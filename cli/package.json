@@ -1,0 +1,19 @@
+﻿{
+  "name": "demogo",
+  "version": "0.2.4",
+  "description": "DemoGo CLI for generating shareable trial links from AI-built pages.",
+  "type": "module",
+  "bin": {
+    "demogo": "./bin/demogo.js"
+  },
+  "files": [
+    "bin",
+    "lib"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "license": "UNLICENSED"
+}
+
+

@@ -1,0 +1,22 @@
+﻿{
+  "name": "demogo-server",
+  "version": "0.2.4",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "check": "node --check src/server.js && node --check src/config.js && node --check src/services/content-review-service.js && node --check src/services/quota-service.js && node --check src/services/deploy-event-service.js && node --check src/services/feedback-service.js && node --check src/services/form-service.js && node --check src/services/plan-request-service.js && node --check src/services/user-service.js && node --check src/db/mysql.js && node --check src/db/mysql-store.js && node --check src/db/migrate-json-to-mysql.js && node --check src/db/verify-migration.js && node --check src/tests/smoke-test.js",
+    "test:smoke": "node src/tests/smoke-test.js"
+  },
+  "dependencies": {
+    "cookie-parser": "^1.4.7",
+    "express": "^4.19.2",
+    "multer": "^2.0.2",
+    "mysql2": "^3.22.3",
+    "tar": "^7.5.15",
+    "unzipper": "^0.12.3"
+  }
+}
+
+

@@ -1,0 +1,130 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1100" viewBox="0 0 1800 1100">
+  <defs>
+    <style>
+      .page { fill: #f6f7fb; }
+      .card { fill: #ffffff; stroke: #d8dee8; stroke-width: 2; }
+      .title { font: 700 30px Arial, sans-serif; fill: #182230; letter-spacing: 0; }
+      .desc { font: 400 18px Arial, sans-serif; fill: #667085; letter-spacing: 0; }
+      .brand { font: 800 44px Arial, sans-serif; fill: #111827; letter-spacing: 0; }
+      .blue { fill: #2563eb; }
+      .green { fill: #12b981; }
+      .cyan { fill: #06b6d4; }
+      .ink { fill: #111827; }
+      .yellow { fill: #f5b329; }
+      .red { fill: #ef4444; }
+      .soft-blue { fill: #eaf2ff; }
+      .soft-green { fill: #e9fbf3; }
+      .soft-cyan { fill: #e8fbff; }
+      .line-blue { stroke: #2563eb; }
+      .line-green { stroke: #12b981; }
+      .line-cyan { stroke: #06b6d4; }
+      .line-ink { stroke: #111827; }
+      .line-white { stroke: #ffffff; }
+      .line { fill: none; stroke-linecap: round; stroke-linejoin: round; stroke-width: 16; }
+      .line-sm { fill: none; stroke-linecap: round; stroke-linejoin: round; stroke-width: 10; }
+    </style>
+  </defs>
+
+  <rect class="page" width="1800" height="1100"/>
+
+  <g transform="translate(70 70)">
+    <rect class="card" width="520" height="430" rx="30"/>
+    <text class="title" x="38" y="58">A. 链接火箭增强版</text>
+    <text class="desc" x="38" y="92">最接近你认可的方向：快、清楚、有传播感</text>
+    <g transform="translate(150 132)">
+      <circle cx="110" cy="110" r="104" class="soft-blue"/>
+      <path class="line line-green" d="M44 166h-16a50 50 0 0 1 0-100h48"/>
+      <path class="line line-green" d="M144 54h34a50 50 0 0 1 0 100h-52"/>
+      <path class="line line-blue" d="M72 150L176 46"/>
+      <path class="line line-white" d="M104 118l54-54"/>
+      <path class="blue" d="M178 30c42 8 70 36 78 78l-62-16-16-62z"/>
+      <circle class="yellow" cx="202" cy="83" r="12"/>
+      <path class="line-sm line-blue" d="M42 198l-24 24"/>
+      <path class="line-sm line-green" d="M76 204l-10 30"/>
+    </g>
+    <text class="brand" x="154" y="374">DemoGo</text>
+  </g>
+
+  <g transform="translate(640 70)">
+    <rect class="card" width="520" height="430" rx="30"/>
+    <text class="title" x="38" y="58">B. 演示窗口起飞</text>
+    <text class="desc" x="38" y="92">更产品化：项目窗口变成可分享链接</text>
+    <g transform="translate(134 134)">
+      <rect x="0" y="34" width="232" height="154" rx="24" class="soft-cyan" stroke="#06b6d4" stroke-width="14"/>
+      <circle class="blue" cx="38" cy="34" r="9"/>
+      <circle class="yellow" cx="68" cy="34" r="9"/>
+      <path class="line-sm line-ink" d="M34 78h76"/>
+      <path class="line-sm line-ink" d="M34 112h132"/>
+      <path class="line-sm line-ink" d="M34 146h86"/>
+      <path class="line line-green" d="M172 112h102"/>
+      <path class="line line-green" d="M240 72l44 40-44 40"/>
+      <path class="blue" d="M238 20c30 5 50 25 56 56l-44-12-12-44z"/>
+    </g>
+    <text class="brand" x="154" y="374">DemoGo</text>
+  </g>
+
+  <g transform="translate(1210 70)">
+    <rect class="card" width="520" height="430" rx="30"/>
+    <text class="title" x="38" y="58">C. 一键生成链接</text>
+    <text class="desc" x="38" y="92">突出“上传后得到链接”，适合官网首页</text>
+    <g transform="translate(126 136)">
+      <rect x="0" y="38" width="252" height="134" rx="67" fill="#111827"/>
+      <circle cx="70" cy="105" r="42" class="soft-blue"/>
+      <path class="line-sm line-blue" d="M46 105h48"/>
+      <path class="line-sm line-blue" d="M76 82l26 23-26 23"/>
+      <path class="line line-green" d="M128 105h92"/>
+      <path class="line line-green" d="M190 70l40 35-40 35"/>
+      <circle class="yellow" cx="236" cy="38" r="16"/>
+      <path class="line-sm line-white" d="M222 38h28"/>
+    </g>
+    <text class="brand" x="154" y="374">DemoGo</text>
+  </g>
+
+  <g transform="translate(70 570)">
+    <rect class="card" width="520" height="430" rx="30"/>
+    <text class="title" x="38" y="58">D. 上传到预览</text>
+    <text class="desc" x="38" y="92">更业务直白：文件包进入浏览器预览页</text>
+    <g transform="translate(130 130)">
+      <path d="M40 26h94l48 48v116H40z" fill="#ffffff" stroke="#2563eb" stroke-width="14" stroke-linejoin="round"/>
+      <path d="M134 26v52h48" fill="#eaf2ff" stroke="#2563eb" stroke-width="14" stroke-linejoin="round"/>
+      <path class="line-sm line-ink" d="M72 112h68"/>
+      <path class="line-sm line-ink" d="M72 146h88"/>
+      <rect x="136" y="88" width="150" height="118" rx="22" class="soft-green" stroke="#12b981" stroke-width="12"/>
+      <path class="line-sm line-green" d="M164 128h78"/>
+      <path class="line-sm line-green" d="M164 160h52"/>
+      <path class="line line-blue" d="M72 214h132"/>
+      <path class="line line-blue" d="M174 178l42 36-42 36"/>
+    </g>
+    <text class="brand" x="154" y="374">DemoGo</text>
+  </g>
+
+  <g transform="translate(640 570)">
+    <rect class="card" width="520" height="430" rx="30"/>
+    <text class="title" x="38" y="58">E. Demo 发射台</text>
+    <text class="desc" x="38" y="92">更有品牌记忆点：不是云托管，是测试发射</text>
+    <g transform="translate(130 126)">
+      <rect x="18" y="158" width="234" height="38" rx="19" fill="#111827"/>
+      <path class="line-sm line-green" d="M64 158v-46"/>
+      <path class="line-sm line-green" d="M112 158v-74"/>
+      <path class="line-sm line-green" d="M160 158v-46"/>
+      <path class="line line-blue" d="M92 112l86-86"/>
+      <path class="blue" d="M174 18c38 8 62 32 70 70l-56-14-14-56z"/>
+      <circle class="yellow" cx="196" cy="62" r="11"/>
+      <path class="line line-cyan" d="M38 218h158"/>
+      <path class="line line-cyan" d="M164 182l44 36-44 36"/>
+      <path class="line-sm line-ink" d="M36 74h62"/>
+    </g>
+    <text class="brand" x="154" y="374">DemoGo</text>
+  </g>
+
+  <g transform="translate(1210 570)">
+    <rect class="card" width="520" height="430" rx="30"/>
+    <text class="title" x="38" y="58">我的判断</text>
+    <text class="desc" x="38" y="108">现在不建议再做抽象字母、印章、立方体。</text>
+    <text class="desc" x="38" y="152">DemoGo 还在 MVP 阶段，用户首先要看懂：</text>
+    <text class="desc" x="38" y="196">我上传一个 AI 项目，马上获得测试链接。</text>
+    <text class="desc" x="38" y="252">主推：A 做品牌图标，B 做产品解释型图标。</text>
+    <text class="desc" x="38" y="296">官网和公众号头像可先用 A。</text>
+    <text class="brand" x="38" y="374">DemoGo</text>
+  </g>
+</svg>

@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1200" viewBox="0 0 1800 1200">
+  <defs>
+    <style>
+      .page { fill: #f7f8fa; }
+      .card { fill: #ffffff; stroke: #e5e7eb; stroke-width: 1; }
+      .title { font: 600 22px Arial, sans-serif; fill: #111827; letter-spacing: 0; }
+      .note { font: 400 16px Arial, sans-serif; fill: #6b7280; letter-spacing: 0; }
+      .word { font: 700 58px Arial, sans-serif; fill: #0b0f19; letter-spacing: 0; }
+      .word-lg { font: 700 72px Arial, sans-serif; fill: #0b0f19; letter-spacing: 0; }
+      .black { fill: #0b0f19; }
+      .blue { fill: #2f6bff; }
+      .line-black { stroke: #0b0f19; }
+      .line-blue { stroke: #2f6bff; }
+      .line { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+    </style>
+  </defs>
+
+  <rect class="page" width="1800" height="1200"/>
+
+  <g transform="translate(72 72)">
+    <text class="title" x="0" y="0">DemoGo Minimal Logo Direction</text>
+    <text class="note" x="0" y="34">关键词：国际工具品牌、字标优先、极简、可缩小、少解释。</text>
+  </g>
+
+  <g transform="translate(72 140)">
+    <rect class="card" width="520" height="280" rx="20"/>
+    <text class="title" x="32" y="48">A. Pure Wordmark</text>
+    <text class="note" x="32" y="78">最国际化，先建立 DemoGo 这个名字</text>
+    <text class="word-lg" x="72" y="178">DemoGo</text>
+  </g>
+
+  <g transform="translate(640 140)">
+    <rect class="card" width="520" height="280" rx="20"/>
+    <text class="title" x="32" y="48">B. Wordmark + Go Accent</text>
+    <text class="note" x="32" y="78">只强调 Go，不增加复杂图形</text>
+    <text class="word-lg" x="72" y="178">Demo</text>
+    <text class="word-lg blue" x="278" y="178">Go</text>
+  </g>
+
+  <g transform="translate(1208 140)">
+    <rect class="card" width="520" height="280" rx="20"/>
+    <text class="title" x="32" y="48">C. Wordmark + Dot</text>
+    <text class="note" x="32" y="78">一个“已生成 / 可访问”的状态点</text>
+    <text class="word-lg" x="72" y="178">DemoGo</text>
+    <circle class="blue" cx="385" cy="154" r="10"/>
+  </g>
+
+  <g transform="translate(72 480)">
+    <rect class="card" width="520" height="280" rx="20"/>
+    <text class="title" x="32" y="48">D. Minimal Link Mark</text>
+    <text class="note" x="32" y="78">独立图标，只保留“链接”这一层含义</text>
+    <g transform="translate(76 124)">
+      <path class="line line-black" stroke-width="18" d="M34 48h68a48 48 0 0 1 0 96H74"/>
+      <path class="line line-blue" stroke-width="18" d="M158 48h-68a48 48 0 0 0 0 96h28"/>
+    </g>
+    <text class="word" x="244" y="183">DemoGo</text>
+  </g>
+
+  <g transform="translate(640 480)">
+    <rect class="card" width="520" height="280" rx="20"/>
+    <text class="title" x="32" y="48">E. Go Arrow Mark</text>
+    <text class="note" x="32" y="78">一个极简前进符号，适合 favicon</text>
+    <g transform="translate(86 126)">
+      <circle class="black" cx="52" cy="52" r="52"/>
+      <path class="line line-blue" stroke-width="16" d="M34 52h40"/>
+      <path class="line line-blue" stroke-width="16" d="M58 30l24 22-24 22"/>
+    </g>
+    <text class="word" x="244" y="183">DemoGo</text>
+  </g>
+
+  <g transform="translate(1208 480)">
+    <rect class="card" width="520" height="280" rx="20"/>
+    <text class="title" x="32" y="48">F. DG Monogram</text>
+    <text class="note" x="32" y="78">如果一定要图标，用最简单字母组合</text>
+    <g transform="translate(84 122)">
+      <rect class="black" x="0" y="0" width="112" height="112" rx="28"/>
+      <text x="26" y="75" font-family="Arial, sans-serif" font-size="48" font-weight="700" fill="#ffffff">D</text>
+      <circle class="blue" cx="82" cy="76" r="8"/>
+    </g>
+    <text class="word" x="244" y="183">DemoGo</text>
+  </g>
+
+  <g transform="translate(72 845)">
+    <text class="title" x="0" y="0">推荐路线</text>
+    <text class="note" x="0" y="40">正式品牌建议从 A / B / C 里选，不要急着做复杂图标。</text>
+    <text class="note" x="0" y="74">早期产品最稳妥的是 B：Demo 黑色，Go 蓝色。它足够简单，也能表达“快速发布”。</text>
+    <text class="note" x="0" y="108">独立图标可用 E，但只在浏览器标签、头像、按钮里辅助使用，不要抢字标。</text>
+  </g>
+</svg>

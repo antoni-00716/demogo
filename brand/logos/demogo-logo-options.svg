@@ -1,0 +1,113 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000">
+  <defs>
+    <style>
+      .bg { fill: #f7f8fb; }
+      .card { fill: #fff; stroke: #dce2ea; stroke-width: 2; }
+      .label { font: 600 30px Arial, sans-serif; fill: #1d2733; }
+      .note { font: 400 18px Arial, sans-serif; fill: #667085; }
+      .word { font: 700 38px Arial, sans-serif; fill: #182230; letter-spacing: 0; }
+      .accent-blue { fill: #2563eb; }
+      .accent-green { fill: #10b981; }
+      .accent-cyan { fill: #06b6d4; }
+      .accent-ink { fill: #111827; }
+      .accent-yellow { fill: #f59e0b; }
+      .stroke-blue { stroke: #2563eb; }
+      .stroke-green { stroke: #10b981; }
+      .stroke-cyan { stroke: #06b6d4; }
+      .stroke-ink { stroke: #111827; }
+      .stroke-yellow { stroke: #f59e0b; }
+      .stroke-white { stroke: #fff; }
+      .stroke { fill: none; stroke-linecap: round; stroke-linejoin: round; stroke-width: 18; }
+      .thin { fill: none; stroke-linecap: round; stroke-linejoin: round; stroke-width: 10; }
+    </style>
+  </defs>
+
+  <rect class="bg" width="1600" height="1000"/>
+
+  <g transform="translate(80 70)">
+    <rect class="card" width="430" height="360" rx="28"/>
+    <text class="label" x="34" y="56">方案 1：链接火箭</text>
+    <text class="note" x="34" y="88">AI 作品一键发射成测试链接</text>
+    <g transform="translate(125 125)">
+      <circle cx="90" cy="90" r="82" fill="#eff6ff"/>
+      <path class="stroke stroke-blue" d="M44 138l92-92"/>
+      <path class="stroke stroke-green" d="M78 144H52a44 44 0 0 1 0-88h34"/>
+      <path class="stroke stroke-green" d="M102 36h26a44 44 0 0 1 0 88h-34"/>
+      <path class="stroke stroke-white" d="M86 96l48-48"/>
+      <path class="accent-blue" d="M132 34c36 7 58 29 65 65l-52-13-13-52z"/>
+      <circle class="accent-yellow" cx="151" cy="81" r="10"/>
+    </g>
+    <text class="word" x="122" y="315">DemoGo</text>
+  </g>
+
+  <g transform="translate(585 70)">
+    <rect class="card" width="430" height="360" rx="28"/>
+    <text class="label" x="34" y="56">方案 2：演示窗口</text>
+    <text class="note" x="34" y="88">把项目放进可访问的预览窗口</text>
+    <g transform="translate(117 125)">
+      <rect x="0" y="18" width="196" height="140" rx="22" fill="#ecfeff" stroke="#06b6d4" stroke-width="14"/>
+      <path class="thin stroke-ink" d="M28 54h58"/>
+      <path class="thin stroke-ink" d="M28 84h108"/>
+      <path class="thin stroke-ink" d="M28 114h74"/>
+      <path class="stroke stroke-green" d="M152 84h72"/>
+      <path class="stroke stroke-green" d="M196 50l38 34-38 34"/>
+      <circle class="accent-blue" cx="36" cy="18" r="9"/>
+      <circle class="accent-yellow" cx="68" cy="18" r="9"/>
+    </g>
+    <text class="word" x="122" y="315">DemoGo</text>
+  </g>
+
+  <g transform="translate(1090 70)">
+    <rect class="card" width="430" height="360" rx="28"/>
+    <text class="label" x="34" y="56">方案 3：D + Go</text>
+    <text class="note" x="34" y="88">更适合 App 图标和浏览器书签</text>
+    <g transform="translate(127 118)">
+      <rect x="0" y="0" width="176" height="176" rx="40" fill="#111827"/>
+      <path d="M54 44h44c39 0 66 27 66 44s-27 44-66 44H54z" fill="#2563eb"/>
+      <path d="M54 70h42c22 0 36 10 36 18s-14 18-36 18H78v46H54z" fill="#fff"/>
+      <path class="stroke stroke-green" d="M112 88h92"/>
+      <path class="stroke stroke-green" d="M174 54l38 34-38 34"/>
+    </g>
+    <text class="word" x="122" y="315">DemoGo</text>
+  </g>
+
+  <g transform="translate(80 520)">
+    <rect class="card" width="430" height="360" rx="28"/>
+    <text class="label" x="34" y="56">方案 4：测试链接章</text>
+    <text class="note" x="34" y="88">强调验证、通过、可信交付</text>
+    <g transform="translate(122 120)">
+      <circle cx="90" cy="90" r="86" fill="#f0fdf4" stroke="#10b981" stroke-width="14"/>
+      <path class="stroke stroke-blue" d="M48 94h84"/>
+      <path class="stroke stroke-blue" d="M102 60l40 34-40 34"/>
+      <path class="stroke stroke-ink" d="M45 140l32 30 62-72"/>
+      <circle class="accent-yellow" cx="140" cy="42" r="14"/>
+    </g>
+    <text class="word" x="122" y="315">DemoGo</text>
+  </g>
+
+  <g transform="translate(585 520)">
+    <rect class="card" width="430" height="360" rx="28"/>
+    <text class="label" x="34" y="56">方案 5：产品立方体</text>
+    <text class="note" x="34" y="88">AI 生成物被封装成可分享产品</text>
+    <g transform="translate(116 123)">
+      <path d="M100 8l88 44v96l-88 44-88-44V52z" fill="#eef2ff" stroke="#2563eb" stroke-width="12" stroke-linejoin="round"/>
+      <path d="M12 52l88 44 88-44" fill="none" stroke="#2563eb" stroke-width="12" stroke-linejoin="round"/>
+      <path d="M100 96v96" fill="none" stroke="#2563eb" stroke-width="12" stroke-linecap="round"/>
+      <path class="stroke stroke-green" d="M58 128h84"/>
+      <path class="stroke stroke-green" d="M112 94l38 34-38 34"/>
+      <circle class="accent-cyan" cx="100" cy="52" r="16"/>
+    </g>
+    <text class="word" x="122" y="315">DemoGo</text>
+  </g>
+
+  <g transform="translate(1090 520)">
+    <rect class="card" width="430" height="360" rx="28"/>
+    <text class="label" x="34" y="56">组合建议</text>
+    <text class="note" x="34" y="98">主推：方案 2 或方案 3</text>
+    <text class="note" x="34" y="140">方案 2 更容易解释 DemoGo 的产品价值。</text>
+    <text class="note" x="34" y="178">方案 3 更像正式产品品牌，适合长期使用。</text>
+    <text class="note" x="34" y="216">颜色建议：深墨色 + 蓝色 + 绿色。</text>
+    <text class="note" x="34" y="254">避免过度科技感，突出“可测试、可分享”。</text>
+    <text class="word" x="34" y="315">DemoGo</text>
+  </g>
+</svg>

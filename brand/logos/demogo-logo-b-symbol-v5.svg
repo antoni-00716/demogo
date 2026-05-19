@@ -1,0 +1,121 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1200" viewBox="0 0 1800 1200">
+  <defs>
+    <style>
+      .page { fill: #f7f8fa; }
+      .card { fill: #ffffff; stroke: #e5e7eb; stroke-width: 1; }
+      .title { font: 600 22px Arial, sans-serif; fill: #111827; letter-spacing: 0; }
+      .note { font: 400 16px Arial, sans-serif; fill: #6b7280; letter-spacing: 0; }
+      .word { font: 700 66px Arial, sans-serif; fill: #0b0f19; letter-spacing: 0; }
+      .black { fill: #0b0f19; }
+      .blue { fill: #2f6bff; }
+      .white { fill: #ffffff; }
+      .line-black { stroke: #0b0f19; }
+      .line-blue { stroke: #2f6bff; }
+      .line-white { stroke: #ffffff; }
+      .line { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+    </style>
+  </defs>
+
+  <rect class="page" width="1800" height="1200"/>
+
+  <g transform="translate(72 72)">
+    <text class="title" x="0" y="0">DemoGo Symbol Exploration</text>
+    <text class="note" x="0" y="34">基于你认可的 B 方向：字标保持极简，增加一个可独立使用的品牌符号。</text>
+  </g>
+
+  <g transform="translate(72 140)">
+    <rect class="card" width="520" height="280" rx="20"/>
+    <text class="title" x="32" y="48">A. Link Mark</text>
+    <text class="note" x="32" y="78">最贴合 DemoGo：测试链接生成</text>
+    <g transform="translate(62 128)">
+      <path class="line line-black" stroke-width="18" d="M16 44h70a44 44 0 0 1 0 88H58"/>
+      <path class="line line-blue" stroke-width="18" d="M152 44H82a44 44 0 0 0 0 88h28"/>
+    </g>
+    <g transform="translate(232 194)">
+      <text class="word" x="0" y="0">Demo</text>
+      <text class="word blue" x="228" y="0">Go</text>
+    </g>
+  </g>
+
+  <g transform="translate(640 140)">
+    <rect class="card" width="520" height="280" rx="20"/>
+    <text class="title" x="32" y="48">B. Go Dot</text>
+    <text class="note" x="32" y="78">极简状态符号：生成成功、链接可访问</text>
+    <g transform="translate(72 136)">
+      <circle class="black" cx="56" cy="56" r="52"/>
+      <circle class="blue" cx="82" cy="56" r="13"/>
+    </g>
+    <g transform="translate(232 194)">
+      <text class="word" x="0" y="0">Demo</text>
+      <text class="word blue" x="228" y="0">Go</text>
+    </g>
+  </g>
+
+  <g transform="translate(1208 140)">
+    <rect class="card" width="520" height="280" rx="20"/>
+    <text class="title" x="32" y="48">C. Go Arrow</text>
+    <text class="note" x="32" y="78">更有“Go”的动作感，但仍然克制</text>
+    <g transform="translate(72 136)">
+      <circle class="black" cx="56" cy="56" r="52"/>
+      <path class="line line-blue" stroke-width="14" d="M34 56h42"/>
+      <path class="line line-blue" stroke-width="14" d="M58 34l24 22-24 22"/>
+    </g>
+    <g transform="translate(232 194)">
+      <text class="word" x="0" y="0">Demo</text>
+      <text class="word blue" x="228" y="0">Go</text>
+    </g>
+  </g>
+
+  <g transform="translate(72 480)">
+    <rect class="card" width="520" height="280" rx="20"/>
+    <text class="title" x="32" y="48">D. Portal Mark</text>
+    <text class="note" x="32" y="78">像一个打开入口，不画窗口、不画页面</text>
+    <g transform="translate(78 136)">
+      <rect class="black" x="0" y="0" width="112" height="112" rx="32"/>
+      <rect class="white" x="30" y="24" width="52" height="64" rx="26"/>
+      <rect class="blue" x="64" y="44" width="52" height="24" rx="12"/>
+    </g>
+    <g transform="translate(232 194)">
+      <text class="word" x="0" y="0">Demo</text>
+      <text class="word blue" x="228" y="0">Go</text>
+    </g>
+  </g>
+
+  <g transform="translate(640 480)">
+    <rect class="card" width="520" height="280" rx="20"/>
+    <text class="title" x="32" y="48">E. Slash Go</text>
+    <text class="note" x="32" y="78">更像开发工具品牌，适合技术感</text>
+    <g transform="translate(80 136)">
+      <rect class="black" x="0" y="0" width="112" height="112" rx="28"/>
+      <path class="line line-white" stroke-width="14" d="M42 82L70 30"/>
+      <path class="line line-blue" stroke-width="14" d="M34 56h50"/>
+      <path class="line line-blue" stroke-width="14" d="M62 34l26 22-26 22"/>
+    </g>
+    <g transform="translate(232 194)">
+      <text class="word" x="0" y="0">Demo</text>
+      <text class="word blue" x="228" y="0">Go</text>
+    </g>
+  </g>
+
+  <g transform="translate(1208 480)">
+    <rect class="card" width="520" height="280" rx="20"/>
+    <text class="title" x="32" y="48">F. DG Minimal</text>
+    <text class="note" x="32" y="78">字母符号路线，更品牌化但业务含义弱</text>
+    <g transform="translate(80 136)">
+      <rect class="black" x="0" y="0" width="112" height="112" rx="28"/>
+      <text x="27" y="74" font-family="Arial, sans-serif" font-size="48" font-weight="700" fill="#ffffff">D</text>
+      <circle class="blue" cx="78" cy="56" r="12"/>
+    </g>
+    <g transform="translate(232 194)">
+      <text class="word" x="0" y="0">Demo</text>
+      <text class="word blue" x="228" y="0">Go</text>
+    </g>
+  </g>
+
+  <g transform="translate(72 850)">
+    <text class="title" x="0" y="0">我的建议</text>
+    <text class="note" x="0" y="40">主 Logo：优先 A。它是最符合 DemoGo 的符号，不复杂，也不是纯装饰。</text>
+    <text class="note" x="0" y="74">更国际极简：选 B。它最克制，但需要后续靠品牌传播建立含义。</text>
+    <text class="note" x="0" y="108">更有动作感：选 C。适合强调 Go，但比 A 更像通用工具图标。</text>
+  </g>
+</svg>

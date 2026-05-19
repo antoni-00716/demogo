@@ -1,0 +1,140 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1120" viewBox="0 0 1600 1120">
+  <defs>
+    <style>
+      :root {
+        --ink: #07111f;
+        --muted: #667085;
+        --line: #e5e7eb;
+        --paper: #ffffff;
+        --soft: #f7f9fc;
+        --brand: #00c2a8;
+        --night: #101426;
+      }
+      .page { fill: #f2f4f7; }
+      .paper { fill: var(--paper); }
+      .soft { fill: var(--soft); }
+      .night { fill: var(--night); }
+      .border { fill: none; stroke: var(--line); stroke-width: 1; }
+      .label { font: 700 20px Inter, Arial, sans-serif; fill: var(--ink); letter-spacing: 0; }
+      .small { font: 500 14px Inter, Arial, sans-serif; fill: var(--muted); letter-spacing: 0; }
+      .body { font: 500 16px Inter, Arial, sans-serif; fill: #475467; letter-spacing: 0; }
+      .word { font: 760 58px Inter, Arial, sans-serif; letter-spacing: 0; }
+      .word-sm { font: 740 25px Inter, Arial, sans-serif; letter-spacing: 0; }
+      .ink { fill: var(--ink); }
+      .white { fill: #ffffff; }
+      .brand { fill: var(--brand); }
+      .go { fill: var(--brand); }
+    </style>
+
+    <symbol id="mark" viewBox="0 0 96 96">
+      <path d="M10 20h34l34 28-34 28H10z" fill="#00c2a8"/>
+    </symbol>
+
+    <symbol id="mark-knockout" viewBox="0 0 96 96">
+      <path d="M10 20h34l34 28-34 28H10z" fill="#ffffff"/>
+    </symbol>
+  </defs>
+
+  <rect class="page" width="1600" height="1120"/>
+
+  <g transform="translate(32 26)">
+    <rect class="paper" width="1536" height="1068" rx="34"/>
+
+    <g transform="translate(88 70)">
+      <text class="label" x="0" y="0">DemoGo Logo System - Polished v11</text>
+      <text class="small" x="0" y="34">优化点：符号更修长、更轻，整体尺寸略收小，保留 v10 的颜色和品牌方向。</text>
+      <line class="border" x1="0" y1="58" x2="1360" y2="58"/>
+    </g>
+
+    <g transform="translate(88 164)">
+      <rect class="soft" width="1360" height="224" rx="22"/>
+      <g transform="translate(462 69)">
+        <use href="#mark" width="86" height="86"/>
+        <text class="word" x="84" y="63">
+          <tspan class="ink">Demo</tspan><tspan class="go">Go</tspan>
+        </text>
+      </g>
+    </g>
+
+    <g transform="translate(88 424)">
+      <rect class="night" width="1360" height="224" rx="22"/>
+      <g transform="translate(462 69)">
+        <use href="#mark" width="86" height="86"/>
+        <text class="word" x="84" y="63">
+          <tspan class="white">Demo</tspan><tspan class="go">Go</tspan>
+        </text>
+      </g>
+    </g>
+
+    <g transform="translate(88 704)">
+      <text class="label" x="0" y="0">核心组件</text>
+
+      <g transform="translate(0 36)">
+        <rect class="paper border" width="260" height="150" rx="18"/>
+        <text class="small" x="24" y="36">主符号</text>
+        <g transform="translate(88 54)">
+          <use href="#mark" width="64" height="64"/>
+        </g>
+      </g>
+
+      <g transform="translate(292 36)">
+        <rect class="night" width="260" height="150" rx="18"/>
+        <text class="small" x="24" y="36" fill="#98a2b3">深色底符号</text>
+        <g transform="translate(88 54)">
+          <use href="#mark" width="64" height="64"/>
+        </g>
+      </g>
+
+      <g transform="translate(584 36)">
+        <rect class="paper border" width="260" height="150" rx="18"/>
+        <text class="small" x="24" y="36">App 图标</text>
+        <g transform="translate(86 50)">
+          <rect width="72" height="72" rx="18" class="brand"/>
+          <g transform="translate(9 9)">
+            <use href="#mark-knockout" width="54" height="54"/>
+          </g>
+        </g>
+      </g>
+
+      <g transform="translate(876 36)">
+        <rect class="paper border" width="484" height="150" rx="18"/>
+        <text class="small" x="24" y="36">比例优化</text>
+        <text class="body" x="24" y="70">符号高度从 72 缩到 56，减少方块感。</text>
+        <text class="body" x="24" y="100">主 Logo 符号尺寸从 96 缩到 86，更贴近字标。</text>
+      </g>
+    </g>
+
+    <g transform="translate(88 930)">
+      <text class="label" x="0" y="0">产品使用场景</text>
+
+      <g transform="translate(0 34)">
+        <rect class="paper border" width="420" height="104" rx="16"/>
+        <g transform="translate(26 36)">
+          <use href="#mark" width="32" height="32"/>
+          <text class="word-sm" x="34" y="25">
+            <tspan class="ink">Demo</tspan><tspan class="go">Go</tspan>
+          </text>
+        </g>
+      </g>
+
+      <g transform="translate(456 34)">
+        <rect class="paper border" width="420" height="104" rx="16"/>
+        <text class="small" x="24" y="34">浏览器标签页</text>
+        <g transform="translate(24 57)">
+          <use href="#mark" width="20" height="20"/>
+          <text x="23" y="16" font-family="Inter, Arial, sans-serif" font-size="16" fill="#344054">DemoGo - 首页</text>
+        </g>
+      </g>
+
+      <g transform="translate(912 34)">
+        <rect class="night" width="448" height="104" rx="16"/>
+        <g transform="translate(26 36)">
+          <use href="#mark" width="32" height="32"/>
+          <text class="word-sm" x="34" y="25">
+            <tspan class="white">Demo</tspan><tspan class="go">Go</tspan>
+          </text>
+        </g>
+      </g>
+    </g>
+  </g>
+</svg>

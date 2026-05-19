@@ -1,0 +1,19 @@
+﻿{
+  "name": "demogo-mcp",
+  "version": "0.2.4",
+  "description": "DemoGo MCP server for AI coding tools.",
+  "type": "module",
+  "bin": {
+    "demogo-mcp": "./bin/demogo-mcp.js"
+  },
+  "files": [
+    "bin",
+    "lib"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "license": "UNLICENSED"
+}
+
+

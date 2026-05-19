@@ -1,0 +1,149 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1120" viewBox="0 0 1600 1120">
+  <defs>
+    <style>
+      :root {
+        --ink: #08111f;
+        --muted: #667085;
+        --line: #e5e7eb;
+        --paper: #ffffff;
+        --soft: #f7f8fb;
+        --brand: #4f46e5;
+        --brand-2: #8b8cff;
+        --night: #171729;
+      }
+      .page { fill: #f2f4f7; }
+      .paper { fill: var(--paper); }
+      .soft { fill: var(--soft); }
+      .night { fill: var(--night); }
+      .border { fill: none; stroke: var(--line); stroke-width: 1; }
+      .label { font: 700 20px Inter, Arial, sans-serif; fill: var(--ink); letter-spacing: 0; }
+      .small { font: 500 14px Inter, Arial, sans-serif; fill: var(--muted); letter-spacing: 0; }
+      .body { font: 500 16px Inter, Arial, sans-serif; fill: #475467; letter-spacing: 0; }
+      .word-demo { font: 760 58px Inter, Arial, sans-serif; fill: var(--ink); letter-spacing: 0; }
+      .word-go { font: 760 58px Inter, Arial, sans-serif; fill: var(--brand); letter-spacing: 0; }
+      .word-demo-white { font: 760 58px Inter, Arial, sans-serif; fill: #ffffff; letter-spacing: 0; }
+      .word-go-white { font: 760 58px Inter, Arial, sans-serif; fill: #a5b4fc; letter-spacing: 0; }
+      .word-sm { font: 740 25px Inter, Arial, sans-serif; fill: var(--ink); letter-spacing: 0; }
+      .word-sm-go { font: 740 25px Inter, Arial, sans-serif; fill: var(--brand); letter-spacing: 0; }
+      .word-sm-white { font: 740 25px Inter, Arial, sans-serif; fill: #ffffff; letter-spacing: 0; }
+      .brand { fill: var(--brand); }
+      .brand-2 { fill: var(--brand-2); }
+    </style>
+
+    <symbol id="mark" viewBox="0 0 96 96">
+      <path d="M18 16h33l28 32-28 32H18z" fill="#4f46e5"/>
+      <path d="M50 16l29 32-29 32H35l28-32-28-32z" fill="#8b8cff"/>
+    </symbol>
+
+    <symbol id="mark-solid" viewBox="0 0 96 96">
+      <path d="M18 16h33l28 32-28 32H18z" fill="#4f46e5"/>
+    </symbol>
+
+    <symbol id="mark-white" viewBox="0 0 96 96">
+      <path d="M18 16h33l28 32-28 32H18z" fill="#a5b4fc"/>
+      <path d="M50 16l29 32-29 32H35l28-32-28-32z" fill="#ffffff" opacity="0.92"/>
+    </symbol>
+
+    <symbol id="mark-knockout" viewBox="0 0 96 96">
+      <path d="M18 16h33l28 32-28 32H18z" fill="#ffffff"/>
+    </symbol>
+  </defs>
+
+  <rect class="page" width="1600" height="1120"/>
+
+  <g transform="translate(32 26)">
+    <rect class="paper" width="1536" height="1068" rx="34"/>
+
+    <g transform="translate(88 70)">
+      <text class="label" x="0" y="0">DemoGo Logo System - Polished v7</text>
+      <text class="small" x="0" y="34">方向：国际工具品牌、极简几何符号、字标优先、深浅底一致可用。</text>
+      <line class="border" x1="0" y1="58" x2="1360" y2="58"/>
+    </g>
+
+    <g transform="translate(88 164)">
+      <rect class="soft" width="1360" height="224" rx="22"/>
+      <g transform="translate(425 64)">
+        <use href="#mark" width="96" height="96"/>
+        <text class="word-demo" x="128" y="68">Demo</text>
+        <text class="word-go" x="300" y="68">Go</text>
+      </g>
+    </g>
+
+    <g transform="translate(88 424)">
+      <rect class="night" width="1360" height="224" rx="22"/>
+      <g transform="translate(425 64)">
+        <use href="#mark-white" width="96" height="96"/>
+        <text class="word-demo-white" x="128" y="68">Demo</text>
+        <text class="word-go-white" x="300" y="68">Go</text>
+      </g>
+    </g>
+
+    <g transform="translate(88 704)">
+      <text class="label" x="0" y="0">核心组件</text>
+
+      <g transform="translate(0 36)">
+        <rect class="paper border" width="260" height="150" rx="18"/>
+        <text class="small" x="24" y="36">主符号</text>
+        <g transform="translate(88 54)">
+          <use href="#mark" width="64" height="64"/>
+        </g>
+      </g>
+
+      <g transform="translate(292 36)">
+        <rect class="paper border" width="260" height="150" rx="18"/>
+        <text class="small" x="24" y="36">纯色符号</text>
+        <g transform="translate(88 54)">
+          <use href="#mark-solid" width="64" height="64"/>
+        </g>
+      </g>
+
+      <g transform="translate(584 36)">
+        <rect class="paper border" width="260" height="150" rx="18"/>
+        <text class="small" x="24" y="36">App 图标</text>
+        <g transform="translate(86 50)">
+          <rect width="72" height="72" rx="18" class="brand"/>
+          <g transform="translate(9 9)">
+            <use href="#mark-knockout" width="54" height="54"/>
+          </g>
+        </g>
+      </g>
+
+      <g transform="translate(876 36)">
+        <rect class="paper border" width="484" height="150" rx="18"/>
+        <text class="small" x="24" y="36">比例与含义</text>
+        <text class="body" x="24" y="70">符号由 D 形轮廓和向右动势组成。</text>
+        <text class="body" x="24" y="100">表达：Demo 被打开、生成链接、继续前进。</text>
+      </g>
+    </g>
+
+    <g transform="translate(88 930)">
+      <text class="label" x="0" y="0">产品使用场景</text>
+
+      <g transform="translate(0 34)">
+        <rect class="paper border" width="420" height="104" rx="16"/>
+        <g transform="translate(26 34)">
+          <use href="#mark" width="36" height="36"/>
+          <text class="word-sm" x="52" y="27">Demo</text>
+          <text class="word-sm-go" x="126" y="27">Go</text>
+        </g>
+      </g>
+
+      <g transform="translate(456 34)">
+        <rect class="paper border" width="420" height="104" rx="16"/>
+        <text class="small" x="24" y="34">浏览器标签页</text>
+        <g transform="translate(24 56)">
+          <use href="#mark-solid" width="22" height="22"/>
+          <text x="38" y="17" font-family="Inter, Arial, sans-serif" font-size="16" fill="#344054">DemoGo - 首页</text>
+        </g>
+      </g>
+
+      <g transform="translate(912 34)">
+        <rect class="night" width="448" height="104" rx="16"/>
+        <g transform="translate(26 34)">
+          <use href="#mark-white" width="36" height="36"/>
+          <text class="word-sm-white" x="52" y="27">DemoGo</text>
+        </g>
+      </g>
+    </g>
+  </g>
+</svg>

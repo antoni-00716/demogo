@@ -1,0 +1,1027 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DemoGo - AI 应用 Demo 一键发布</title>
+  <meta name="description" content="DemoGo 嵌入 AI 编程工具，让用户用一句自然语言命令发布国内可访问 Demo 链接，无需购买域名、备案、服务器或配置海外平台。">
+  <style>
+    :root {
+      --ink: #15242a;
+      --muted: #5d6f77;
+      --soft: #eef5f6;
+      --line: #d6e1e4;
+      --panel: #ffffff;
+      --panel-2: #f7fafb;
+      --teal: #0f9f86;
+      --teal-dark: #087461;
+      --blue: #245f9c;
+      --orange: #d76c25;
+      --shadow: 0 18px 50px rgba(16, 38, 45, 0.12);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+      overflow-x: hidden;
+    }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: #ffffff;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .nav {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      border-bottom: 1px solid rgba(214, 225, 228, 0.78);
+      background: rgba(255, 255, 255, 0.9);
+      backdrop-filter: blur(14px);
+    }
+
+    .nav-inner,
+    .wrap {
+      width: min(1160px, calc(100vw - 40px));
+      margin: 0 auto;
+    }
+
+    .nav-inner {
+      height: 68px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 22px;
+    }
+
+    .logo {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 800;
+      font-size: 22px;
+      letter-spacing: 0;
+    }
+
+    .logo-mark {
+      width: 34px;
+      height: 34px;
+      display: grid;
+      place-items: center;
+      border-radius: 8px;
+      color: #ffffff;
+      background: linear-gradient(135deg, var(--teal), var(--blue));
+      font-size: 13px;
+    }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 22px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 44px;
+      padding: 0 18px;
+      border-radius: 8px;
+      border: 1px solid transparent;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+    }
+
+    .btn:hover {
+      transform: translateY(-1px);
+    }
+
+    .btn.primary {
+      color: #ffffff;
+      background: var(--teal-dark);
+      box-shadow: 0 10px 24px rgba(8, 116, 97, 0.24);
+    }
+
+    .btn.ghost {
+      color: var(--ink);
+      border-color: var(--line);
+      background: #ffffff;
+    }
+
+    .hero {
+      position: relative;
+      min-height: 720px;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      border-bottom: 1px solid var(--line);
+      background: #f8fbfc;
+    }
+
+    .hero-bg {
+      position: absolute;
+      inset: 0;
+      background-image: linear-gradient(90deg, rgba(248, 251, 252, 1) 0%, rgba(248, 251, 252, 0.98) 42%, rgba(248, 251, 252, 0.76) 58%, rgba(248, 251, 252, 0.18) 100%), url("assets/demogo-hero.png");
+      background-size: cover;
+      background-position: center right;
+    }
+
+    .hero .wrap {
+      position: relative;
+      z-index: 1;
+      padding: 68px 0 88px;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 20px;
+      padding: 6px 10px;
+      border: 1px solid rgba(15, 159, 134, 0.25);
+      border-radius: 999px;
+      color: var(--teal-dark);
+      background: rgba(255, 255, 255, 0.8);
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .eyebrow::before {
+      content: "";
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--orange);
+    }
+
+    h1 {
+      max-width: 620px;
+      margin: 0;
+      font-size: clamp(38px, 5.2vw, 64px);
+      line-height: 1.06;
+      letter-spacing: 0;
+      word-break: break-word;
+      overflow-wrap: anywhere;
+    }
+
+    h1 .line {
+      display: block;
+    }
+
+    .mobile-only .line {
+      display: block;
+    }
+
+    .mobile-only {
+      display: none;
+    }
+
+    .hero-copy {
+      max-width: 650px;
+      margin: 22px 0 0;
+      color: var(--muted);
+      font-size: 19px;
+    }
+
+    .hero-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 14px;
+      margin-top: 34px;
+    }
+
+    .hero-note {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .quick-stats {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: -72px;
+      position: relative;
+      z-index: 4;
+    }
+
+    .stat {
+      min-height: 116px;
+      padding: 20px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #ffffff;
+      box-shadow: var(--shadow);
+    }
+
+    .stat strong {
+      display: block;
+      color: var(--teal-dark);
+      font-size: 28px;
+      line-height: 1.1;
+    }
+
+    .stat span {
+      display: block;
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    section {
+      padding: 76px 0;
+    }
+
+    section.alt {
+      background: var(--panel-2);
+      border-block: 1px solid var(--line);
+    }
+
+    .section-head {
+      display: grid;
+      grid-template-columns: minmax(0, 0.72fr) minmax(0, 1fr);
+      gap: 38px;
+      align-items: end;
+      margin-bottom: 34px;
+    }
+
+    .label {
+      color: var(--teal-dark);
+      font-size: 13px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0;
+    }
+
+    h2 {
+      margin: 8px 0 0;
+      font-size: 34px;
+      line-height: 1.18;
+      letter-spacing: 0;
+    }
+
+    .section-head p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 17px;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 18px;
+    }
+
+    .feature,
+    .step,
+    .price-card,
+    .target-card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #ffffff;
+    }
+
+    .feature {
+      min-height: 228px;
+      padding: 24px;
+    }
+
+    .icon {
+      width: 42px;
+      height: 42px;
+      display: grid;
+      place-items: center;
+      margin-bottom: 18px;
+      border-radius: 8px;
+      color: #ffffff;
+      background: var(--blue);
+      font-weight: 800;
+    }
+
+    .feature h3,
+    .target-card h3,
+    .step h3,
+    .price-card h3 {
+      margin: 0 0 10px;
+      font-size: 19px;
+      letter-spacing: 0;
+    }
+
+    .feature p,
+    .target-card p,
+    .step p,
+    .price-card p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 15px;
+    }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+    }
+
+    .step {
+      padding: 22px;
+      min-height: 188px;
+      position: relative;
+    }
+
+    .step-num {
+      display: inline-grid;
+      width: 34px;
+      height: 34px;
+      place-items: center;
+      margin-bottom: 20px;
+      border-radius: 50%;
+      color: #ffffff;
+      background: var(--teal-dark);
+      font-weight: 800;
+    }
+
+    .split {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(360px, 0.9fr);
+      gap: 28px;
+      align-items: center;
+    }
+
+    .demo-box {
+      padding: 22px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #ffffff;
+      box-shadow: var(--shadow);
+    }
+
+    .terminal {
+      overflow: hidden;
+      border-radius: 8px;
+      background: #16242b;
+      color: #d4f4ee;
+      font-family: "Cascadia Code", Consolas, monospace;
+      font-size: 13px;
+    }
+
+    .terminal-head {
+      display: flex;
+      gap: 6px;
+      padding: 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #ef6a5b;
+    }
+
+    .dot:nth-child(2) {
+      background: #f2bd4a;
+    }
+
+    .dot:nth-child(3) {
+      background: #62c554;
+    }
+
+    .terminal-body {
+      padding: 18px;
+    }
+
+    .terminal-body div {
+      margin: 8px 0;
+    }
+
+    .ok {
+      color: #74e2c8;
+    }
+
+    .link-line {
+      color: #f3b56a;
+      word-break: break-all;
+    }
+
+    .target-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+    }
+
+    .target-card {
+      min-height: 150px;
+      padding: 22px;
+    }
+
+    .compare-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 18px;
+    }
+
+    .compare-card,
+    .fit-card {
+      padding: 26px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #ffffff;
+    }
+
+    .compare-card h3,
+    .fit-card h3 {
+      margin: 0 0 12px;
+      font-size: 20px;
+    }
+
+    .compare-card p {
+      min-height: 96px;
+      margin: 0;
+      color: var(--muted);
+      font-size: 15px;
+    }
+
+    .compare-card ul,
+    .fit-card ul {
+      margin: 18px 0 0;
+      padding-left: 19px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .compare-card li,
+    .fit-card li {
+      margin: 8px 0;
+    }
+
+    .compare-card.highlight {
+      border-color: rgba(15, 159, 134, 0.44);
+      background: #f1faf7;
+      box-shadow: var(--shadow);
+    }
+
+    .compare-card.highlight h3 {
+      color: var(--teal-dark);
+    }
+
+    .fit-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 18px;
+    }
+
+    .fit-card.yes {
+      border-color: rgba(15, 159, 134, 0.34);
+      background: #f4fbf8;
+    }
+
+    .fit-card.no {
+      border-color: rgba(215, 108, 37, 0.32);
+      background: #fff8f2;
+    }
+
+    .pricing {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 18px;
+    }
+
+    .price-card {
+      padding: 26px;
+      min-height: 280px;
+    }
+
+    .price-card.primary {
+      border-color: rgba(15, 159, 134, 0.45);
+      box-shadow: var(--shadow);
+    }
+
+    .price {
+      margin: 16px 0 14px;
+      color: var(--teal-dark);
+      font-size: 44px;
+      line-height: 1;
+      font-weight: 850;
+    }
+
+    .price small {
+      color: var(--muted);
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .price-card ul {
+      margin: 18px 0 0;
+      padding-left: 19px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .price-card li {
+      margin: 8px 0;
+    }
+
+    .cta {
+      color: #ffffff;
+      background: #15242a;
+    }
+
+    .cta-inner {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 24px;
+      align-items: center;
+    }
+
+    .cta h2 {
+      color: #ffffff;
+      margin: 0;
+    }
+
+    .cta p {
+      max-width: 720px;
+      margin: 14px 0 0;
+      color: #c7d5da;
+      font-size: 17px;
+    }
+
+    .cta .btn.primary {
+      color: #15242a;
+      background: #ffffff;
+      box-shadow: none;
+    }
+
+    .cta-points {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 18px;
+    }
+
+    .cta-points span {
+      padding: 7px 10px;
+      border-radius: 999px;
+      color: #d9f3ed;
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      font-size: 13px;
+    }
+
+    footer {
+      padding: 30px 0;
+      color: var(--muted);
+      background: #ffffff;
+      font-size: 14px;
+    }
+
+    .footer-inner {
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+    }
+
+    @media (max-width: 900px) {
+      .nav-links {
+        display: none;
+      }
+
+      .hero {
+        min-height: auto;
+      }
+
+      .hero-bg {
+        background-image: linear-gradient(180deg, rgba(248, 251, 252, 0.98) 0%, rgba(248, 251, 252, 0.94) 58%, rgba(248, 251, 252, 0.74) 100%), url("assets/demogo-hero.png");
+        background-size: auto 76%;
+        background-repeat: no-repeat;
+        background-position: center bottom;
+      }
+
+      .hero .wrap {
+        padding: 56px 0 180px;
+      }
+
+      .quick-stats,
+      .section-head,
+      .grid-3,
+      .flow,
+      .split,
+      .target-grid,
+      .compare-grid,
+      .fit-grid,
+      .pricing,
+      .cta-inner {
+        grid-template-columns: 1fr;
+      }
+
+      .quick-stats {
+        margin-top: 22px;
+      }
+
+      section {
+        padding: 58px 0;
+      }
+
+      .footer-inner {
+        flex-direction: column;
+      }
+    }
+
+    @media (max-width: 520px) {
+      *,
+      *::before,
+      *::after {
+        max-width: 100%;
+      }
+
+      .nav-inner,
+      .wrap {
+        width: min(100vw - 28px, 1160px);
+      }
+
+      .hero-actions {
+        align-items: stretch;
+        flex-direction: column;
+      }
+
+      .btn {
+        width: 100%;
+      }
+
+      h2 {
+        font-size: 28px;
+      }
+
+      h1 {
+        max-width: 100%;
+        font-size: 40px;
+        line-height: 1.12;
+      }
+
+      .hero-copy {
+        max-width: 100%;
+        font-size: 15px;
+        line-height: 1.55;
+        word-break: break-all;
+        overflow-wrap: anywhere;
+      }
+
+      .hero-copy .desktop-only {
+        display: none;
+      }
+
+      .mobile-only {
+        display: inline;
+      }
+
+      .hero-note {
+        font-size: 12px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <nav class="nav">
+    <div class="nav-inner">
+      <a class="logo" href="#">
+        <span class="logo-mark">Go</span>
+        <span>DemoGo</span>
+      </a>
+      <div class="nav-links">
+        <a href="#features">功能</a>
+        <a href="#compare">对比</a>
+        <a href="#workflow">流程</a>
+        <a href="#users">用户</a>
+        <a href="#pricing">价格</a>
+        <a class="btn primary" href="#join">提交项目</a>
+      </div>
+    </div>
+  </nav>
+
+  <header class="hero">
+    <div class="hero-bg"></div>
+    <div class="wrap">
+      <div class="eyebrow">AI 应用 Demo 发布工具</div>
+      <h1><span class="line">说一句话，</span><span class="line">AI 小产品发布成</span><span class="line">国内试用链接。</span></h1>
+      <p class="hero-copy">
+        <span class="desktop-only">DemoGo 嵌入 AI 编程工具。用户只要说“发布 Demo”，Agent 就能完成构建并返回国内访问更稳的链接。免海外平台、免域名备案、免服务器配置。</span>
+        <span class="mobile-only"><span class="line">一句话发布 Demo。</span><span class="line">返回国内试用链接。</span><span class="line">免备案，免服务器。</span></span>
+      </p>
+      <div class="hero-actions">
+        <a class="btn primary" href="#join">提交真实项目</a>
+        <a class="btn ghost" href="#workflow">查看流程</a>
+        <span class="hero-note">首批内测优先免费发布第一个真实 Demo。</span>
+      </div>
+    </div>
+  </header>
+
+  <div class="wrap">
+    <div class="quick-stats">
+      <div class="stat">
+        <strong>5 分钟</strong>
+        <span>从自然语言命令到国内 Demo 链接。</span>
+      </div>
+      <div class="stat">
+        <strong>0 配置</strong>
+        <span>不用打包上传、买域名或配服务器。</span>
+      </div>
+      <div class="stat">
+        <strong>可控</strong>
+        <span>有效期、访问量、删除和下线。</span>
+      </div>
+      <div class="stat">
+        <strong>国内访问</strong>
+        <span>避免海外平台访问慢或打不开。</span>
+      </div>
+    </div>
+  </div>
+
+  <section id="features">
+    <div class="wrap">
+      <div class="section-head">
+        <div>
+          <div class="label">What DemoGo Solves</div>
+          <h2>非技术用户不想学部署，也不想离开 AI 编程工具再去上传代码包。</h2>
+        </div>
+        <p>
+          AI 编程工具已经能生成小应用，但发布环节仍然卡在工程概念里。DemoGo 的核心不是“再做一个上传网站”，而是把发布能力内嵌到 AI 编程工具里，让用户用自然语言触发部署。
+        </p>
+      </div>
+      <div class="grid-3">
+        <article class="feature">
+          <div class="icon">01</div>
+          <h3>Agent 原生调用</h3>
+          <p>通过 MCP、CLI 或插件接入 AI 编程工具，用户一句“发布 Demo”，Agent 自动调用 DemoGo。</p>
+        </article>
+        <article class="feature">
+          <div class="icon">02</div>
+          <h3>自动识别项目</h3>
+          <p>读取当前项目结构，自动选择构建命令和发布策略；上传 zip 只是备用入口。</p>
+        </article>
+        <article class="feature">
+          <div class="icon">03</div>
+          <h3>返回国内链接</h3>
+          <p>生成类似 app.demogo.cn 的链接，面向国内客户试用场景设计，避免海外托管链接访问慢或不可用。</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section id="compare" class="alt">
+    <div class="wrap">
+      <div class="section-head">
+        <div>
+          <div class="label">Why DemoGo</div>
+          <h2>不是再做一个云平台，而是成为 AI 编程工具里的“发布 Demo”按钮。</h2>
+        </div>
+        <p>
+          非技术用户真正要的不是“学习部署”，而是继续和 AI 对话，然后直接拿到客户能打开的链接。DemoGo 把发布能力做成 Agent 可调用的工具。
+        </p>
+      </div>
+      <div class="compare-grid">
+        <article class="compare-card">
+          <h3>海外部署平台</h3>
+          <p>Vercel、Netlify 等工具对技术用户很好，但国内访问可能不稳定，非技术用户还要理解 GitHub、构建和环境配置。</p>
+          <ul>
+            <li>可能访问慢或打不开</li>
+            <li>需要理解仓库和构建</li>
+            <li>错误信息偏工程化</li>
+          </ul>
+        </article>
+        <article class="compare-card">
+          <h3>自己国内上线</h3>
+          <p>正式商用应该这么做，但 Demo 阶段成本太高：买域名、备案、买服务器、配解析、配证书、配 CDN。</p>
+          <ul>
+            <li>域名和备案有等待周期</li>
+            <li>服务器和 CDN 配置复杂</li>
+            <li>不适合临时试用链接</li>
+          </ul>
+        </article>
+        <article class="compare-card highlight">
+          <h3>DemoGo</h3>
+          <p>在 AI 编程工具里说一句发布 Demo，Agent 调用 DemoGo 返回 xxx.demogo.cn。上传 zip 只是备用入口。</p>
+          <ul>
+            <li>自然语言触发发布</li>
+            <li>国内客户访问更稳</li>
+            <li>Demo 阶段免域名备案</li>
+          </ul>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section id="workflow">
+    <div class="wrap">
+      <div class="section-head">
+        <div>
+          <div class="label">Workflow</div>
+          <h2>从 AI 对话到客户试用，中间不再多一个“上传平台”。</h2>
+        </div>
+        <p>DemoGo 不承诺替代生产环境，不做大型云平台。它只解决 Demo 阶段最关键的一步：让 Agent 帮用户把项目发布成国内客户能打开的链接。</p>
+      </div>
+      <div class="flow">
+        <article class="step">
+          <span class="step-num">1</span>
+          <h3>AI 生成项目</h3>
+          <p>用户在 AI 编程工具里完成小工具、落地页、表单或产品原型。</p>
+        </article>
+        <article class="step">
+          <span class="step-num">2</span>
+          <h3>说“发布 Demo”</h3>
+          <p>Agent 通过 MCP、CLI 或插件调用 DemoGo，不需要用户手动打包上传。</p>
+        </article>
+        <article class="step">
+          <span class="step-num">3</span>
+          <h3>自动构建发布</h3>
+          <p>平台读取项目、构建静态产物，并分配无需用户备案的试用子域名。</p>
+        </article>
+        <article class="step">
+          <span class="step-num">4</span>
+          <h3>发给客户</h3>
+          <p>分享给国内客户试用，看访问数据，到期自动休眠或手动下线。</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <div class="split">
+        <div>
+          <div class="label">Demo Experience</div>
+          <h2>发布动作应该发生在 AI 对话里，而不是另开一个复杂后台。</h2>
+          <p class="hero-copy">
+            MVP 阶段建议先做静态站，控制成本和风险。主入口是 Agent 工具调用，网页上传作为兜底；真正商用时，再迁移到独立域名、备案和正式生产环境。
+          </p>
+        </div>
+        <div class="demo-box">
+          <div class="terminal">
+            <div class="terminal-head">
+              <span class="dot"></span>
+              <span class="dot"></span>
+              <span class="dot"></span>
+            </div>
+            <div class="terminal-body">
+              <div>&gt; 用户：帮我发布一个 Demo</div>
+              <div>&gt; Agent 正在调用 DemoGo...</div>
+              <div>&gt; 正在识别项目类型...</div>
+              <div class="ok">✓ 检测到 Vite / React 项目</div>
+              <div>&gt; 正在安装依赖并构建...</div>
+              <div class="ok">✓ 构建完成，产物大小 3.8 MB</div>
+              <div>&gt; 正在生成国内试用链接...</div>
+              <div class="link-line">https://coffee-crm.demogo.cn</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <div class="section-head">
+        <div>
+          <div class="label">Fit</div>
+          <h2>边界越清楚，越容易吸引真正会付费的用户。</h2>
+        </div>
+        <p>DemoGo 的第一版必须克制：服务演示和试用，不承诺生产级托管。这样才能控制成本、风险和客服复杂度。</p>
+      </div>
+      <div class="fit-grid">
+        <article class="fit-card yes">
+          <h3>适合</h3>
+          <ul>
+            <li>AI 生成的落地页、表单页、小工具</li>
+            <li>产品原型、客户 Demo、课程作业展示</li>
+            <li>需要 7-30 天短期试用链接的项目</li>
+            <li>希望在 AI 编程工具里一句话发布的人</li>
+          </ul>
+        </article>
+        <article class="fit-card no">
+          <h3>暂不适合</h3>
+          <ul>
+            <li>正式商用生产系统</li>
+            <li>复杂后端、数据库、长驻任务和高并发访问</li>
+            <li>爬虫、代理、下载站、敏感内容和灰色业务</li>
+            <li>需要长期独立域名运营的成熟产品</li>
+          </ul>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section id="users" class="alt">
+    <div class="wrap">
+      <div class="section-head">
+        <div>
+          <div class="label">Target Users</div>
+          <h2>先服务一小撮高频、有付费意愿的人。</h2>
+        </div>
+        <p>DemoGo 不需要一开始覆盖所有 AI 编程用户。100-1000 个稳定付费用户，就能支撑一个健康的小而美产品。</p>
+      </div>
+      <div class="target-grid">
+        <article class="target-card">
+          <h3>产品经理</h3>
+          <p>用 AI 做原型，在对话里直接发布给老板、客户和团队试用。</p>
+        </article>
+        <article class="target-card">
+          <h3>运营和设计师</h3>
+          <p>把活动页、小工具、表单页面快速发布出来，不用单独购买域名。</p>
+        </article>
+        <article class="target-card">
+          <h3>AI 训练营</h3>
+          <p>学员在 AI 工具里一句话提交作业 Demo，减少部署答疑。</p>
+        </article>
+        <article class="target-card">
+          <h3>小型外包团队</h3>
+          <p>向客户交付阶段性 Demo，而不是先折腾服务器、备案和生产环境。</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section id="pricing">
+    <div class="wrap">
+      <div class="section-head">
+        <div>
+          <div class="label">Pricing</div>
+          <h2>Demo 阶段花几十元，省掉域名、备案、服务器和部署学习成本。</h2>
+        </div>
+        <p>通过有效期、部署数量、文件大小和访问量限制，把资源成本控制在可预测范围内，同时保留一键下线能力。</p>
+      </div>
+      <div class="pricing">
+        <article class="price-card">
+          <h3>Free</h3>
+          <div class="price">0 <small>元/月</small></div>
+          <p>适合第一次试用和低频用户。</p>
+          <ul>
+            <li>1-3 个 Demo</li>
+            <li>7 天有效期</li>
+            <li>基础访问限制</li>
+            <li>无需自备域名</li>
+          </ul>
+        </article>
+        <article class="price-card primary">
+          <h3>Pro</h3>
+          <div class="price">49 <small>元/月</small></div>
+          <p>适合持续做 AI 小产品的人。</p>
+          <ul>
+            <li>10 个 Demo</li>
+            <li>30 天有效期</li>
+            <li>访问统计和一键下线</li>
+            <li>Agent 一句话发布</li>
+            <li>国内试用链接</li>
+          </ul>
+        </article>
+        <article class="price-card">
+          <h3>Studio</h3>
+          <div class="price">99 <small>元/月</small></div>
+          <p>适合团队、课程和外包交付。</p>
+          <ul>
+            <li>更多 Demo 和流量</li>
+            <li>团队项目管理</li>
+            <li>正式上线协助入口</li>
+          </ul>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section id="join" class="cta">
+    <div class="wrap">
+      <div class="cta-inner">
+        <div>
+          <h2>提交一个真实 AI 项目，优先接入“一句话发布 Demo”。</h2>
+          <p>如果你正在用 AI 编程工具做小产品，但卡在 GitHub、Vercel、域名、备案、服务器或国内访问稳定性，DemoGo 会优先帮你生成第一个国内试用链接，并验证 Agent 工具调用流程。</p>
+          <div class="cta-points">
+            <span>真实项目优先</span>
+            <span>Agent 发布流程优先验证</span>
+            <span>适合 7-30 天客户试用</span>
+          </div>
+        </div>
+        <a class="btn primary" href="mailto:hello@demogo.cn?subject=DemoGo%20%E5%86%85%E6%B5%8B%E9%A1%B9%E7%9B%AE%E6%8F%90%E4%BA%A4">提交项目</a>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="wrap footer-inner">
+      <div>DemoGo - AI 应用 Demo 一键发布</div>
+      <div>建议域名：demogo.cn ｜ 本地能跑，就能发给别人试用</div>
+    </div>
+  </footer>
+</body>
+</html>
