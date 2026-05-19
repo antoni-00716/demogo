@@ -4,6 +4,7 @@ $ProjectRoot = Split-Path -Parent $PSScriptRoot
 $Dist = Join-Path $ProjectRoot "dist"
 $WebRoot = Join-Path $ProjectRoot "web"
 $WebDist = Join-Path $WebRoot "dist"
+$Version = "0.2.5"
 
 New-Item -ItemType Directory -Force -Path $Dist | Out-Null
 
@@ -39,11 +40,11 @@ function New-ZipFromDirectory {
 }
 
 $SiteZip = Join-Path $Dist "demogo-site-preview.zip"
-$ServerZip = Join-Path $Dist "demogo-server-v0.2.4.zip"
-$OpsZip = Join-Path $Dist "demogo-ops-scripts-v0.2.4.zip"
-$CliZip = Join-Path $Dist "demogo-cli-v0.2.4.zip"
-$McpZip = Join-Path $Dist "demogo-mcp-v0.2.4.zip"
-$CodexSkillZip = Join-Path $Dist "demogo-codex-skill-v0.2.4.zip"
+$ServerZip = Join-Path $Dist "demogo-server-v$Version.zip"
+$OpsZip = Join-Path $Dist "demogo-ops-scripts-v$Version.zip"
+$CliZip = Join-Path $Dist "demogo-cli-v$Version.zip"
+$McpZip = Join-Path $Dist "demogo-mcp-v$Version.zip"
+$CodexSkillZip = Join-Path $Dist "demogo-codex-skill-v$Version.zip"
 
 Remove-Item -Force -ErrorAction SilentlyContinue $SiteZip, $ServerZip, $OpsZip, $CliZip, $McpZip, $CodexSkillZip
 
@@ -103,8 +104,8 @@ New-ZipFromDirectory -SourceDir $CodexSkillPackageDir -DestinationZip $CodexSkil
 $OpsPackageDir = Join-Path $Dist "ops-package"
 Remove-Item -Recurse -Force -ErrorAction SilentlyContinue $OpsPackageDir
 New-Item -ItemType Directory -Force -Path $OpsPackageDir | Out-Null
-Copy-Item -Force (Join-Path $ProjectRoot "scripts\server-deploy-demogo-v0.2.4.sh") $OpsPackageDir
-Copy-Item -Force (Join-Path $ProjectRoot "scripts\server-rollback-demogo-v0.2.4.sh") $OpsPackageDir
+Copy-Item -Force (Join-Path $ProjectRoot "scripts\server-deploy-demogo-v$Version.sh") $OpsPackageDir
+Copy-Item -Force (Join-Path $ProjectRoot "scripts\server-rollback-demogo-v$Version.sh") $OpsPackageDir
 Copy-Item -Force (Join-Path $ProjectRoot "scripts\server-verify-demogo.sh") $OpsPackageDir
 Copy-Item -Force (Join-Path $ProjectRoot "scripts\server-clean-demogo-data.sh") $OpsPackageDir
 Copy-Item -Force (Join-Path $ProjectRoot "scripts\upload-demogo-packages.ps1") $OpsPackageDir

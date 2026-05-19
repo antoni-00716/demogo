@@ -10,7 +10,7 @@ DemoGo 是一个面向 AI 编程工具产物的测试链接生成与试用平台
 
 ## 当前版本状态
 
-当前开发目标版本：v0.2.4。线上已部署版本仍需以 `/api/health` 返回版本为准。
+当前开发目标版本：v0.2.5。线上已部署版本仍需以 `/api/health` 返回版本为准。
 
 v0.1.21 基于 v0.1.20 已完成：
 
@@ -104,13 +104,22 @@ v0.2.3 已完成：
 - 同步发布 API、Agent 发布 API、CLI、MCP 继续兼容，不破坏 AI 工具发布链路。
 - 异步任务继续复用原项目检测、内容安全检查、额度检查、表单识别和发布记录，不绕过任何现有规则。
 
-v0.2.4 当前目标：
+v0.2.4 已完成：
 
 - 正式域名真实试用与三端体验重构版。
 - 首页全面重构：强化需求钩子、试用转化、场景表达、信任信息和支持边界。
 - 用户端全面重构：完善发布流程、项目管理、表单记录、AI 发布引导、套餐额度和反馈入口。
 - 管理端全面重构：完善运营看板、待处理事项、真实试用指标、失败原因、内容检查和用户反馈处理。
 - 保留 v0.2.3 异步发布和 AI 发布链路，不新增后端托管、数据库托管、Docker 隔离等长期能力。
+
+v0.2.5 当前目标：
+
+- AI 发布链路真实可用版。
+- Agent 发布接口兼容 `project`、`file`、`package` 三种项目包字段，避免 AI 工具因字段名不同报错。
+- CLI/MCP/Skill 统一升级到 `0.2.5`，继续复用 `POST /api/agent/deploy`。
+- 用户端 AI 发布页明确说明：已安装 CLI 时优先 `demogo deploy`；`npx demogo` 只有 npm 正式发布后才可作为候选；CLI 不可用时可以用 MCP/API 兜底，但不能说成 CLI 发布成功。
+- 强化 AI 发布口令说明：口令可长期复用，只有泄露、失效或主动更换时才重置。
+- 本版本不新增后端托管、数据库托管、支付、登录系统托管等长期能力。
 
 当前明确不支持：
 
@@ -171,7 +180,7 @@ v0.1.25 内容安全能力的边界：
 - 首页样式：`web/src/styles/home.css`
 - 打包脚本：`scripts/build-demogo-packages.ps1`
 - 上传脚本：`scripts/upload-demogo-packages.ps1`
-- 部署脚本：`scripts/server-deploy-demogo-v0.2.4.sh`
+- 部署脚本：`scripts/server-deploy-demogo-v0.2.5.sh`
 - 验证脚本：`scripts/server-verify-demogo.sh`
 - CLI：`cli/bin/demogo.js`
 - MCP：`mcp/bin/demogo-mcp.js`
@@ -197,6 +206,7 @@ v0.1.25 内容安全能力的边界：
 - v0.2.2：AI 发布真实可用性强化版，强化 CLI 可安装、标准化 AI 发布结果、建立真实项目测试集。
 - v0.2.3：真实试用与异步发布合并版，新增发布任务接口，用户端创建和更新改为任务进度式体验。
 - v0.2.4：正式域名真实试用与三端体验重构版，重构首页、用户端和管理端体验。
+- v0.2.5：AI 发布链路真实可用版，修复真实 AI 工具发布字段兼容、CLI/Skill 指令和口令说明。
 
 建议后续节奏：
 
@@ -311,11 +321,11 @@ powershell -ExecutionPolicy Bypass -File C:\Users\wei.gu\Documents\demogo\script
 
 ```text
 dist\demogo-site-preview.zip
-dist\demogo-server-v0.2.4.zip
-dist\demogo-ops-scripts-v0.2.4.zip
-dist\demogo-cli-v0.2.4.zip
-dist\demogo-mcp-v0.2.4.zip
-dist\demogo-codex-skill-v0.2.4.zip
+dist\demogo-server-v0.2.5.zip
+dist\demogo-ops-scripts-v0.2.5.zip
+dist\demogo-cli-v0.2.5.zip
+dist\demogo-mcp-v0.2.5.zip
+dist\demogo-codex-skill-v0.2.5.zip
 ```
 
 上传：
@@ -328,17 +338,17 @@ powershell -ExecutionPolicy Bypass -File C:\Users\wei.gu\Documents\demogo\script
 
 ```bash
 cd /tmp
-unzip -o demogo-ops-scripts-v0.2.4.zip
-sed -i 's/\r$//' server-deploy-demogo-v0.2.4.sh server-rollback-demogo-v0.2.4.sh server-verify-demogo.sh server-clean-demogo-data.sh
-chmod +x server-deploy-demogo-v0.2.4.sh server-rollback-demogo-v0.2.4.sh server-verify-demogo.sh server-clean-demogo-data.sh
-./server-deploy-demogo-v0.2.4.sh 2>&1 | tee /tmp/demogo-v0.2.4-deploy.log
+unzip -o demogo-ops-scripts-v0.2.5.zip
+sed -i 's/\r$//' server-deploy-demogo-v0.2.5.sh server-rollback-demogo-v0.2.5.sh server-verify-demogo.sh server-clean-demogo-data.sh
+chmod +x server-deploy-demogo-v0.2.5.sh server-rollback-demogo-v0.2.5.sh server-verify-demogo.sh server-clean-demogo-data.sh
+./server-deploy-demogo-v0.2.5.sh 2>&1 | tee /tmp/demogo-v0.2.5-deploy.log
 ./server-verify-demogo.sh
 ```
 
 部署成功标准：
 
-- `/api/health` 返回 `0.2.4`。
-- Nginx `/api/health` 代理返回 `0.2.4`。
+- `/api/health` 返回 `0.2.5`。
+- Nginx `/api/health` 代理返回 `0.2.5`。
 - 首页、登录页、用户端返回 200。
 - 管理后台返回 401 是正常的，因为有 Basic Auth。
 - `demogo-server.service` 是 `active (running)`。

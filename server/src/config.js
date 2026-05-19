@@ -1,9 +1,9 @@
 ﻿import process from "node:process";
 
-export const serviceVersion = "0.2.4";
+export const serviceVersion = "0.2.5";
 
 export const port = Number(process.env.PORT || 3001);
-export const publicBaseUrl = process.env.PUBLIC_BASE_URL || "http://8.155.150.162";
+export const publicBaseUrl = process.env.PUBLIC_BASE_URL || "https://demogo.cn";
 export const uploadDir = process.env.DEMOGO_UPLOAD_DIR || "/var/lib/demogo/uploads";
 export const demoRoot = process.env.DEMOGO_DEMO_ROOT || "/var/www/demogo-preview/d";
 export const dataDir = process.env.DEMOGO_DATA_DIR || "/var/lib/demogo/data";

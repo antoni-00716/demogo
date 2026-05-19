@@ -735,6 +735,10 @@ function AgentPublishPanel({
           <strong>最简单的说法</strong>
           <p>“请把当前项目发布到 DemoGo，生成一个可以发给别人试用的链接。如果失败，请根据 DemoGo 的提示帮我修改后再试。”</p>
         </div>
+        <div className="agent-user-guide agent-status-guide">
+          <strong>现在的真实状态</strong>
+          <p>如果当前电脑或 AI 工具里已经安装了 DemoGo CLI，可以直接用命令发布；如果没有安装，AI 会说明原因，再改用 DemoGo 的备用发布通道。备用通道生成的链接同样有效，但不能说成 CLI 发布成功。</p>
+        </div>
         <div className="agent-steps">
           <div>
             <strong>1. 生成一次口令</strong>
@@ -769,7 +773,7 @@ function AgentPublishPanel({
         <div className="agent-cli-box">
           <span>AI 会优先执行的命令</span>
           <code>demogo config set --api {getDemoGoApiBase()} --token {commandToken} && demogo deploy</code>
-          <small>当前默认使用已安装的 demogo 命令；如果没有安装，AI 需要说明原因，再改用 DemoGo MCP 或 Agent API。</small>
+          <small>当前默认使用已安装的 demogo 命令；npx 只有在 DemoGo CLI 正式发布到 npm 后才可用。CLI 不可用时，AI 需要说明原因，再改用 DemoGo MCP 或 Agent API。</small>
         </div>
         <div className="row-actions">
           {!token?.enabled ? <Button variant="primary" onClick={onResetToken}>生成 AI 发布口令</Button> : null}
@@ -1868,6 +1872,7 @@ function createAgentInstruction(token: AgentToken | null, target: "codex" | "age
     "   demogo deploy",
     "",
     "如果当前环境不能直接运行 demogo 命令，请先说明 CLI 未安装或不可用的原因；不要把 API 兜底说成 CLI 发布成功。npx demogo 只有在 DemoGo CLI 已正式发布到 npm 后才作为候选方式。CLI 不可用时，再使用 DemoGo MCP 或直接调用 POST /api/agent/deploy。",
+    "直接调用 Agent API 时，请使用 multipart/form-data；项目包字段优先使用 project，DemoGo 也兼容 file 和 package；请求头使用 Authorization: Bearer <DemoGo AI 发布口令>。",
     "",
     "操作要求：",
     "1. 先检查当前项目是否已经有 index.html、单个 HTML 文件、dist/index.html、build/index.html 或 out/index.html。",

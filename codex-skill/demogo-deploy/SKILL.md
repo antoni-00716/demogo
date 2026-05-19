@@ -5,7 +5,7 @@ description: Publish AI-built static pages or frontend projects to DemoGo and re
 
 # DemoGo Deploy
 
-Use this skill to publish the current project to DemoGo. DemoGo v0.2.4 is intended for AI-assisted publishing: the AI tool can package the current project, call DemoGo, and return a shareable trial link.
+Use this skill to publish the current project to DemoGo. DemoGo v0.2.5 is intended for AI-assisted publishing: the AI tool can package the current project, call DemoGo, and return a shareable trial link.
 
 ## What DemoGo Supports
 
@@ -68,7 +68,7 @@ npx demogo doctor
 npx demogo deploy
 ```
 
-Do not use `demogo inspect`; it is not a supported CLI command in v0.2.4. Use `demogo doctor` only to check the platform address and local token configuration.
+Do not use `demogo inspect`; it is not a supported CLI command in v0.2.5. Use `demogo doctor` only to check the platform address and local token configuration.
 
 If the CLI is unavailable, use the MCP tool if configured, or call DemoGo Agent API directly. When falling back to the API, clearly say that this was an API fallback, not a successful CLI deployment.
 
@@ -85,6 +85,8 @@ Send a multipart request:
   - `project`: `.zip`, `.tar.gz`, or `.tgz` archive
 
 Use `project` as the preferred archive field. DemoGo also accepts `file` and `package` for compatibility with AI tools, but new integrations should still use `project`.
+
+If the API fallback succeeds, say it was an API fallback. Do not describe it as a CLI deployment.
 
 ## Failure Handling
 

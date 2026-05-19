@@ -6,13 +6,14 @@ if (!$Server) {
 }
 
 $ProjectRoot = Split-Path -Parent $PSScriptRoot
+$Version = "0.2.5"
 
 $SiteZip = Join-Path $ProjectRoot "dist\demogo-site-preview.zip"
-$ServerZip = Join-Path $ProjectRoot "dist\demogo-server-v0.2.4.zip"
-$OpsZip = Join-Path $ProjectRoot "dist\demogo-ops-scripts-v0.2.4.zip"
-$CliZip = Join-Path $ProjectRoot "dist\demogo-cli-v0.2.4.zip"
-$McpZip = Join-Path $ProjectRoot "dist\demogo-mcp-v0.2.4.zip"
-$CodexSkillZip = Join-Path $ProjectRoot "dist\demogo-codex-skill-v0.2.4.zip"
+$ServerZip = Join-Path $ProjectRoot "dist\demogo-server-v$Version.zip"
+$OpsZip = Join-Path $ProjectRoot "dist\demogo-ops-scripts-v$Version.zip"
+$CliZip = Join-Path $ProjectRoot "dist\demogo-cli-v$Version.zip"
+$McpZip = Join-Path $ProjectRoot "dist\demogo-mcp-v$Version.zip"
+$CodexSkillZip = Join-Path $ProjectRoot "dist\demogo-codex-skill-v$Version.zip"
 
 if (!(Test-Path $SiteZip)) {
   throw "Cannot find site package: $SiteZip"
