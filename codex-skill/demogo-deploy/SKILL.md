@@ -60,13 +60,15 @@ demogo doctor
 demogo deploy
 ```
 
-If `demogo` is not installed, explain that the local CLI is unavailable. Do not present `npx demogo` as the default unless the DemoGo CLI package has been formally published to npm. After npm publication, this form is acceptable:
+If `demogo` is not installed, use the npm package when network access is available:
 
 ```bash
-npx demogo config set --api <DEMOGO_API_BASE> --token <DEMOGO_AGENT_TOKEN>
-npx demogo doctor
-npx demogo deploy
+npx @demogo-cn/cli config set --api <DEMOGO_API_BASE> --token <DEMOGO_AGENT_TOKEN>
+npx @demogo-cn/cli doctor
+npx @demogo-cn/cli deploy
 ```
+
+The npm package name is `@demogo-cn/cli`; the installed command name remains `demogo`.
 
 Do not use `demogo inspect`; it is not a supported CLI command in v0.2.5. Use `demogo doctor` only to check the platform address and local token configuration.
 

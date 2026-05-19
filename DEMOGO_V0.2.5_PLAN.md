@@ -16,7 +16,7 @@ v0.2.5 解决真实 AI 工具发布过程中暴露的问题，让 Codex、Cursor
 2. CLI 真实可用性说明
    - CLI 版本升级到 `0.2.5`。
    - 交付包继续支持本地安装后的 `demogo deploy`。
-   - 在 npm 正式发布前，不把 `npx demogo` 当作默认方案。
+   - npm 发布包名使用 `@demogo-cn/cli`，支持 `npx @demogo-cn/cli deploy`。
    - CLI 不可用时，AI 工具应说明原因，再使用 MCP 或 Agent API 兜底。
 
 3. MCP / Codex Skill 同步
@@ -40,7 +40,7 @@ v0.2.5 解决真实 AI 工具发布过程中暴露的问题，让 Codex、Cursor
 - 前端 lint 和生产构建通过。
 - Agent API 使用 `project`、`file`、`package` 字段都能发布成功。
 - 错误上传字段返回 400 和可理解提示。
-- 用户端 AI 发布说明不再暗示 `npx demogo` 当前已可用。
+- 用户端 AI 发布说明使用 `npx @demogo-cn/cli`，不再暗示被占用的 `npx demogo` 当前可用。
 - 打包后存在：
   - `dist/demogo-site-preview.zip`
   - `dist/demogo-server-v0.2.5.zip`

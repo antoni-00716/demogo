@@ -1,10 +1,10 @@
-﻿{
-  "name": "demogo",
+{
+  "name": "@demogo-cn/cli",
   "version": "0.2.5",
   "description": "DemoGo CLI for generating shareable trial links from AI-built pages.",
   "type": "module",
   "bin": {
-    "demogo": "./bin/demogo.js"
+    "demogo": "bin/demogo.js"
   },
   "files": [
     "bin",
@@ -15,5 +15,3 @@
   },
   "license": "UNLICENSED"
 }
-
-

@@ -117,7 +117,7 @@ v0.2.5 当前目标：
 - AI 发布链路真实可用版。
 - Agent 发布接口兼容 `project`、`file`、`package` 三种项目包字段，避免 AI 工具因字段名不同报错。
 - CLI/MCP/Skill 统一升级到 `0.2.5`，继续复用 `POST /api/agent/deploy`。
-- 用户端 AI 发布页明确说明：已安装 CLI 时优先 `demogo deploy`；`npx demogo` 只有 npm 正式发布后才可作为候选；CLI 不可用时可以用 MCP/API 兜底，但不能说成 CLI 发布成功。
+- 用户端 AI 发布页明确说明：已安装 CLI 时优先 `demogo deploy`；未安装时可使用 `npx @demogo-cn/cli`；CLI 不可用时可以用 MCP/API 兜底，但不能说成 CLI 发布成功。
 - 强化 AI 发布口令说明：口令可长期复用，只有泄露、失效或主动更换时才重置。
 - 本版本不新增后端托管、数据库托管、支付、登录系统托管等长期能力。
 

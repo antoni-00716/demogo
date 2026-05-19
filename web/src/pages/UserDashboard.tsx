@@ -773,7 +773,7 @@ function AgentPublishPanel({
         <div className="agent-cli-box">
           <span>AI 会优先执行的命令</span>
           <code>demogo config set --api {getDemoGoApiBase()} --token {commandToken} && demogo deploy</code>
-          <small>当前默认使用已安装的 demogo 命令；npx 只有在 DemoGo CLI 正式发布到 npm 后才可用。CLI 不可用时，AI 需要说明原因，再改用 DemoGo MCP 或 Agent API。</small>
+          <small>当前默认使用已安装的 demogo 命令；未安装时可以使用 npx @demogo-cn/cli。CLI 不可用时，AI 需要说明原因，再改用 DemoGo MCP 或 Agent API。</small>
         </div>
         <div className="row-actions">
           {!token?.enabled ? <Button variant="primary" onClick={onResetToken}>生成 AI 发布口令</Button> : null}
@@ -1871,7 +1871,7 @@ function createAgentInstruction(token: AgentToken | null, target: "codex" | "age
     "   demogo doctor",
     "   demogo deploy",
     "",
-    "如果当前环境不能直接运行 demogo 命令，请先说明 CLI 未安装或不可用的原因；不要把 API 兜底说成 CLI 发布成功。npx demogo 只有在 DemoGo CLI 已正式发布到 npm 后才作为候选方式。CLI 不可用时，再使用 DemoGo MCP 或直接调用 POST /api/agent/deploy。",
+    "如果当前环境不能直接运行 demogo 命令，请使用 npx @demogo-cn/cli；如果 npx 也不可用，请先说明 CLI 不可用的原因，不要把 API 兜底说成 CLI 发布成功。CLI 不可用时，再使用 DemoGo MCP 或直接调用 POST /api/agent/deploy。",
     "直接调用 Agent API 时，请使用 multipart/form-data；项目包字段优先使用 project，DemoGo 也兼容 file 和 package；请求头使用 Authorization: Bearer <DemoGo AI 发布口令>。",
     "",
     "操作要求：",

@@ -48,6 +48,20 @@ DemoGo supports static pages, single HTML pages, built frontend output, and fron
 
 ## npm / npx Status
 
-`npx demogo` works only after the CLI package is formally published to npm. Before that, use the local install package above. If an AI coding tool cannot run `demogo`, it should explain that the CLI is not installed and then use DemoGo MCP or the Agent API fallback.
+After npm publication, AI coding tools can run:
+
+```bash
+npx @demogo-cn/cli deploy
+```
+
+Or install it globally:
+
+```bash
+npm install -g @demogo-cn/cli
+demogo deploy
+```
+
+The package name is `@demogo-cn/cli`; the installed command remains `demogo`.
+If an AI coding tool cannot run `demogo` or `npx @demogo-cn/cli`, it should explain why and then use DemoGo MCP or the Agent API fallback.
 
 
