@@ -84,6 +84,8 @@ Send a multipart request:
   - `source`: `agent_api` unless this is a CLI or MCP call
   - `project`: `.zip`, `.tar.gz`, or `.tgz` archive
 
+Use `project` as the preferred archive field. DemoGo also accepts `file` and `package` for compatibility with AI tools, but new integrations should still use `project`.
+
 ## Failure Handling
 
 If DemoGo returns a project issue:

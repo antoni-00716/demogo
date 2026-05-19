@@ -260,12 +260,13 @@ async function testAgentDeployApi() {
   assert(!tokenStatus.token?.value, "agent token status should not return secret value");
 
   const agentZip = await createStaticZip("agent-demo", "Agent Demo");
+  const agentHeaders = {
+    Authorization: `Bearer ${tokenPayload.token.value}`,
+    "X-DemoGo-Deploy-Source": "cli",
+    "User-Agent": "demogo-cli/0.2.3"
+  };
   const agentDeploy = await postZip("/api/agent/deploy", agentZip, { name: "agent-demo" }, {
-    headers: {
-      Authorization: `Bearer ${tokenPayload.token.value}`,
-      "X-DemoGo-Deploy-Source": "cli",
-      "User-Agent": "demogo-cli/0.2.3"
-    }
+    headers: agentHeaders
   });
   assert(agentDeploy.ok, "agent deploy should return ok");
   assert(agentDeploy.publicUrl, "agent deploy should return public URL");
@@ -283,6 +284,32 @@ async function testAgentDeployApi() {
   assert(overviewAfter.metrics?.failureReasons && typeof overviewAfter.metrics.failureReasons === "object", "admin overview should include failure reason buckets");
   await postJson(`/api/demos/${agentDeploy.id}/offline`, {});
   await postJson(`/api/demos/${agentDeploy.id}/delete`, {});
+
+  const fileFieldZip = await createStaticZip("agent-file-field-demo", "Agent File Field Demo");
+  const fileFieldDeploy = await postZip("/api/agent/deploy", fileFieldZip, { name: "agent-file-field-demo" }, {
+    headers: agentHeaders,
+    fileField: "file"
+  });
+  assert(fileFieldDeploy.ok, "agent deploy should accept file field for AI tool compatibility");
+  await postJson(`/api/demos/${fileFieldDeploy.id}/offline`, {});
+  await postJson(`/api/demos/${fileFieldDeploy.id}/delete`, {});
+
+  const packageFieldZip = await createStaticZip("agent-package-field-demo", "Agent Package Field Demo");
+  const packageFieldDeploy = await postZip("/api/agent/deploy", packageFieldZip, { name: "agent-package-field-demo" }, {
+    headers: agentHeaders,
+    fileField: "package"
+  });
+  assert(packageFieldDeploy.ok, "agent deploy should accept package field for AI tool compatibility");
+  await postJson(`/api/demos/${packageFieldDeploy.id}/offline`, {});
+  await postJson(`/api/demos/${packageFieldDeploy.id}/delete`, {});
+
+  const wrongFieldZip = await createStaticZip("agent-wrong-field-demo", "Agent Wrong Field Demo");
+  const wrongField = await postZip("/api/agent/deploy", wrongFieldZip, { name: "agent-wrong-field-demo" }, {
+    headers: agentHeaders,
+    fileField: "archive",
+    expectedStatus: 400
+  });
+  assert(wrongField.error?.includes("上传字段"), "unexpected upload field should return a readable 400 error");
 }
 
 async function inspectCalculatorControls() {
@@ -817,17 +844,18 @@ function crc32(buffer) {
 }
 
 async function postZip(endpoint, zipPath, fields = {}, options = {}) {
+  const { fileField = "project", ...requestOptions } = options;
   const form = new FormData();
   const bytes = await fs.readFile(zipPath);
   const type = zipPath.endsWith(".zip") ? "application/zip" : "application/gzip";
-  form.append("project", new Blob([bytes], { type }), path.basename(zipPath));
+  form.append(fileField, new Blob([bytes], { type }), path.basename(zipPath));
   for (const [key, value] of Object.entries(fields)) {
     form.append(key, String(value));
   }
   return requestJson(endpoint, {
     method: "POST",
     body: form,
-    ...options
+    ...requestOptions
   });
 }
 

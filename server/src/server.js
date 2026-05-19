@@ -162,6 +162,18 @@ const upload = multer({
   }
 });
 
+const uploadProjectArchive = [
+  upload.fields([
+    { name: "project", maxCount: 1 },
+    { name: "file", maxCount: 1 },
+    { name: "package", maxCount: 1 }
+  ]),
+  (req, _res, next) => {
+    req.file = req.files?.project?.[0] || req.files?.file?.[0] || req.files?.package?.[0] || null;
+    next();
+  }
+];
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
@@ -1087,7 +1099,7 @@ app.post("/api/feedback", requireUser, async (req, res, next) => {
   }
 });
 
-app.post("/api/inspect", requireUser, upload.single("project"), async (req, res, next) => {
+app.post("/api/inspect", requireUser, uploadProjectArchive, async (req, res, next) => {
   const uploadedFile = req.file;
   if (!uploadedFile) {
     res.status(400).json({ error: "请上传 .zip、.tar.gz 或 .tgz 项目包" });
@@ -1419,7 +1431,7 @@ app.post("/api/demos/:id/restore", requireUser, async (req, res, next) => {
   }
 });
 
-app.post("/api/demos/:id/update", requireUser, upload.single("project"), async (req, res, next) => {
+app.post("/api/demos/:id/update", requireUser, uploadProjectArchive, async (req, res, next) => {
   const uploadedFile = req.file;
   const user = req.user;
   const clientIp = getClientIp(req);
@@ -1441,7 +1453,7 @@ app.post("/api/demos/:id/update", requireUser, upload.single("project"), async (
   }
 });
 
-app.post("/api/deployment-jobs", requireUser, upload.single("project"), async (req, res, next) => {
+app.post("/api/deployment-jobs", requireUser, uploadProjectArchive, async (req, res, next) => {
   const uploadedFile = req.file;
   if (!uploadedFile) {
     res.status(400).json({ error: "请上传 .zip、.tar.gz 或 .tgz 项目包" });
@@ -1467,7 +1479,7 @@ app.post("/api/deployment-jobs", requireUser, upload.single("project"), async (r
   }
 });
 
-app.post("/api/demos/:id/deployment-jobs", requireUser, upload.single("project"), async (req, res, next) => {
+app.post("/api/demos/:id/deployment-jobs", requireUser, uploadProjectArchive, async (req, res, next) => {
   const uploadedFile = req.file;
   if (!uploadedFile) {
     res.status(400).json({ error: "请上传 .zip、.tar.gz 或 .tgz 项目包" });
@@ -1493,11 +1505,11 @@ app.post("/api/demos/:id/deployment-jobs", requireUser, upload.single("project")
   }
 });
 
-app.post("/api/agent/deploy", requireAgentToken, upload.single("project"), async (req, res, next) => {
+app.post("/api/agent/deploy", requireAgentToken, uploadProjectArchive, async (req, res, next) => {
   return handleCreateDeployment(req, res, next, { actor: "agent" });
 });
 
-app.post("/api/deploy", requireUser, upload.single("project"), async (req, res, next) => {
+app.post("/api/deploy", requireUser, uploadProjectArchive, async (req, res, next) => {
   return handleCreateDeployment(req, res, next, { actor: "user" });
 });
 
@@ -2141,8 +2153,18 @@ function createHttpError(message, statusCode = 400) {
 }
 
 app.use((error, _req, res, _next) => {
-  const message = error instanceof Error ? error.message : "发布失败";
-  const statusCode = error.statusCode || (message.includes("仅支持") || message.includes("不支持") || message.includes("超出") ? 400 : 500);
+  let message = error instanceof Error ? error.message : "发布失败";
+  let statusCode = error.statusCode || (message.includes("仅支持") || message.includes("不支持") || message.includes("超出") ? 400 : 500);
+  if (error instanceof multer.MulterError) {
+    statusCode = 400;
+    if (error.code === "LIMIT_UNEXPECTED_FILE") {
+      message = "上传字段不正确。请把项目包放在 project 字段中；为兼容 AI 工具，file 和 package 字段也可以使用。";
+    } else if (error.code === "LIMIT_FILE_SIZE") {
+      message = `项目包体积过大，当前最多支持 ${maxZipSizeMb}MB。`;
+    } else {
+      message = "项目包上传失败，请确认只上传一个 .zip、.tar.gz 或 .tgz 文件。";
+    }
+  }
   res.status(statusCode).json({
     error: message,
     inspection: error.inspection,
