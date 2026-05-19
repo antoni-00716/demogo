@@ -746,7 +746,7 @@ function AgentPublishPanel({
           </div>
           <div>
             <strong>2. 复制给 AI</strong>
-            <span>把下方指令交给 Codex、Cursor 或其他 AI 工具。</span>
+            <span>把下方指令交给 Codex、Cursor 或其他 AI 工具，先确认发布目录是干净项目文件夹。</span>
           </div>
           <div>
             <strong>3. 等待链接</strong>
@@ -1875,13 +1875,15 @@ function createAgentInstruction(token: AgentToken | null, target: "codex" | "age
     "直接调用 Agent API 时，请使用 multipart/form-data；项目包字段优先使用 project，DemoGo 也兼容 file 和 package；请求头使用 Authorization: Bearer <DemoGo AI 发布口令>。",
     "",
     "操作要求：",
-    "1. 先检查当前项目是否已经有 index.html、单个 HTML 文件、dist/index.html、build/index.html 或 out/index.html。",
-    "2. 如果是 React/Vue/Vite 源码项目，请先运行构建命令，确保生成可打开的网页文件。",
-    "3. 如果只有 landing-page.html、home.html 这类单个 HTML 页面，可以直接发布，不要强制用户手动改名。",
-    "4. 发布名称不要使用 project、demo、demogo 这类泛化名称，优先使用页面 title、主标题或文件名。",
-    "5. 请把项目打包成 .zip、.tar.gz 或 .tgz，不要包含 .env、密钥文件、node_modules、.git。",
-    "6. 如果页面里有报名、预约、留资或留言表单，DemoGo 会在生成链接时自动识别并开启基础收集；价格计算器、配置开关等控件不应当当成报名表。",
-    "7. 生成成功后返回访问链接；失败时请根据 DemoGo 返回的原因修改项目后再试，不要绕过内容检查。"
+    "1. 先确认发布目录只包含当前项目，不要在桌面、下载、文档、OneDrive 或用户根目录直接执行发布。",
+    "2. 如果只有一个 HTML 文件，请创建干净临时目录，只放这个 HTML 文件后再发布；不需要把它手动改名为 index.html。",
+    "3. 再检查当前项目是否已经有 index.html、单个 HTML 文件、dist/index.html、build/index.html 或 out/index.html。",
+    "4. 如果是 React/Vue/Vite 源码项目，请先运行构建命令，确保生成可打开的网页文件。",
+    "5. 如果只有 landing-page.html、home.html 这类单个 HTML 页面，可以直接发布，不要强制用户手动改名。",
+    "6. 发布名称不要使用 project、demo、demogo 这类泛化名称，优先使用页面 title、主标题或文件名。",
+    "7. 请把项目打包成 .zip、.tar.gz 或 .tgz，不要包含 .env、密钥文件、node_modules、.git。",
+    "8. 如果页面里有报名、预约、留资或留言表单，DemoGo 会在生成链接时自动识别并开启基础收集；价格计算器、配置开关等控件不应当当成报名表。",
+    "9. 生成成功后返回访问链接；失败时请根据 DemoGo 返回的原因修改项目后再试，不要绕过内容检查。"
   ].join("\n");
 }
 

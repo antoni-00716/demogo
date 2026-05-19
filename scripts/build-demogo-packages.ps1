@@ -4,7 +4,7 @@ $ProjectRoot = Split-Path -Parent $PSScriptRoot
 $Dist = Join-Path $ProjectRoot "dist"
 $WebRoot = Join-Path $ProjectRoot "web"
 $WebDist = Join-Path $WebRoot "dist"
-$Version = "0.2.6"
+$Version = "0.2.7"
 
 New-Item -ItemType Directory -Force -Path $Dist | Out-Null
 

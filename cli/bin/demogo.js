@@ -7,6 +7,7 @@ import {
   MAX_BYTES,
   VERSION,
   assertDirectory,
+  assertSafeProjectDirectory,
   collectFiles,
   createProjectArchive,
   deployArchive,
@@ -121,6 +122,7 @@ async function handleDeploy(args) {
   }
 
   await assertDirectory(projectDir);
+  assertSafeProjectDirectory(projectDir);
   const fileList = await collectFiles(projectDir);
   if (!fileList.length) fail("当前目录没有可发布文件。");
 
@@ -132,7 +134,10 @@ async function handleDeploy(args) {
     await createProjectArchive(projectDir, fileList, archivePath);
     const archiveStats = await stat(archivePath);
     if (archiveStats.size > MAX_BYTES) {
-      fail(`打包后文件超过 50MB，请减少大文件后重试。当前约 ${formatBytes(archiveStats.size)}。`);
+      fail([
+        `打包后文件超过 50MB，当前约 ${formatBytes(archiveStats.size)}。`,
+        "你可能在错误目录执行了发布。请切换到真正的项目目录，或使用 --dir 指定干净项目文件夹。"
+      ].join("\n"));
     }
     console.log(`项目包已生成：${formatBytes(archiveStats.size)}`);
     console.log("DemoGo 正在生成试用链接...");

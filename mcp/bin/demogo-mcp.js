@@ -8,6 +8,7 @@ import {
   MAX_BYTES,
   VERSION,
   assertDirectory,
+  assertSafeProjectDirectory,
   collectFiles,
   createProjectArchive,
   deployArchive,
@@ -119,6 +120,7 @@ async function callTool(name, args) {
 async function checkProject(args) {
   const projectDir = path.resolve(String(args.dir || "."));
   await assertDirectory(projectDir);
+  assertSafeProjectDirectory(projectDir);
   const files = await collectFiles(projectDir);
   const summary = summarizeProject(projectDir, files);
   return textResult([
@@ -140,6 +142,7 @@ async function deployProject(args) {
   const projectDir = path.resolve(String(args.dir || "."));
   const projectName = String(args.name || path.basename(projectDir)).trim();
   await assertDirectory(projectDir);
+  assertSafeProjectDirectory(projectDir);
   const files = await collectFiles(projectDir);
   if (!files.length) throw new Error("当前目录没有可发布文件。");
 

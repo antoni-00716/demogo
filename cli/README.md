@@ -6,7 +6,7 @@ DemoGo CLI lets AI coding tools publish a local project to DemoGo and return a s
 
 Current MVP delivery uses a local install package.
 
-1. Unzip `demogo-cli-v0.2.6.zip`.
+1. Unzip `demogo-cli-v0.2.7.zip`.
 2. Open a terminal in the extracted folder.
 3. Run:
 
@@ -32,6 +32,8 @@ Reset it only when it is lost, invalid, or exposed in chat/logs.
 
 ## Deploy
 
+Run the command from a clean project folder. Do not run it directly from Desktop, Downloads, Documents, or the user home folder.
+
 Use without installing:
 
 ```bash
@@ -49,6 +51,8 @@ For a specific folder or project name:
 ```bash
 demogo deploy --dir <project-folder> --name <project-name>
 ```
+
+If you only have one HTML file, put that file in a clean folder and publish that folder. You do not need to rename the file to `index.html`.
 
 ## Current Boundary
 

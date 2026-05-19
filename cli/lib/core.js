@@ -2,9 +2,19 @@
 import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-export const VERSION = "0.2.6";
+export const VERSION = "0.2.7";
 export const MAX_FILES = 800;
 export const MAX_BYTES = 50 * 1024 * 1024;
+
+export const unsafeProjectDirectoryNames = new Set([
+  "desktop",
+  "downloads",
+  "documents",
+  "onedrive",
+  "桌面",
+  "下载",
+  "文档"
+]);
 
 const EXCLUDED_DIRS = new Set([
   ".git",
@@ -51,6 +61,28 @@ export async function assertDirectory(dir) {
   }
 }
 
+export function assertSafeProjectDirectory(dir) {
+  const resolved = path.resolve(dir);
+  const home = path.resolve(process.env.USERPROFILE || process.env.HOME || "");
+  const baseName = path.basename(resolved).toLowerCase();
+
+  if (home && resolved === home) {
+    throw new Error([
+      "当前目录像是用户主目录，不适合直接发布。",
+      "请新建一个干净文件夹，只放要发布的项目文件，然后在该文件夹里运行发布命令。",
+      "也可以使用：npx --yes @demogo-cn/cli deploy --dir <项目目录>"
+    ].join("\n"));
+  }
+
+  if (unsafeProjectDirectoryNames.has(baseName)) {
+    throw new Error([
+      `当前目录是 ${path.basename(resolved)}，通常会包含很多无关文件，不适合直接发布。`,
+      "请新建一个干净文件夹，只放要发布的项目文件；如果只有一个 HTML 文件，也可以让 AI 先创建临时目录再发布。",
+      "也可以使用：npx --yes @demogo-cn/cli deploy --dir <项目目录>"
+    ].join("\n"));
+  }
+}
+
 export async function collectFiles(rootDir) {
   const files = [];
   let totalBytes = 0;
@@ -69,14 +101,23 @@ export async function collectFiles(rootDir) {
       if (!entry.isFile()) continue;
       const stats = await stat(fullPath);
       totalBytes += stats.size;
-      if (files.length >= MAX_FILES) throw new Error(`项目文件超过 ${MAX_FILES} 个，请精简后再发布。`);
-      if (totalBytes > MAX_BYTES) throw new Error("项目文件超过 50MB，请删除大文件后再发布。");
+      if (files.length >= MAX_FILES) throw new Error(projectTooLargeMessage(`项目文件超过 ${MAX_FILES} 个。`));
+      if (totalBytes > MAX_BYTES) throw new Error(projectTooLargeMessage("项目文件超过 50MB。"));
       files.push({ fullPath, relativePath, size: stats.size });
     }
   }
 
   await walk(rootDir);
   return files;
+}
+
+export function projectTooLargeMessage(reason) {
+  return [
+    `${reason}你可能在桌面、下载、文档或用户根目录执行了发布。`,
+    "请切换到真正的项目目录，或新建一个干净文件夹，只放要发布的项目文件。",
+    "如果只有一个 HTML 文件，不需要改名为 index.html，可以把它单独放进干净目录后发布。",
+    "也可以使用：npx --yes @demogo-cn/cli deploy --dir <项目目录>"
+  ].join("\n");
 }
 
 export function summarizeProject(projectDir, files) {
