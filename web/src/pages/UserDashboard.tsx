@@ -737,7 +737,7 @@ function AgentPublishPanel({
         </div>
         <div className="agent-user-guide agent-status-guide">
           <strong>现在的真实状态</strong>
-          <p>如果当前电脑或 AI 工具里已经安装了 DemoGo CLI，可以直接用命令发布；如果没有安装，AI 会说明原因，再改用 DemoGo 的备用发布通道。备用通道生成的链接同样有效，但不能说成 CLI 发布成功。</p>
+          <p>DemoGo CLI 已经可以通过 npm 使用。AI 可以直接运行 npx 命令发布；如果当前环境不能联网或不能运行 npx，再说明原因并改用备用发布通道。备用通道生成的链接同样有效，但不能说成 CLI 发布成功。</p>
         </div>
         <div className="agent-steps">
           <div>
@@ -772,8 +772,8 @@ function AgentPublishPanel({
         </div>
         <div className="agent-cli-box">
           <span>AI 会优先执行的命令</span>
-          <code>demogo config set --api {getDemoGoApiBase()} --token {commandToken} && demogo deploy</code>
-          <small>当前默认使用已安装的 demogo 命令；未安装时可以使用 npx @demogo-cn/cli。CLI 不可用时，AI 需要说明原因，再改用 DemoGo MCP 或 Agent API。</small>
+          <code>npx --yes @demogo-cn/cli config set --api {getDemoGoApiBase()} --token {commandToken} && npx --yes @demogo-cn/cli deploy</code>
+          <small>如果本机已经安装过 DemoGo CLI，也可以直接使用 demogo deploy。CLI 不可用时，AI 需要说明原因，再改用 DemoGo MCP 或 Agent API。</small>
         </div>
         <div className="row-actions">
           {!token?.enabled ? <Button variant="primary" onClick={onResetToken}>生成 AI 发布口令</Button> : null}
@@ -1864,14 +1864,14 @@ function createAgentInstruction(token: AgentToken | null, target: "codex" | "age
     `DemoGo 平台地址：${apiBase}`,
     value ? `DemoGo AI 发布口令：${value}` : "DemoGo AI 发布口令：使用你已经保存好的 DEMOGO_AGENT_TOKEN，不要要求用户重新生成口令。",
     "",
-    "请优先使用 DemoGo CLI：",
+    "请优先使用 npm 版 DemoGo CLI：",
     value
-      ? `   demogo config set --api ${apiBase} --token 上面的AI发布口令`
-      : `   demogo config set --api ${apiBase} --token 已保存的AI发布口令`,
-    "   demogo doctor",
-    "   demogo deploy",
+      ? `   npx --yes @demogo-cn/cli config set --api ${apiBase} --token 上面的AI发布口令`
+      : `   npx --yes @demogo-cn/cli config set --api ${apiBase} --token 已保存的AI发布口令`,
+    "   npx --yes @demogo-cn/cli doctor",
+    "   npx --yes @demogo-cn/cli deploy",
     "",
-    "如果当前环境不能直接运行 demogo 命令，请使用 npx @demogo-cn/cli；如果 npx 也不可用，请先说明 CLI 不可用的原因，不要把 API 兜底说成 CLI 发布成功。CLI 不可用时，再使用 DemoGo MCP 或直接调用 POST /api/agent/deploy。",
+    "如果当前环境不能运行 npx，可以尝试已安装的 demogo 命令；如果 CLI 仍不可用，请先说明原因，不要把 API 兜底说成 CLI 发布成功。CLI 不可用时，再使用 DemoGo MCP 或直接调用 POST /api/agent/deploy。",
     "直接调用 Agent API 时，请使用 multipart/form-data；项目包字段优先使用 project，DemoGo 也兼容 file 和 package；请求头使用 Authorization: Bearer <DemoGo AI 发布口令>。",
     "",
     "操作要求：",

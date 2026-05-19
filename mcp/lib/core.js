@@ -2,7 +2,7 @@
 import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-export const VERSION = "0.2.5";
+export const VERSION = "0.2.6";
 export const MAX_FILES = 800;
 export const MAX_BYTES = 50 * 1024 * 1024;
 

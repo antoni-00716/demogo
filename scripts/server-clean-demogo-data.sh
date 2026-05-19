@@ -143,8 +143,8 @@ mkdir -p "${DEMO_ROOT}"
 find "${DEMO_ROOT}" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
 
 rm -rf /var/www/demo
-find /tmp -maxdepth 1 -type f -name 'demogo-server-v*.zip' ! -name 'demogo-server-v0.2.5.zip' -delete
-find /tmp -maxdepth 1 -type f -name 'demogo-ops-scripts-v*.zip' ! -name 'demogo-ops-scripts-v0.2.5.zip' -delete
+find /tmp -maxdepth 1 -type f -name 'demogo-server-v*.zip' ! -name 'demogo-server-v0.2.6.zip' -delete
+find /tmp -maxdepth 1 -type f -name 'demogo-ops-scripts-v*.zip' ! -name 'demogo-ops-scripts-v0.2.6.zip' -delete
 find /tmp -maxdepth 1 -type f -name 'demogo-site-preview*.zip' ! -name 'demogo-site-preview.zip' -delete
 rm -f /tmp/static-demo-test.zip
 rm -f /tmp/source-demo-test.zip

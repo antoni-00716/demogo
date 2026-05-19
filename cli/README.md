@@ -6,7 +6,7 @@ DemoGo CLI lets AI coding tools publish a local project to DemoGo and return a s
 
 Current MVP delivery uses a local install package.
 
-1. Unzip `demogo-cli-v0.2.5.zip`.
+1. Unzip `demogo-cli-v0.2.6.zip`.
 2. Open a terminal in the extracted folder.
 3. Run:
 
@@ -32,6 +32,14 @@ Reset it only when it is lost, invalid, or exposed in chat/logs.
 
 ## Deploy
 
+Use without installing:
+
+```bash
+npx --yes @demogo-cn/cli deploy
+```
+
+Or use the installed command:
+
 ```bash
 demogo deploy
 ```
@@ -48,10 +56,10 @@ DemoGo supports static pages, single HTML pages, built frontend output, and fron
 
 ## npm / npx Status
 
-After npm publication, AI coding tools can run:
+AI coding tools can run:
 
 ```bash
-npx @demogo-cn/cli deploy
+npx --yes @demogo-cn/cli deploy
 ```
 
 Or install it globally:
