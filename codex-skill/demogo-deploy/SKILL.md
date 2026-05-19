@@ -5,7 +5,7 @@ description: Publish AI-built static pages or frontend projects to DemoGo and re
 
 # DemoGo Deploy
 
-Use this skill to publish the current project to DemoGo. DemoGo v0.2.7 is intended for AI-assisted publishing: the AI tool can package the current project, call DemoGo, and return a shareable trial link.
+Use this skill to publish the current project to DemoGo. DemoGo v0.2.8 is intended for AI-assisted publishing: the AI tool can package the current project, call DemoGo, and return a shareable trial link.
 
 ## What DemoGo Supports
 
@@ -53,8 +53,9 @@ Need a DemoGo platform/API address:
 4. If there is only one HTML file on Desktop/Downloads, create a clean temporary folder, put that HTML file there, and publish that folder. Do not force the user to manually rename it.
 5. If there is only one root HTML file such as `landing-page.html`, publish it directly; do not force the user to manually rename it.
 6. Choose a meaningful project name from the page title, main heading, or HTML filename. Do not use generic names like `project`, `demo`, or `demogo`.
-7. Do not include `.env`, secret files, `.git`, `node_modules`, logs, or huge generated folders.
-8. Publish with the npm DemoGo CLI first:
+7. Project names are for workbench display. Free users receive an automatically assigned trial link path; do not promise a fixed custom URL unless the user's plan supports it.
+8. Do not include `.env`, secret files, `.git`, `node_modules`, logs, or huge generated folders.
+9. Publish with the npm DemoGo CLI first:
 
 ```bash
 npx --yes @demogo-cn/cli config set --api <DEMOGO_API_BASE> --token <DEMOGO_AGENT_TOKEN>
@@ -72,7 +73,7 @@ demogo deploy
 
 The npm package name is `@demogo-cn/cli`; the installed command name remains `demogo`.
 
-Do not use `demogo inspect`; it is not a supported CLI command in v0.2.7. Use `demogo doctor` only to check the platform address and local token configuration.
+Do not use `demogo inspect`; it is not a supported CLI command in v0.2.8. Use `demogo doctor` only to check the platform address and local token configuration.
 
 If the CLI is unavailable, use the MCP tool if configured, or call DemoGo Agent API directly. When falling back to the API, clearly say that this was an API fallback, not a successful CLI deployment.
 

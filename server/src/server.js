@@ -1589,7 +1589,7 @@ async function performCreateDeployment({ uploadedFile, requestedName = "", user,
       uploadedFileName: uploadedFile.originalname,
       inspection: preInspection
     });
-    slug = await createAvailableSlug(inferredName, existingDemos);
+    slug = await createAvailableSlug(inferredName, existingDemos, { planCode: user.plan });
     targetDir = path.join(demoRoot, slug);
     const quota = calculateQuota(user, existingDemos);
     if (quota.onlineDemos.used >= quota.onlineDemos.limit) {
@@ -1629,6 +1629,8 @@ async function performCreateDeployment({ uploadedFile, requestedName = "", user,
       userEmail: user.email,
       slug,
       name: inferredName,
+      linkMode: linkModeForPlan(user.plan),
+      customDomainEligible: canUseCustomDomain(user.plan),
       status: "published",
       publicUrl,
       deploySource,
@@ -1712,6 +1714,8 @@ async function performCreateDeployment({ uploadedFile, requestedName = "", user,
       name: demo.name,
       projectName: demo.name,
       publicUrl,
+      linkMode: demo.linkMode,
+      customDomainEligible: demo.customDomainEligible,
       deploySource,
       deploySourceLabel: demo.deploySourceLabel,
       detectedType: result.detectedType,
@@ -1897,6 +1901,8 @@ async function performUpdateDeployment({ demoId, uploadedFile, user, clientIp = 
       projectName: demos[demoIndex].name,
       status: demos[demoIndex].status,
       publicUrl: demos[demoIndex].publicUrl,
+      linkMode: demos[demoIndex].linkMode || "readable",
+      customDomainEligible: Boolean(demos[demoIndex].customDomainEligible),
       deploySource: demos[demoIndex].deploySource || "web",
       deploySourceLabel: demos[demoIndex].deploySourceLabel || deploySourceLabel(demos[demoIndex].deploySource || "web"),
       detectedType: demos[demoIndex].detectedType,
@@ -2177,8 +2183,8 @@ app.listen(port, () => {
   console.log(`DemoGo server listening on ${port}`);
 });
 
-async function createAvailableSlug(input, existingDemos = []) {
-  const base = slugify(input) || `demo-${crypto.randomBytes(3).toString("hex")}`;
+async function createAvailableSlug(input, existingDemos = [], options = {}) {
+  const base = slugBaseForPlan(input, options.planCode);
   let slug = base;
   let index = 1;
   const reservedSlugs = new Set(existingDemos.map((demo) => demo.slug).filter(Boolean));
@@ -2189,6 +2195,23 @@ async function createAvailableSlug(input, existingDemos = []) {
   }
 
   return slug;
+}
+
+function slugBaseForPlan(input, planCode = "free") {
+  if (!canUseReadableSlug(planCode)) return `try-${crypto.randomBytes(4).toString("hex")}`;
+  return slugify(input) || `demo-${crypto.randomBytes(3).toString("hex")}`;
+}
+
+function canUseReadableSlug(planCode = "free") {
+  return ["lite", "pro"].includes(String(planCode || "free").toLowerCase());
+}
+
+function canUseCustomDomain(planCode = "free") {
+  return String(planCode || "free").toLowerCase() === "pro";
+}
+
+function linkModeForPlan(planCode = "free") {
+  return canUseReadableSlug(planCode) ? "readable" : "random";
 }
 
 function inferProjectDisplayName({ requestedName, uploadedFileName, inspection }) {

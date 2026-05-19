@@ -20,6 +20,8 @@ export type Demo = {
   userEmail?: string;
   status: string;
   publicUrl?: string;
+  linkMode?: "random" | "readable" | string;
+  customDomainEligible?: boolean;
   version?: number;
   deploySource?: "web" | "cli" | "mcp" | "agent_api" | string;
   deploySourceLabel?: string;

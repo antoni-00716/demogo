@@ -256,6 +256,7 @@ export function HomePage() {
                     <li>{plan.onlineDemos} 个在线试用项目</li>
                     <li>{plan.monthlyDeploys} 次生成/更新链接/月</li>
                     <li>试用项目保留 {plan.retentionDays} 天</li>
+                    <li>{plan.linkBenefit}</li>
                   </ul>
                   <LinkButton href="login.html?next=app.html%23plan" variant={plan.code === "free" ? "secondary" : "primary"}>
                     {plan.code === "free" ? "开始使用 Free" : `申请 ${plan.name}`}

@@ -6,7 +6,7 @@ if (!$Server) {
 }
 
 $ProjectRoot = Split-Path -Parent $PSScriptRoot
-$Version = "0.2.7"
+$Version = "0.2.8"
 
 $SiteZip = Join-Path $ProjectRoot "dist\demogo-site-preview.zip"
 $ServerZip = Join-Path $ProjectRoot "dist\demogo-server-v$Version.zip"

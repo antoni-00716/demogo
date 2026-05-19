@@ -491,6 +491,7 @@ export function UserDashboard() {
             token={agentToken}
             onResetToken={handleResetAgentToken}
             onCopyInstruction={handleCopyAgentInstruction}
+            onCopyText={handleCopyText}
           />
         ) : null}
         {activeView === "plan" ? (
@@ -711,16 +712,19 @@ function QuickCreatePanel({ onCreate }: { onCreate: () => void }) {
 function AgentPublishPanel({
   token,
   onResetToken,
-  onCopyInstruction
+  onCopyInstruction,
+  onCopyText
 }: {
   token: AgentToken | null;
   onResetToken: () => void;
   onCopyInstruction: () => void;
+  onCopyText: (text: string, successMessage?: string) => void;
 }) {
   const codexInstruction = createAgentInstruction(token, "codex");
   const agentInstruction = createAgentInstruction(token, "agent");
   const generalInstruction = createAgentInstruction(token, "general");
   const commandToken = token?.value ? "上面的AI发布口令" : "已保存的AI发布口令";
+  const cliCommand = `npx --yes @demogo-cn/cli config set --api ${getDemoGoApiBase()} --token ${commandToken} && npx --yes @demogo-cn/cli deploy`;
   return (
     <section className="agent-publish-layout">
       <Card className="panel agent-publish-panel">
@@ -759,20 +763,32 @@ function AgentPublishPanel({
           {token?.createdAt ? <small>生成时间：{formatDate(token.createdAt)}；已配置的口令可长期复用。</small> : <small>首次生成后请立即保存，页面刷新后不再显示完整口令。</small>}
         </div>
         <div className="agent-command-box">
-          <span>给 Codex 的指令</span>
+          <div className="copyable-head">
+            <span>给 Codex 的指令</span>
+            <Button onClick={() => onCopyText(codexInstruction, "给 Codex 的指令已复制。")} disabled={!codexInstruction}>复制</Button>
+          </div>
           <pre>{codexInstruction || "请先生成一次 AI 发布口令。生成后复制这里的发布指令。"}</pre>
         </div>
         <div className="agent-command-box">
-          <span>给 Cursor / Claude Code 的指令</span>
+          <div className="copyable-head">
+            <span>给 Cursor / Claude Code 的指令</span>
+            <Button onClick={() => onCopyText(agentInstruction, "给 Cursor / Claude Code 的指令已复制。")} disabled={!agentInstruction}>复制</Button>
+          </div>
           <pre>{agentInstruction || "请先生成一次 AI 发布口令。生成后复制这里的发布指令。"}</pre>
         </div>
         <div className="agent-command-box">
-          <span>给其他 AI Agent 的通用指令</span>
+          <div className="copyable-head">
+            <span>给其他 AI Agent 的通用指令</span>
+            <Button onClick={() => onCopyText(generalInstruction, "通用 AI 指令已复制。")} disabled={!generalInstruction}>复制</Button>
+          </div>
           <pre>{generalInstruction || "请先生成一次 AI 发布口令。生成后复制这里的发布指令。"}</pre>
         </div>
         <div className="agent-cli-box">
-          <span>AI 会优先执行的命令</span>
-          <code>npx --yes @demogo-cn/cli config set --api {getDemoGoApiBase()} --token {commandToken} && npx --yes @demogo-cn/cli deploy</code>
+          <div className="copyable-head">
+            <span>AI 会优先执行的命令</span>
+            <Button onClick={() => onCopyText(cliCommand, "CLI 命令已复制。")} disabled={!token?.enabled}>复制</Button>
+          </div>
+          <code>{cliCommand}</code>
           <small>如果本机已经安装过 DemoGo CLI，也可以直接使用 demogo deploy。CLI 不可用时，AI 需要说明原因，再改用 DemoGo MCP 或 Agent API。</small>
         </div>
         <div className="row-actions">
@@ -1357,6 +1373,14 @@ function ProjectDetail({
           <dd>{demo.publicUrl || "当前不可访问"}</dd>
         </div>
         <div>
+          <dt>链接类型</dt>
+          <dd>{demo.linkMode === "random" ? "系统自动分配试用链接" : "清晰项目访问地址"}</dd>
+        </div>
+        <div>
+          <dt>自定义域名</dt>
+          <dd>{demo.customDomainEligible ? "可联系开通独立域名" : "当前套餐暂不支持"}</dd>
+        </div>
+        <div>
           <dt>有效期</dt>
           <dd>{formatDate(demo.expiresAt)}</dd>
         </div>
@@ -1641,6 +1665,7 @@ function PlanPanel({
             </span>
             <span>{plan.description}</span>
             <small>{plan.onlineDemos} 个在线试用项目 · {plan.monthlyDeploys} 次生成/更新/月 · 保留 {plan.retentionDays} 天</small>
+            <small className="plan-link-benefit">{plan.linkBenefit}</small>
           </button>
         ))}
       </div>
@@ -1881,9 +1906,10 @@ function createAgentInstruction(token: AgentToken | null, target: "codex" | "age
     "4. 如果是 React/Vue/Vite 源码项目，请先运行构建命令，确保生成可打开的网页文件。",
     "5. 如果只有 landing-page.html、home.html 这类单个 HTML 页面，可以直接发布，不要强制用户手动改名。",
     "6. 发布名称不要使用 project、demo、demogo 这类泛化名称，优先使用页面 title、主标题或文件名。",
-    "7. 请把项目打包成 .zip、.tar.gz 或 .tgz，不要包含 .env、密钥文件、node_modules、.git。",
-    "8. 如果页面里有报名、预约、留资或留言表单，DemoGo 会在生成链接时自动识别并开启基础收集；价格计算器、配置开关等控件不应当当成报名表。",
-    "9. 生成成功后返回访问链接；失败时请根据 DemoGo 返回的原因修改项目后再试，不要绕过内容检查。"
+    "7. 项目名称用于工作台展示；免费套餐的公开访问路径由 DemoGo 自动分配，不要要求免费用户指定固定访问地址。",
+    "8. 请把项目打包成 .zip、.tar.gz 或 .tgz，不要包含 .env、密钥文件、node_modules、.git。",
+    "9. 如果页面里有报名、预约、留资或留言表单，DemoGo 会在生成链接时自动识别并开启基础收集；价格计算器、配置开关等控件不应当当成报名表。",
+    "10. 生成成功后返回访问链接；失败时请根据 DemoGo 返回的原因修改项目后再试，不要绕过内容检查。"
   ].join("\n");
 }
 

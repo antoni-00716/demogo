@@ -420,6 +420,7 @@
 .token-box span,
 .token-box small,
 .agent-command-box span,
+.copyable-head span,
 .agent-cli-box span,
 .agent-cli-box small,
 .agent-user-guide p {
@@ -1193,6 +1194,24 @@
   font-size: 13px;
 }
 
+.copyable-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.copyable-head span {
+  margin: 0;
+}
+
+.copyable-head .btn {
+  min-height: 32px;
+  padding-inline: 12px;
+  font-size: 13px;
+}
+
 .form-field-chips {
   display: flex;
   flex-wrap: wrap;
@@ -1431,7 +1450,7 @@
   display: grid;
   gap: 8px;
   align-content: start;
-  min-height: 168px;
+  min-height: 196px;
   padding: 16px;
   border: 1px solid var(--line);
   border-radius: 14px;
@@ -1463,6 +1482,13 @@
 .plan-option span,
 .plan-option small {
   color: var(--muted);
+}
+
+.plan-link-benefit {
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+  color: var(--brand-dark) !important;
+  font-weight: 820;
 }
 
 .plan-option-title {

@@ -6,7 +6,7 @@ DemoGo CLI lets AI coding tools publish a local project to DemoGo and return a s
 
 Current MVP delivery uses a local install package.
 
-1. Unzip `demogo-cli-v0.2.7.zip`.
+1. Unzip `demogo-cli-v0.2.8.zip`.
 2. Open a terminal in the extracted folder.
 3. Run:
 
@@ -53,6 +53,8 @@ demogo deploy --dir <project-folder> --name <project-name>
 ```
 
 If you only have one HTML file, put that file in a clean folder and publish that folder. You do not need to rename the file to `index.html`.
+
+Project names are used for display in the DemoGo workbench. Free accounts receive an automatically assigned trial link path. Paid accounts can receive clearer project link paths, and Pro users can apply for custom access addresses or independent domains.
 
 ## Current Boundary
 

@@ -1,6 +1,6 @@
 ﻿import process from "node:process";
 
-export const serviceVersion = "0.2.7";
+export const serviceVersion = "0.2.8";
 
 export const port = Number(process.env.PORT || 3001);
 export const publicBaseUrl = process.env.PUBLIC_BASE_URL || "https://demogo.cn";

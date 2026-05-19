@@ -7,6 +7,7 @@ export type Plan = {
   monthlyDeploys: number;
   retentionDays: number;
   description: string;
+  linkBenefit: string;
 };
 
 export const plans: Plan[] = [
@@ -16,7 +17,8 @@ export const plans: Plan[] = [
     onlineDemos: 1,
     monthlyDeploys: 3,
     retentionDays: 7,
-    description: "先试一次，验证能不能跑通"
+    description: "先试一次，验证能不能跑通",
+    linkBenefit: "系统自动分配试用链接"
   },
   {
     code: "lite",
@@ -24,7 +26,8 @@ export const plans: Plan[] = [
     onlineDemos: 3,
     monthlyDeploys: 20,
     retentionDays: 30,
-    description: "适合客户演示和小范围试用"
+    description: "适合客户演示和小范围试用",
+    linkBenefit: "可使用更清晰的项目访问地址"
   },
   {
     code: "pro",
@@ -32,7 +35,8 @@ export const plans: Plan[] = [
     onlineDemos: 10,
     monthlyDeploys: 60,
     retentionDays: 30,
-    description: "适合持续验证多个 AI 产品原型"
+    description: "适合持续验证多个 AI 产品原型",
+    linkBenefit: "可申请自定义访问地址或独立域名"
   }
 ];
 

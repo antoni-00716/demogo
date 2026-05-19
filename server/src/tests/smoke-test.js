@@ -65,6 +65,9 @@ try {
   assert(deploy.projectName === "Smoke Demo", "deploy should return standardized projectName");
   assert(deploy.contentReviewStatus === "passed", "deploy should return standardized content review status");
   assert(deploy.name === "Smoke Demo", "generic archive/request name should be replaced by page title");
+  assert(deploy.linkMode === "random", "free plan should use an automatically assigned trial link path");
+  assert(/^try-[a-f0-9]{8}$/.test(deploy.slug), "free plan slug should not reserve readable project names");
+  assert(deploy.customDomainEligible === false, "free plan should not expose custom domain eligibility");
   assert((deploy.deploymentEvents || []).some((item) => item.eventType === "success" && item.status === "success"), "deploy should return deployment success events");
   const demoDetail = await getJson(`/api/demos/${deploy.id}`);
   assert(demoDetail.demo?.id === deploy.id, "demo detail should return deployed demo");
@@ -114,6 +117,13 @@ try {
   assert(approvedRequests.requests?.some((item) => item.id === planRequestId), "approved plan request should be filterable");
   const refreshedMe = await getJson("/api/me");
   assert(refreshedMe.user?.plan === "pro", "approved plan request should update user plan");
+  const proZipPath = await createStaticZip("pro-readable-slug-demo", "Pro Readable Link");
+  const proDeploy = await postZip("/api/deploy", proZipPath, { name: "Readable Customer Demo" });
+  assert(proDeploy.linkMode === "readable", "paid plan should keep readable project link path");
+  assert(proDeploy.slug.includes("readable-customer-demo") || proDeploy.slug.includes("pro-readable-link"), "paid plan slug should be based on project name");
+  assert(proDeploy.customDomainEligible === true, "pro plan should expose custom domain eligibility");
+  await postJson(`/api/demos/${proDeploy.id}/offline`, {});
+  await postJson(`/api/demos/${proDeploy.id}/delete`, {});
   await testDeploymentJobs();
   await inspectAndDeploySingleHtmlProject();
   await inspectCalculatorControls();
