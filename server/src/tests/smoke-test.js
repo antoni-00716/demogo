@@ -11,6 +11,7 @@ const projectRoot = path.resolve(serverRoot, "..");
 const testRoot = path.join(projectRoot, ".tmp", "smoke-test");
 const port = 3119;
 const baseUrl = `http://127.0.0.1:${port}`;
+globalThis.__demogoBaseUrl = baseUrl;
 const adminUser = "admin";
 const adminPassword = "admin-test-pass";
 
@@ -30,8 +31,12 @@ const child = spawn(process.execPath, ["src/server.js"], {
     DEMOGO_DEMO_ROOT: path.join(testRoot, "site", "d"),
     DEMOGO_ADMIN_USER: adminUser,
     DEMOGO_ADMIN_PASSWORD: adminPassword,
+    DEMOGO_EMAIL_VERIFICATION_ENABLED: "0",
     DEMOGO_DEPLOY_RATE_LIMIT: "20",
     DEMOGO_BUILD_MODE: "host",
+    DEMOGO_RUNTIME_ENABLED: "0",
+    DEMOGO_RUNTIME_NODE_ENABLED: "0",
+    DEMOGO_RUNTIME_DRIVER: "host",
     DEMOGO_DB_HOST: "",
     DEMOGO_DB_NAME: "",
     DEMOGO_DB_USER: "",
@@ -44,11 +49,16 @@ let cookie = "";
 
 try {
   await waitForHealth();
+  await testEmailVerificationOptions();
   await register();
   await testLoginRateLimit();
   await getJson("/api/me");
+  const hostingCapabilities = await getJson("/api/hosting/capabilities");
+  assert(hostingCapabilities.capabilities?.modes?.static?.status === "available", "hosting capabilities should expose static mode");
+  assert(hostingCapabilities.capabilities?.modes?.nodeRuntime?.status === "planned", "node runtime should be planned when runtime is disabled");
   await inspectDistAndBuildProjects();
   await inspectOutProjects();
+  await inspectProjectClassifierV2();
   await inspectUnsupportedRuntimeProjects();
   await inspectFormApiProject();
   await inspectBlockedAndIgnoredFiles();
@@ -64,13 +74,18 @@ try {
   assert(deploy.ok, "deploy should return standardized ok");
   assert(deploy.projectName === "Smoke Demo", "deploy should return standardized projectName");
   assert(deploy.contentReviewStatus === "passed", "deploy should return standardized content review status");
+  assert(deploy.hostingMode === "static", "static deploy should expose hosting mode");
+  assert(deploy.architecture?.hosting?.routeStrategy?.publicPath === "/d/{slug}/", "deploy should expose architecture route strategy");
   assert(deploy.name === "Smoke Demo", "generic archive/request name should be replaced by page title");
   assert(deploy.linkMode === "random", "free plan should use an automatically assigned trial link path");
   assert(/^try-[a-f0-9]{8}$/.test(deploy.slug), "free plan slug should not reserve readable project names");
   assert(deploy.customDomainEligible === false, "free plan should not expose custom domain eligibility");
+  const freeSlugUpdate = await postJsonExpectStatus(`/api/demos/${deploy.id}/slug`, { slug: "free-should-not-edit" }, 403);
+  assert(freeSlugUpdate.error, "free plan should not update link suffix");
   assert((deploy.deploymentEvents || []).some((item) => item.eventType === "success" && item.status === "success"), "deploy should return deployment success events");
   const demoDetail = await getJson(`/api/demos/${deploy.id}`);
   assert(demoDetail.demo?.id === deploy.id, "demo detail should return deployed demo");
+  assert(demoDetail.demo?.architecture?.projectKind === "static", "demo detail should persist architecture");
   assert((demoDetail.events || []).length > 0, "demo detail should include deployment events");
   const demoEvents = await getJson(`/api/demos/${deploy.id}/events`);
   assert((demoEvents.events || []).some((item) => item.eventType === "success"), "demo events API should include success step");
@@ -84,6 +99,7 @@ try {
   const updateZipPath = await createStaticZip("smoke-demo-update", "Smoke Demo Updated");
   const update = await postZip(`/api/demos/${deploy.id}/update`, updateZipPath);
   assert(update.version === 2, "demo update should increment version");
+  assert(update.hostingMode === "static", "update should return hosting mode");
   const deployEvents = await getJson("/api/deploy-events");
   assert(deployEvents.month?.used >= 2, "deploy events should include create and update usage");
   assert((deployEvents.events || []).some((item) => item.demoId === deploy.id && item.type === "update"), "deploy event list should include update event");
@@ -117,11 +133,33 @@ try {
   assert(approvedRequests.requests?.some((item) => item.id === planRequestId), "approved plan request should be filterable");
   const refreshedMe = await getJson("/api/me");
   assert(refreshedMe.user?.plan === "pro", "approved plan request should update user plan");
+  await testSupabaseExternalBackendConfig();
   const proZipPath = await createStaticZip("pro-readable-slug-demo", "Pro Readable Link");
   const proDeploy = await postZip("/api/deploy", proZipPath, { name: "Readable Customer Demo" });
-  assert(proDeploy.linkMode === "readable", "paid plan should keep readable project link path");
-  assert(proDeploy.slug.includes("readable-customer-demo") || proDeploy.slug.includes("pro-readable-link"), "paid plan slug should be based on project name");
+  assert(proDeploy.linkMode === "random", "paid plan first publish should still use random path");
+  assert(/^try-[a-f0-9]{8}$/.test(proDeploy.slug), "paid plan first publish should not force a readable path");
   assert(proDeploy.customDomainEligible === true, "pro plan should expose custom domain eligibility");
+  const oldProSlug = proDeploy.slug;
+  const slugUpdate = await postJson(`/api/demos/${proDeploy.id}/slug`, { slug: "pro-readable-link" });
+  assert(slugUpdate.demo?.slug === "pro-readable-link", "pro plan should update link suffix after publish");
+  const aliasResponse = await fetch(`${baseUrl}/d/${oldProSlug}/`, { redirect: "manual" });
+  assert(aliasResponse.status === 302, "old random link should redirect after suffix update");
+  const anotherProZip = await createStaticZip("another-pro-demo", "Another Pro Link");
+  const anotherProDeploy = await postZip("/api/deploy", anotherProZip, { name: "Another Pro Demo" });
+  const aliasSlugUpdate = await postJsonExpectStatus(`/api/demos/${anotherProDeploy.id}/slug`, { slug: oldProSlug }, 409);
+  assert(aliasSlugUpdate.error, "old random link alias should stay reserved from other demos after suffix update");
+  const subdomainRequest = await postJson(`/api/demos/${proDeploy.id}/subdomain-requests`, { subdomain: "pro-readable-link" });
+  assert(subdomainRequest.request?.status === "open", "pro plan should submit subdomain request");
+  const userSubdomainRequests = await getJson("/api/subdomain-requests");
+  assert(userSubdomainRequests.requests?.some((item) => item.id === subdomainRequest.request.id && item.status === "open"), "user should see own subdomain request status");
+  const subdomainRequests = await adminGet("/api/admin/subdomain-requests");
+  const subdomainRequestId = subdomainRequests.requests?.[0]?.id;
+  assert(subdomainRequestId, "admin should see subdomain request");
+  await adminPost(`/api/admin/subdomain-requests/${subdomainRequestId}/status`, { status: "approved", adminNote: "smoke approved" });
+  const approvedUserSubdomainRequests = await getJson("/api/subdomain-requests");
+  assert(approvedUserSubdomainRequests.requests?.some((item) => item.id === subdomainRequestId && item.status === "approved" && item.adminNote === "smoke approved"), "user should see approved subdomain request and admin note");
+  await postJson(`/api/demos/${anotherProDeploy.id}/offline`, {});
+  await postJson(`/api/demos/${anotherProDeploy.id}/delete`, {});
   await postJson(`/api/demos/${proDeploy.id}/offline`, {});
   await postJson(`/api/demos/${proDeploy.id}/delete`, {});
   await testDeploymentJobs();
@@ -130,6 +168,8 @@ try {
   await testAutoFormHosting();
   await testAgentDeployApi();
   await inspectAndDeploySourceShellProject();
+  await testNodeRuntimeWithHostDriver();
+  await testNodeRuntimeWithMysqlTrialDatabase();
   const downgradePlanRequest = await postJsonExpectStatus("/api/plan-upgrade-requests", {
     plan: "lite",
     contact: "smoke@example.com",
@@ -214,6 +254,14 @@ async function testDeploymentJobs() {
   const updatedPage = await getText(`/d/${completed.result.slug}/`);
   assert(updatedPage.includes("Async Job Demo Updated"), "update deployment job should publish new content");
 
+  const blockedZip = await createBlockedContentZip();
+  const failedStarted = await postZip("/api/deployment-jobs", blockedZip, { name: "async-blocked-demo" }, { expectedStatus: 202 });
+  const failedJob = await waitDeploymentJob(failedStarted.job.id);
+  assert(failedJob.status === "failed", "blocked deployment job should fail");
+  assert(failedJob.diagnosis?.category === "content", "failed deployment job should expose content diagnosis");
+  assert(failedJob.diagnosis?.aiPrompt?.includes("DemoGo"), "failed deployment job should include AI fix prompt");
+  assert(failedJob.inspection?.failureDiagnosis?.category === "content", "failed inspection should include diagnosis");
+
   await postJson(`/api/demos/${completed.result.id}/offline`, {});
   await postJson(`/api/demos/${completed.result.id}/delete`, {});
 }
@@ -268,6 +316,18 @@ async function testAgentDeployApi() {
   const tokenStatus = await getJson("/api/agent-token");
   assert(tokenStatus.token?.enabled, "agent token should be enabled after reset");
   assert(!tokenStatus.token?.value, "agent token status should not return secret value");
+  const missingTokenCheck = await requestJson("/api/agent/token-check", { expectedStatus: 401 });
+  assert(missingTokenCheck.error, "agent token check should reject missing token");
+  const invalidTokenCheck = await requestJson("/api/agent/token-check", {
+    headers: { Authorization: "Bearer dmg_000000000000_invalidinvalidinvalid" },
+    expectedStatus: 401
+  });
+  assert(invalidTokenCheck.error, "agent token check should reject invalid token");
+  const validTokenCheck = await requestJson("/api/agent/token-check", {
+    headers: { Authorization: `Bearer ${tokenPayload.token.value}` }
+  });
+  assert(validTokenCheck.ok, "agent token check should accept current token");
+  assert(validTokenCheck.token?.prefix === tokenStatus.token?.prefix, "agent token check should return token prefix");
 
   const agentZip = await createStaticZip("agent-demo", "Agent Demo");
   const agentHeaders = {
@@ -287,6 +347,22 @@ async function testAgentDeployApi() {
   assert(agentDeploy.deploySource === "cli", "agent deploy should record CLI source");
   const page = await getText(`/d/${agentDeploy.slug}/`);
   assert(page.includes("Agent Demo"), "agent deployed page should contain original content");
+  const agentUpdateZip = await createStaticZip("agent-demo-update", "Agent Demo Updated");
+  const agentUpdate = await postZip("/api/agent/update", agentUpdateZip, { demoId: agentDeploy.publicUrl }, {
+    headers: agentHeaders
+  });
+  assert(agentUpdate.ok !== false, "agent update should return a successful payload");
+  assert(agentUpdate.id === agentDeploy.id, "agent update should keep the same demo id");
+  assert(agentUpdate.slug === agentDeploy.slug, "agent update should keep the same link slug");
+  assert(agentUpdate.publicUrl === agentDeploy.publicUrl, "agent update should keep the same public URL");
+  assert(agentUpdate.version === 2, "agent update should increment version");
+  const agentUpdatedPage = await getText(`/d/${agentDeploy.slug}/`);
+  assert(agentUpdatedPage.includes("Agent Demo Updated"), "agent updated page should contain new content");
+  const missingAgentUpdate = await postZip("/api/agent/update", agentUpdateZip, {}, {
+    headers: agentHeaders,
+    expectedStatus: 400
+  });
+  assert(missingAgentUpdate.error, "agent update should require a demo id or link");
   const overviewAfter = await adminGet("/api/admin/overview");
   assert((overviewAfter.demos || []).some((item) => item.id === agentDeploy.id && item.deploySource === "cli"), "admin overview should expose deploy source");
   assert(Number(overviewAfter.metrics?.aiDeploys || 0) >= aiDeploysBefore + 1, "admin overview should count agent deploys");
@@ -390,6 +466,16 @@ async function register() {
   });
 }
 
+async function testEmailVerificationOptions() {
+  const options = await getJson("/api/auth/register-options");
+  assert(options.emailVerificationEnabled === false, "smoke test should disable email verification by env");
+  const sent = await postJson("/api/auth/send-verification-code", {
+    email: `verify-${Date.now()}@example.com`,
+    password: "password123"
+  });
+  assert(sent.ok, "send verification should be a no-op when email verification is disabled");
+}
+
 async function testLoginRateLimit() {
   await postJson("/api/auth/logout", {});
   for (let index = 0; index < 5; index += 1) {
@@ -439,6 +525,139 @@ async function inspectOutProjects() {
   assert(outInspection.inspection?.userStatusLabel === "支持", "out project should have user-facing supported label");
 }
 
+async function inspectProjectClassifierV2() {
+  const nextStaticZip = await createZipFromFiles("next-static-demo", {
+    "package.json": JSON.stringify({
+      scripts: { build: "next build" },
+      dependencies: { next: "^15.0.0", react: "^19.0.0", "react-dom": "^19.0.0" }
+    }),
+    "next.config.js": "module.exports = { output: 'export' };",
+    "out/index.html": "<!doctype html><html><body><h1>Next Static</h1></body></html>"
+  });
+  const nextStaticInspection = await postZip("/api/inspect", nextStaticZip);
+  assert(nextStaticInspection.inspection?.canPublish, "Next static export should be publishable");
+  assert(nextStaticInspection.inspection?.projectProfile?.frontendFrameworks?.some((item) => item.code === "next"), "Next static project should identify Next.js");
+  assert(nextStaticInspection.inspection?.projectAssessment?.support?.publishMode === "static", "Next static export should publish as static output");
+
+  const nextSsrZip = await createZipFromFiles("next-ssr-demo", {
+    "package.json": JSON.stringify({
+      scripts: { build: "next build", start: "next start" },
+      dependencies: { next: "^15.0.0", react: "^19.0.0", "react-dom": "^19.0.0" }
+    }),
+    "next.config.js": "module.exports = {};",
+    "app/page.tsx": "export default function Page(){ return <h1>Next SSR</h1>; }"
+  });
+  const nextSsrInspection = await postZip("/api/inspect", nextSsrZip);
+  assert(nextSsrInspection.inspection?.hostingMode === "node_runtime", "Next SSR should be planned for node runtime architecture");
+  assert(!nextSsrInspection.inspection?.canPublish, "Next SSR should remain blocked when runtime is disabled");
+  assert(nextSsrInspection.inspection?.projectProfile?.assessment?.support?.publishMode === "node_runtime", "Next SSR should expose node runtime mode");
+
+  const tanStackZip = await createZipFromFiles("tanstack-start-demo", {
+    "package.json": JSON.stringify({
+      scripts: { dev: "vinxi dev", build: "vinxi build", start: "vinxi start" },
+      dependencies: { "@tanstack/react-start": "^1.0.0", react: "^19.0.0" }
+    }),
+    "app/routes/index.tsx": "export default function Home(){ return <h1>TanStack Start</h1>; }"
+  });
+  const tanStackInspection = await postZip("/api/inspect", tanStackZip);
+  assert(tanStackInspection.inspection?.projectProfile?.frontendFrameworks?.some((item) => item.code === "tanstack_start"), "TanStack Start should be identified");
+  assert(tanStackInspection.inspection?.projectAssessment?.support?.publishMode === "node_runtime", "TanStack Start should be marked as node runtime mode");
+
+  const nuxtZip = await createZipFromFiles("nuxt-demo", {
+    "package.json": JSON.stringify({
+      scripts: { build: "nuxt build", start: "node .output/server/index.mjs" },
+      dependencies: { nuxt: "^4.0.0", vue: "^3.0.0" }
+    }),
+    "nuxt.config.ts": "export default defineNuxtConfig({});",
+    "pages/index.vue": "<template><h1>Nuxt</h1></template>"
+  });
+  const nuxtInspection = await postZip("/api/inspect", nuxtZip);
+  assert(nuxtInspection.inspection?.projectProfile?.frontendFrameworks?.some((item) => item.code === "nuxt"), "Nuxt should be identified");
+  assert(nuxtInspection.inspection?.projectAssessment?.support?.publishMode === "node_runtime", "Nuxt should be marked as node runtime mode");
+
+  const honoZip = await createZipFromFiles("hono-demo", {
+    "package.json": JSON.stringify({
+      scripts: { start: "node server.js" },
+      dependencies: { hono: "^4.0.0" }
+    }),
+    "server.js": "console.log('hono demo');"
+  });
+  const honoInspection = await postZip("/api/inspect", honoZip);
+  assert(honoInspection.inspection?.projectProfile?.backendFrameworks?.some((item) => item.code === "hono"), "Hono should be identified");
+  assert(honoInspection.inspection?.projectAssessment?.support?.publishMode === "node_runtime", "Hono should use node runtime mode");
+
+  const supabaseZip = await createZipFromFiles("supabase-demo", {
+    "package.json": JSON.stringify({
+      scripts: { start: "node server.js" },
+      dependencies: { express: "^4.0.0", "@supabase/supabase-js": "^2.0.0" }
+    }),
+    ".env.example": "SUPABASE_URL=\nSUPABASE_ANON_KEY=\nOPENAI_API_KEY=\n",
+    "server.js": "console.log(process.env.SUPABASE_URL);"
+  });
+  const supabaseInspection = await postZip("/api/inspect", supabaseZip);
+  assert(supabaseInspection.inspection?.projectProfile?.databases?.some((item) => item.code === "supabase"), "Supabase should be identified");
+  assert(supabaseInspection.inspection?.projectAssessment?.environmentVariables?.required?.includes("SUPABASE_URL"), "Supabase env should be identified");
+  assert(supabaseInspection.inspection?.projectAssessment?.support?.missingRequirements?.includes("external_backend_config"), "Supabase should require external backend config");
+  assert(!supabaseInspection.inspection?.projectAssessment?.support?.missingRequirements?.includes("unsupported_database"), "Supabase should not be treated as unsupported database");
+  assert(supabaseInspection.inspection?.externalBackend?.provider === "supabase", "Supabase external backend status should be exposed");
+  assert(supabaseInspection.inspection?.externalBackend?.missingEnv?.includes("SUPABASE_URL"), "Supabase missing URL should be exposed");
+
+  const prismaZip = await createZipFromFiles("prisma-postgres-demo", {
+    "package.json": JSON.stringify({
+      scripts: { start: "node server.js" },
+      dependencies: { express: "^4.0.0", prisma: "^6.0.0", "@prisma/client": "^6.0.0", pg: "^8.0.0" }
+    }),
+    ".env.example": "DATABASE_URL=postgresql://user:pass@localhost:5432/app\n",
+    "prisma/schema.prisma": "datasource db { provider = \"postgresql\" url = env(\"DATABASE_URL\") }",
+    "server.js": "console.log('prisma postgres demo');"
+  });
+  const prismaInspection = await postZip("/api/inspect", prismaZip);
+  assert(prismaInspection.inspection?.projectProfile?.databases?.some((item) => item.code === "prisma"), "Prisma should be identified");
+  assert(prismaInspection.inspection?.projectProfile?.databases?.some((item) => item.code === "postgres"), "Postgres should be identified");
+  assert(prismaInspection.inspection?.projectAssessment?.signals?.hasDatabaseSchema, "Prisma schema should be identified as database schema");
+}
+
+async function testSupabaseExternalBackendConfig() {
+  const supabaseStaticZip = await createZipFromFiles("supabase-static-config-demo", {
+    "index.html": "<!doctype html><html><body><script type=\"module\" src=\"/src/main.js\"></script></body></html>",
+    "src/main.js": "console.log(import.meta.env.VITE_SUPABASE_URL, import.meta.env.VITE_SUPABASE_ANON_KEY);",
+    ".env.example": "VITE_SUPABASE_URL=\nVITE_SUPABASE_ANON_KEY=\n"
+  });
+  const deploy = await postZip("/api/deploy", supabaseStaticZip, { name: "supabase-static-config-demo" });
+  assert(deploy.id, "Supabase static demo should deploy");
+  assert(deploy.externalBackend?.provider === "supabase", "Supabase deploy should expose external backend");
+  assert(deploy.externalBackend?.status === "missing", "Supabase deploy should require config before saving env");
+  assert(deploy.applicationReadiness?.kind === "frontend_supabase", "Supabase deploy should expose frontend Supabase readiness");
+  assert(deploy.applicationReadiness?.checklist?.some((item) => item.code === "external_backend" && item.status === "missing"), "Supabase readiness should require external backend config");
+
+  const unsafeSave = await postJsonExpectStatus(`/api/demos/${deploy.id}/runtime-env`, {
+    env: {
+      VITE_SUPABASE_URL: "https://example.supabase.co",
+      SUPABASE_SERVICE_ROLE_KEY: "service-role-secret"
+    }
+  }, 400);
+  assert(unsafeSave.error?.includes("service_role"), "service_role key should be rejected");
+
+  const saved = await postJson(`/api/demos/${deploy.id}/runtime-env`, {
+    env: {
+      VITE_SUPABASE_URL: "https://example.supabase.co",
+      VITE_SUPABASE_ANON_KEY: "anon-test-key"
+    }
+  });
+  assert(saved.externalBackend?.provider === "supabase", "saving Supabase env should return external backend");
+  assert(["failed", "warning", "ready", "configured"].includes(saved.externalBackend?.status), "Supabase connection result should be exposed");
+  assert(saved.demo?.runtimeEnv?.VITE_SUPABASE_ANON_KEY?.maskedValue, "Supabase anon key should be masked in public demo response");
+  assert(!saved.demo?.runtimeEnv?.SUPABASE_SERVICE_ROLE_KEY, "service_role key should never appear in public demo response");
+  assert(saved.demo?.applicationReadiness?.kind === "frontend_supabase", "saving Supabase env should refresh readiness");
+
+  const detail = await getJson(`/api/demos/${deploy.id}`);
+  assert(detail.demo?.externalBackend?.provider === "supabase", "demo detail should persist external backend status");
+  assert(detail.demo?.runtimeEnv?.VITE_SUPABASE_URL?.maskedValue, "demo detail should expose masked Supabase URL config");
+  assert(detail.demo?.applicationReadiness?.summary, "demo detail should expose application readiness summary");
+  await postJson(`/api/demos/${deploy.id}/offline`, {});
+  await postJson(`/api/demos/${deploy.id}/delete`, {});
+}
+
 async function inspectUnsupportedRuntimeProjects() {
   const backendZip = await createZipFromFiles("backend-demo", {
     "package.json": JSON.stringify({
@@ -450,8 +669,10 @@ async function inspectUnsupportedRuntimeProjects() {
   });
   const backendInspection = await postZip("/api/inspect", backendZip);
   assert(!backendInspection.inspection?.canPublish, "backend project should not be publishable");
+  assert(backendInspection.inspection?.hostingMode === "node_runtime", "backend project should be classified into node runtime architecture");
+  assert(backendInspection.inspection?.runtime?.status === "planned", "backend project should expose planned runtime status while runtime is disabled");
   assert(backendInspection.inspection?.userStatusLabel === "暂不支持", "backend project should have unsupported user label");
-  assert((backendInspection.inspection?.unsupportedNotes || []).some((item) => item.includes("服务器")), "backend project should explain server requirement");
+  assert((backendInspection.inspection?.unsupportedNotes || []).some((item) => item.includes("数据库") || item.includes("多服务") || item.includes("运行器")), "backend project should explain runtime boundary");
   const noBuildSourceZip = await createZipFromFiles("source-no-build-demo", {
     "package.json": JSON.stringify({
       scripts: {
@@ -518,6 +739,39 @@ async function inspectBlockedAndIgnoredFiles() {
 }
 
 async function inspectBlockedContentProject() {
+  const leadZip = await createZipFromFiles("lead-generation-demo", {
+    "index.html": `<!doctype html><html><body>
+      <h1>产品体验预约</h1>
+      <p>填写姓名、手机号和公司名称，获取产品演示方案。</p>
+      <form>
+        <input name="name" placeholder="姓名" required>
+        <input name="phone" placeholder="手机号" required>
+        <input name="company" placeholder="公司名称">
+        <textarea name="message" placeholder="咨询内容"></textarea>
+        <button>提交需求</button>
+      </form>
+      <p>也可以扫码加微信群，或联系微信 demogo-service。</p>
+    </body></html>`
+  });
+  const leadInspection = await postZip("/api/inspect", leadZip);
+  assert(leadInspection.inspection?.canPublish, "normal lead generation page should be publishable");
+  assert(leadInspection.inspection?.contentReview?.status === "passed", "normal lead generation should pass content review");
+  assert((leadInspection.inspection?.contentReview?.findings || []).some((item) => item.severity === "notice"), "normal lead generation should keep notice findings");
+
+  const sensitiveZip = await createZipFromFiles("sensitive-collection-demo", {
+    "index.html": `<!doctype html><html><body>
+      <h1>实名认证</h1>
+      <form>
+        <input name="idCard" placeholder="身份证号" required>
+        <input name="smsCode" placeholder="短信验证码" required>
+        <input name="password" placeholder="登录密码" required>
+      </form>
+    </body></html>`
+  });
+  const sensitiveInspection = await postZip("/api/inspect", sensitiveZip);
+  assert(!sensitiveInspection.inspection?.canPublish, "highly sensitive data collection should be blocked");
+  assert(sensitiveInspection.inspection?.contentReview?.status === "blocked", "sensitive data collection should be blocked by content review");
+
   const fraudZip = await createZipFromFiles("fraud-demo", {
     "index.html": `<!doctype html><html><body><h1>高额回报</h1><p>导师带单，稳赚不赔，先垫付后返利。</p></body></html>`
   });
@@ -539,6 +793,19 @@ async function inspectBlockedContentProject() {
   assert(handled.review?.resolutionStatus === "confirmed_violation", "admin should update content review resolution");
   const confirmed = await adminGet("/api/admin/content-reviews?resolutionStatus=confirmed_violation");
   assert((confirmed.reviews || []).some((item) => item.id === blockedReview.id), "admin should filter handled content reviews");
+
+  const riskyHtml = "<!doctype html><html><body><h1>\u9ad8\u6536\u76ca \u6295\u8d44\u8fd4\u5229</h1><p>\u7a33\u8d5a\u4e0d\u8d54\uff0c\u5feb\u901f\u56de\u672c\u3002</p></body></html>";
+  const riskyZip = await createZipFromFiles("high-return-risk-zip-demo", {
+    "index.html": riskyHtml
+  });
+  const riskyZipDeploy = await postZipExpectStatus("/api/deploy", riskyZip, { name: "high-return-risk-zip-demo" }, 400);
+  assert(riskyZipDeploy.contentReview?.status === "blocked" || riskyZipDeploy.inspection?.contentReview?.status === "blocked", "zip risk content deploy should be blocked");
+
+  const riskyTar = await createTarGzFromFiles("high-return-risk-tar-demo", {
+    "index.html": riskyHtml
+  });
+  const riskyTarDeploy = await postZipExpectStatus("/api/deploy", riskyTar, { name: "high-return-risk-tar-demo" }, 400);
+  assert(riskyTarDeploy.contentReview?.status === "blocked" || riskyTarDeploy.inspection?.contentReview?.status === "blocked", "tar.gz risk content deploy should be blocked");
 }
 
 async function inspectInvalidZip() {
@@ -630,9 +897,522 @@ async function inspectAndDeploySourceShellProject() {
   await postJson(`/api/demos/${outDeploy.id}/delete`, {});
 }
 
+async function testNodeRuntimeWithHostDriver() {
+  const runtimeRoot = path.join(testRoot, "runtime-host");
+  await fs.rm(runtimeRoot, { recursive: true, force: true });
+  await fs.mkdir(path.join(runtimeRoot, "data"), { recursive: true });
+  await fs.mkdir(path.join(runtimeRoot, "uploads"), { recursive: true });
+  await fs.mkdir(path.join(runtimeRoot, "site", "d"), { recursive: true });
+  const runtimePort = 3120;
+  const runtimeBaseUrl = `http://127.0.0.1:${runtimePort}`;
+  const runtimeChild = spawn(process.execPath, ["src/server.js"], {
+    cwd: serverRoot,
+    env: {
+      ...process.env,
+      PORT: String(runtimePort),
+      PUBLIC_BASE_URL: runtimeBaseUrl,
+      DEMOGO_DATA_DIR: path.join(runtimeRoot, "data"),
+      DEMOGO_UPLOAD_DIR: path.join(runtimeRoot, "uploads"),
+      DEMOGO_DEMO_ROOT: path.join(runtimeRoot, "site", "d"),
+      DEMOGO_ADMIN_USER: adminUser,
+      DEMOGO_ADMIN_PASSWORD: adminPassword,
+      DEMOGO_EMAIL_VERIFICATION_ENABLED: "0",
+      DEMOGO_DEPLOY_RATE_LIMIT: "20",
+      DEMOGO_BUILD_MODE: "host",
+      DEMOGO_RUNTIME_ENABLED: "1",
+      DEMOGO_RUNTIME_NODE_ENABLED: "1",
+      DEMOGO_RUNTIME_DRIVER: "host",
+      DEMOGO_DEMO_DB_ENABLED: "0",
+      DEMOGO_DB_HOST: "",
+      DEMOGO_DB_NAME: "",
+      DEMOGO_DB_USER: "",
+      DEMOGO_DB_PASSWORD: ""
+    },
+    stdio: ["ignore", "pipe", "pipe"]
+  });
+  const previousCookie = cookie;
+  const previousBaseUrl = globalThis.__demogoBaseUrl;
+  globalThis.__demogoBaseUrl = runtimeBaseUrl;
+  cookie = "";
+  try {
+    await waitForRuntimeHealth(runtimeBaseUrl);
+    const capabilities = await requestJsonWithBase(runtimeBaseUrl, "/api/hosting/capabilities");
+    assert(capabilities.capabilities?.modes?.nodeRuntime?.status === "available", "node runtime should be available when enabled");
+    await requestJsonWithBase(runtimeBaseUrl, "/api/auth/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: "runtime@example.com", password: "password123" })
+    });
+    const runtimeZip = await createZipFromFiles("node-runtime-demo", {
+      "package.json": JSON.stringify({
+        type: "commonjs",
+        scripts: { start: "node server.js" }
+      }),
+      "server.js": `const http = require("http");
+const port = process.env.PORT;
+http.createServer((req, res) => {
+  if (req.url.startsWith("/api/hello")) {
+    res.setHeader("content-type", "application/json");
+    res.end(JSON.stringify({ ok: true, from: "node-runtime" }));
+    return;
+  }
+  res.end("<!doctype html><html><body><h1>Node Runtime Demo</h1></body></html>");
+}).listen(port);`
+    });
+    const inspection = await postZipWithBase(runtimeBaseUrl, "/api/inspect", runtimeZip);
+    assert(inspection.inspection?.hostingMode === "node_runtime", "node runtime inspection should expose node_runtime hosting mode");
+    assert(inspection.inspection?.canPublish, "node runtime inspection should be publishable when runtime is enabled");
+    assert(inspection.inspection?.projectProfile?.type === "node_service", "node runtime inspection should expose node service profile");
+    const deploy = await postZipWithBase(runtimeBaseUrl, "/api/deploy", runtimeZip, { name: "node-runtime-demo" });
+    assert(deploy.hostingMode === "node_runtime", "node runtime deploy should expose runtime hosting mode");
+    const page = await fetchTextWithBase(runtimeBaseUrl, `/d/${deploy.slug}/`);
+    assert(page.includes("Node Runtime Demo"), "node runtime page should proxy to running service");
+    const apiPayload = await requestJsonWithBase(runtimeBaseUrl, `/d/${deploy.slug}/api/hello`);
+    assert(apiPayload.from === "node-runtime", "node runtime API should proxy to running service");
+    await requestJsonWithBase(runtimeBaseUrl, `/api/demos/${deploy.id}/runtime/restart`, { method: "POST" });
+    const restartedPayload = await requestJsonWithBase(runtimeBaseUrl, `/d/${deploy.slug}/api/hello`);
+    assert(restartedPayload.from === "node-runtime", "node runtime should respond after explicit restart");
+    await requestJsonWithBase(runtimeBaseUrl, `/api/demos/${deploy.id}/offline`, { method: "POST" });
+    await requestJsonWithBase(runtimeBaseUrl, `/api/demos/${deploy.id}/delete`, { method: "POST" });
+
+    const envZip = await createZipFromFiles("env-runtime-demo", {
+      "package.json": JSON.stringify({
+        type: "commonjs",
+        scripts: { start: "node server.js" }
+      }),
+      ".env.example": "OPENAI_API_KEY=\n",
+      "server.js": `const http = require("http");
+http.createServer((req, res) => {
+  res.setHeader("content-type", "application/json");
+  res.end(JSON.stringify({ hasKey: Boolean(process.env.OPENAI_API_KEY) }));
+}).listen(process.env.PORT);`
+    });
+    const envDeploy = await postZipWithBase(runtimeBaseUrl, "/api/deploy", envZip, { name: "env-runtime-demo" });
+    assert(envDeploy.runtime?.status === "config_required", "env runtime should wait for user configuration");
+    assert(envDeploy.runtimeConfig?.missing?.includes("OPENAI_API_KEY"), "env runtime should expose missing env key");
+    assert(envDeploy.runtime?.failureDiagnosis?.category === "runtime_env", "env runtime should expose runtime env diagnosis");
+    assert(envDeploy.inspection?.failureDiagnosis?.category === "runtime_env", "env runtime inspection should expose diagnosis");
+    const envSave = await requestJsonWithBase(runtimeBaseUrl, `/api/demos/${envDeploy.id}/runtime-env`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ env: { OPENAI_API_KEY: "sk-test-value" } })
+    });
+    assert(envSave.demo?.runtimeEnv?.OPENAI_API_KEY?.maskedValue, "runtime env should be masked in public response");
+    await requestJsonWithBase(runtimeBaseUrl, `/api/demos/${envDeploy.id}/runtime/restart`, { method: "POST" });
+    const envRuntimePayload = await requestJsonWithBase(runtimeBaseUrl, `/d/${envDeploy.slug}/`);
+    assert(envRuntimePayload.hasKey === true, "runtime should receive saved env configuration");
+    await requestJsonWithBase(runtimeBaseUrl, `/api/demos/${envDeploy.id}/offline`, { method: "POST" });
+    await requestJsonWithBase(runtimeBaseUrl, `/api/demos/${envDeploy.id}/delete`, { method: "POST" });
+
+    const nextRuntimeZip = await createZipFromFiles("next-runtime-shim-demo", {
+      "package.json": JSON.stringify({
+        type: "commonjs",
+        scripts: { build: "node build.js", start: "node server.js" },
+        dependencies: { next: "file:./vendor/next", react: "file:./vendor/react", "react-dom": "file:./vendor/react-dom" }
+      }),
+      "vendor/next/package.json": JSON.stringify({ name: "next", version: "15.0.0", main: "index.js" }),
+      "vendor/next/index.js": "module.exports = {};",
+      "vendor/react/package.json": JSON.stringify({ name: "react", version: "19.0.0", main: "index.js" }),
+      "vendor/react/index.js": "module.exports = {};",
+      "vendor/react-dom/package.json": JSON.stringify({ name: "react-dom", version: "19.0.0", main: "index.js" }),
+      "vendor/react-dom/index.js": "module.exports = {};",
+      "next.config.js": "module.exports = {};",
+      "app/page.tsx": "export default function Page(){ return 'Next Runtime'; }",
+      "build.js": "console.log('build ok');",
+      "server.js": `const http = require("http");
+http.createServer((req, res) => res.end("Next runtime shim")).listen(process.env.PORT);`
+    });
+    const nextRuntimeInspection = await postZipWithBase(runtimeBaseUrl, "/api/inspect", nextRuntimeZip);
+    assert(nextRuntimeInspection.inspection?.canPublish, "supported SSR single service should be publishable when runtime is enabled");
+    assert(nextRuntimeInspection.inspection?.hostingMode === "node_runtime", "supported SSR should use node runtime hosting mode");
+    const nextRuntimeDeploy = await postZipWithBase(runtimeBaseUrl, "/api/deploy", nextRuntimeZip, { name: "next-runtime-shim-demo" });
+    const nextRuntimePage = await fetchTextWithBase(runtimeBaseUrl, `/d/${nextRuntimeDeploy.slug}/`);
+    assert(nextRuntimePage.includes("Next runtime shim"), "supported SSR runtime should proxy to service");
+    await requestJsonWithBase(runtimeBaseUrl, `/api/demos/${nextRuntimeDeploy.id}/offline`, { method: "POST" });
+    await requestJsonWithBase(runtimeBaseUrl, `/api/demos/${nextRuntimeDeploy.id}/delete`, { method: "POST" });
+
+    const fastifyZip = await createZipFromFiles("fastify-runtime-demo", {
+      "package.json": JSON.stringify({
+        scripts: { start: "node server.js" },
+        dependencies: { fastify: "^4.0.0" }
+      }),
+      "server.js": `const http = require("http");
+const port = process.env.PORT;
+http.createServer((req, res) => res.end("Fastify style demo")).listen(port);`
+    });
+    const fastifyInspection = await postZipWithBase(runtimeBaseUrl, "/api/inspect", fastifyZip);
+    assert(fastifyInspection.inspection?.projectProfile?.type === "node_service", "fastify dependency should classify as node service");
+    assert(fastifyInspection.inspection?.runtime?.framework === "fastify", "fastify dependency should expose runtime framework");
+
+    const startProdZip = await createZipFromFiles("start-prod-runtime-demo", {
+      "package.json": JSON.stringify({
+        scripts: {
+          start: "node server.js",
+          "start:prod": "node server.js"
+        },
+        dependencies: { koa: "^2.0.0" }
+      }),
+      "server.js": `const http = require("http");
+http.createServer((req, res) => res.end("start prod")).listen(process.env.PORT);`
+    });
+    const startProdInspection = await postZipWithBase(runtimeBaseUrl, "/api/inspect", startProdZip);
+    assert(startProdInspection.inspection?.runtime?.hasStartProdScript, "start:prod should be detected");
+    assert(startProdInspection.inspection?.runtime?.selectedStartCommand === "npm run start:prod", "start:prod should be selected");
+
+    const databaseZip = await createZipFromFiles("database-runtime-demo", {
+      "package.json": JSON.stringify({
+        scripts: { start: "node server.js" },
+        dependencies: { express: "file:./vendor/express", mysql2: "file:./vendor/mysql2" }
+      }),
+      "vendor/express/package.json": JSON.stringify({ name: "express", version: "4.0.0", main: "index.js" }),
+      "vendor/express/index.js": "module.exports = {};",
+      "vendor/mysql2/package.json": JSON.stringify({ name: "mysql2", version: "3.0.0", main: "index.js" }),
+      "vendor/mysql2/index.js": "module.exports = {};",
+      "server.js": `const http = require("http");
+http.createServer((req, res) => res.end("db demo")).listen(process.env.PORT);`
+    });
+    const databaseInspection = await postZipWithBase(runtimeBaseUrl, "/api/inspect", databaseZip);
+    assert(!databaseInspection.inspection?.canPublish, "database runtime project should be blocked for now");
+    assert(databaseInspection.inspection?.runtime?.requiresDatabase, "database runtime project should expose database dependency");
+    assert(databaseInspection.inspection?.runtime?.requiresMysql, "mysql dependency should be detected separately");
+    assert((databaseInspection.inspection?.unsupportedNotes || []).some((item) => item.includes("MySQL") || item.includes("数据库")), "database block should be user-visible");
+  } finally {
+    cookie = previousCookie;
+    globalThis.__demogoBaseUrl = previousBaseUrl;
+    runtimeChild.kill("SIGTERM");
+  }
+}
+
+async function testNodeRuntimeWithMysqlTrialDatabase() {
+  const runtimeRoot = path.join(testRoot, "runtime-mysql");
+  await fs.rm(runtimeRoot, { recursive: true, force: true });
+  await fs.mkdir(path.join(runtimeRoot, "data"), { recursive: true });
+  await fs.mkdir(path.join(runtimeRoot, "uploads"), { recursive: true });
+  await fs.mkdir(path.join(runtimeRoot, "site", "d"), { recursive: true });
+  const runtimePort = 3121;
+  const runtimeBaseUrl = `http://127.0.0.1:${runtimePort}`;
+  const runtimeChild = spawn(process.execPath, ["src/server.js"], {
+    cwd: serverRoot,
+    env: {
+      ...process.env,
+      PORT: String(runtimePort),
+      PUBLIC_BASE_URL: runtimeBaseUrl,
+      DEMOGO_DATA_DIR: path.join(runtimeRoot, "data"),
+      DEMOGO_UPLOAD_DIR: path.join(runtimeRoot, "uploads"),
+      DEMOGO_DEMO_ROOT: path.join(runtimeRoot, "site", "d"),
+      DEMOGO_ADMIN_USER: adminUser,
+      DEMOGO_ADMIN_PASSWORD: adminPassword,
+      DEMOGO_EMAIL_VERIFICATION_ENABLED: "0",
+      DEMOGO_DEPLOY_RATE_LIMIT: "20",
+      DEMOGO_BUILD_MODE: "host",
+      DEMOGO_RUNTIME_ENABLED: "1",
+      DEMOGO_RUNTIME_NODE_ENABLED: "1",
+      DEMOGO_RUNTIME_DRIVER: "host",
+      DEMOGO_DEMO_DB_ENABLED: "1",
+      DEMOGO_DEMO_DB_MOCK: "1",
+      DEMOGO_DEMO_DB_MOCK_VALIDATE_SCHEMA: "1",
+      DEMOGO_DEMO_DB_HOST: "127.0.0.1",
+      DEMOGO_DEMO_DB_PORT: "3306",
+      DEMOGO_DB_HOST: "",
+      DEMOGO_DB_NAME: "",
+      DEMOGO_DB_USER: "",
+      DEMOGO_DB_PASSWORD: ""
+    },
+    stdio: ["ignore", "pipe", "pipe"]
+  });
+  const previousCookie = cookie;
+  const previousBaseUrl = globalThis.__demogoBaseUrl;
+  globalThis.__demogoBaseUrl = runtimeBaseUrl;
+  cookie = "";
+  try {
+    await waitForRuntimeHealth(runtimeBaseUrl);
+    const capabilities = await requestJsonWithBase(runtimeBaseUrl, "/api/hosting/capabilities");
+    assert(capabilities.capabilities?.database?.mysql?.status === "available", "mysql trial database should be available when enabled");
+    await requestJsonWithBase(runtimeBaseUrl, "/api/auth/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: "runtime-mysql@example.com", password: "password123" })
+    });
+    const runtimePlanRequest = await requestJsonWithBase(runtimeBaseUrl, "/api/plan-upgrade-requests", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        plan: "pro",
+        contact: "runtime-mysql@example.com",
+        message: "Use Pro quota for complex application smoke tests"
+      })
+    });
+    await adminPost(`/api/admin/plan-upgrade-requests/${runtimePlanRequest.request.id}/status`, { status: "approved" });
+    const databaseZip = await createZipFromFiles("mysql-runtime-demo", {
+      "package.json": JSON.stringify({
+        scripts: { start: "node server.js" },
+        dependencies: { express: "file:./vendor/express", mysql2: "file:./vendor/mysql2" }
+      }),
+      "vendor/express/package.json": JSON.stringify({ name: "express", version: "4.0.0", main: "index.js" }),
+      "vendor/express/index.js": "module.exports = {};",
+      "vendor/mysql2/package.json": JSON.stringify({ name: "mysql2", version: "3.0.0", main: "index.js" }),
+      "vendor/mysql2/index.js": "module.exports = {};",
+      "server.js": `const http = require("http");
+http.createServer((req, res) => {
+  res.setHeader("content-type", "application/json");
+  res.end(JSON.stringify({
+    ok: true,
+    mysqlHost: process.env.MYSQL_HOST,
+    mysqlDatabase: process.env.MYSQL_DATABASE,
+    hasPassword: Boolean(process.env.MYSQL_PASSWORD)
+  }));
+}).listen(process.env.PORT);`
+    });
+    const inspection = await postZipWithBase(runtimeBaseUrl, "/api/inspect", databaseZip);
+    assert(inspection.inspection?.canPublish, "mysql runtime project should be publishable when trial database is enabled");
+    assert(inspection.inspection?.runtime?.requiresMysql, "mysql runtime project should expose mysql dependency");
+    const deploy = await postZipWithBase(runtimeBaseUrl, "/api/deploy", databaseZip, { name: "mysql-runtime-demo" });
+    assert(deploy.database?.enabled, "deploy should expose public database metadata");
+    assert(deploy.database?.engine === "mysql", "database metadata should identify mysql");
+    assert(deploy.applicationReadiness?.kind === "frontend_node_mysql" || deploy.applicationReadiness?.kind === "node_mysql", "mysql runtime deploy should expose application readiness");
+    assert(deploy.applicationReadiness?.checklist?.some((item) => item.code === "database" && item.status === "ready"), "mysql readiness should mark database ready");
+    assert(deploy.applicationReadiness?.deliveryReport?.verdict === "ready_to_share", "mysql runtime deploy should expose ready trial delivery report");
+    assert(deploy.applicationReadiness?.deliveryReport?.feedbackReady === true, "ready trial delivery report should mark feedback ready");
+    assert(!JSON.stringify(deploy.database).includes("MYSQL_PASSWORD"), "public database metadata must not expose password env");
+    assert(!JSON.stringify(deploy.database).includes("DATABASE_URL"), "public database metadata must not expose database url");
+    const payload = await requestJsonWithBase(runtimeBaseUrl, `/d/${deploy.slug}/`);
+    assert(payload.mysqlHost === "127.0.0.1", "runtime should receive mysql host env");
+    assert(payload.mysqlDatabase === deploy.database.databaseName, "runtime should receive mysql database env");
+    assert(payload.hasPassword === true, "runtime should receive mysql password env");
+    assert(deploy.database?.schema?.status === "skipped", "database without schema should be marked skipped");
+    await requestJsonWithBase(runtimeBaseUrl, `/api/demos/${deploy.id}/offline`, { method: "POST" });
+
+    const schemaZip = await createZipFromFiles("mysql-schema-runtime-demo", {
+      "package.json": JSON.stringify({
+        scripts: { start: "node server.js" },
+        dependencies: { express: "file:./vendor/express", mysql2: "file:./vendor/mysql2" }
+      }),
+      "vendor/express/package.json": JSON.stringify({ name: "express", version: "4.0.0", main: "index.js" }),
+      "vendor/express/index.js": "module.exports = {};",
+      "vendor/mysql2/package.json": JSON.stringify({ name: "mysql2", version: "3.0.0", main: "index.js" }),
+      "vendor/mysql2/index.js": "module.exports = {};",
+      "schema.sql": "CREATE TABLE smoke_items (id INT PRIMARY KEY);",
+      "server.js": `const http = require("http");
+http.createServer((req, res) => res.end("schema ok")).listen(process.env.PORT);`
+    });
+    const schemaDeploy = await postZipWithBase(runtimeBaseUrl, "/api/deploy", schemaZip, { name: "mysql-schema-runtime-demo" });
+    assert(schemaDeploy.database?.schema?.status === "ready", "schema.sql should initialize mock mysql database");
+    assert(schemaDeploy.applicationReadiness?.checklist?.some((item) => item.code === "database" && item.detail?.includes("schema.sql")), "schema deploy readiness should mention schema initialization");
+    const resetPayload = await requestJsonWithBase(runtimeBaseUrl, `/api/demos/${schemaDeploy.id}/database/reset`, { method: "POST" });
+    assert(resetPayload.database?.schema?.status === "ready", "database reset should re-run schema initialization");
+    assert(resetPayload.demo?.applicationReadiness?.checklist?.some((item) => item.code === "database" && item.status === "ready"), "database reset should refresh readiness");
+    assert(resetPayload.demo?.applicationReadiness?.deliveryReport?.verdict === "ready_to_share", "database reset should refresh delivery report");
+    await requestJsonWithBase(runtimeBaseUrl, `/api/demos/${schemaDeploy.id}/offline`, { method: "POST" });
+    await requestJsonWithBase(runtimeBaseUrl, `/api/demos/${schemaDeploy.id}/delete`, { method: "POST" });
+    await testComplexCommerceTrialSample(runtimeBaseUrl);
+    await testComplexSchemaFailureSample(runtimeBaseUrl);
+    await testComplexFailureSamples(runtimeBaseUrl);
+    await requestJsonWithBase(runtimeBaseUrl, `/api/demos/${deploy.id}/delete`, { method: "POST" });
+  } finally {
+    cookie = previousCookie;
+    globalThis.__demogoBaseUrl = previousBaseUrl;
+    runtimeChild.kill("SIGTERM");
+  }
+}
+
+async function testComplexCommerceTrialSample(runtimeBaseUrl) {
+  const sampleZip = await createComplexCommerceTrialZip("commerce-trial-demo", "v1");
+  const inspection = await postZipWithBase(runtimeBaseUrl, "/api/inspect", sampleZip);
+  assert(inspection.inspection?.canPublish, "complex commerce sample should be publishable");
+  assert(inspection.inspection?.runtime?.requiresMysql, "complex commerce sample should require mysql");
+  assert(inspection.inspection?.projectProfile?.backendFrameworks?.some((item) => item.code === "express" || item.code === "node"), "complex commerce sample should expose backend framework");
+
+  const deploy = await postZipWithBase(runtimeBaseUrl, "/api/deploy", sampleZip, { name: "Complex Commerce Trial" });
+  assert(deploy.hostingMode === "node_runtime", "complex commerce sample should use node runtime");
+  assert(deploy.database?.schema?.status === "ready", "complex commerce sample should initialize mysql schema");
+  assert(deploy.applicationReadiness?.kind === "frontend_node_mysql", "complex commerce sample should be classified as frontend node mysql readiness");
+  assert(deploy.applicationReadiness?.status === "ready", "complex commerce sample readiness should be ready");
+  assert(deploy.applicationReadiness?.deliveryReport?.verdict === "ready_to_share", "complex commerce sample should be ready to share");
+  assert(deploy.applicationReadiness?.deliveryReport?.proofPoints?.some((item) => item.includes("数据库")), "complex commerce delivery report should mention database proof");
+
+  const page = await fetchTextWithBase(runtimeBaseUrl, `/d/${deploy.slug}/`);
+  assert(page.includes("DemoGo Commerce Trial v1"), "complex commerce sample page should render");
+  const products = await requestJsonWithBase(runtimeBaseUrl, `/d/${deploy.slug}/api/products`);
+  assert(products.products?.length === 2, "complex commerce sample products API should respond");
+  assert(products.database === deploy.database.databaseName, "complex commerce sample API should receive mysql database env");
+  const lead = await requestJsonWithBase(runtimeBaseUrl, `/d/${deploy.slug}/api/leads`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: "Smoke Buyer", phone: "13800000000", productId: "sku-1" })
+  });
+  assert(lead.ok && lead.received?.name === "Smoke Buyer", "complex commerce sample lead API should accept JSON payload");
+
+  const updateZip = await createComplexCommerceTrialZip("commerce-trial-demo-update", "v2");
+  const updated = await postZipWithBase(runtimeBaseUrl, `/api/demos/${deploy.id}/update`, updateZip);
+  assert(updated.id === deploy.id, "complex commerce sample update should keep demo id");
+  assert(updated.slug === deploy.slug, "complex commerce sample update should keep slug");
+  assert(updated.version === 2, "complex commerce sample update should increment version");
+  assert(updated.applicationReadiness?.status === "ready", "complex commerce sample update should keep readiness ready");
+  assert(updated.applicationReadiness?.deliveryReport?.feedbackReady === true, "complex commerce update should keep delivery report feedback ready");
+  const updatedPage = await fetchTextWithBase(runtimeBaseUrl, `/d/${deploy.slug}/`);
+  assert(updatedPage.includes("DemoGo Commerce Trial v2"), "complex commerce sample updated page should render on same link");
+
+  await requestJsonWithBase(runtimeBaseUrl, `/api/demos/${deploy.id}/offline`, { method: "POST" });
+  await requestJsonWithBase(runtimeBaseUrl, `/api/demos/${deploy.id}/delete`, { method: "POST" });
+}
+
+async function testComplexSchemaFailureSample(runtimeBaseUrl) {
+  const badSchemaZip = await createZipFromFiles("failure-schema-demo", {
+    "package.json": JSON.stringify({
+      scripts: { start: "node server.js" },
+      dependencies: { express: "file:./vendor/express", mysql2: "file:./vendor/mysql2" }
+    }),
+    "vendor/express/package.json": JSON.stringify({ name: "express", version: "4.0.0", main: "index.js" }),
+    "vendor/express/index.js": "module.exports = {};",
+    "vendor/mysql2/package.json": JSON.stringify({ name: "mysql2", version: "3.0.0", main: "index.js" }),
+    "vendor/mysql2/index.js": "module.exports = {};",
+    "schema.sql": "CREATE TABLE broken_items (id INT PRIMARY KEY);\n-- DEMOGO_SCHEMA_ERROR",
+    "index.html": "<!doctype html><html><body><h1>Schema Failure Demo</h1></body></html>",
+    "server.js": "require('http').createServer((req, res) => res.end('schema failure')).listen(process.env.PORT);"
+  });
+  const failure = await postZipWithBase(runtimeBaseUrl, "/api/deploy", badSchemaZip, { name: "Failure Schema" }, { expectedStatus: 400 });
+  assert(failure.diagnosis?.category === "database_init", `bad schema should expose database_init diagnosis, got ${failure.diagnosis?.category || "none"}`);
+  assert(failure.diagnosis?.aiPrompt?.includes("schema.sql"), "bad schema diagnosis should tell AI to fix schema.sql");
+  assert(failure.diagnosis?.evidence?.some((item) => item.includes("数据库")), "bad schema diagnosis should include database evidence");
+}
+
+async function testComplexFailureSamples(runtimeBaseUrl) {
+  const missingStartZip = await createZipFromFiles("failure-missing-start-demo", {
+    "package.json": JSON.stringify({
+      dependencies: { express: "file:./vendor/express" }
+    }),
+    "vendor/express/package.json": JSON.stringify({ name: "express", version: "4.0.0", main: "index.js" }),
+    "vendor/express/index.js": "module.exports = {};",
+    "server.js": "require('http').createServer((req, res) => res.end('missing start')).listen(process.env.PORT);"
+  });
+  const missingStart = await postZipWithBase(runtimeBaseUrl, "/api/deploy", missingStartZip, { name: "Failure Missing Start" }, { expectedStatus: 400 });
+  assert(
+    missingStart.diagnosis?.category === "runtime_start",
+    `missing start should expose runtime_start diagnosis, got ${missingStart.diagnosis?.category || "none"}: ${missingStart.error || missingStart.diagnosis?.summary || ""}`
+  );
+  assert(missingStart.diagnosis?.aiPrompt?.includes("start"), "missing start diagnosis should tell AI to add start command");
+
+  const missingEnvZip = await createZipFromFiles("failure-missing-env-demo", {
+    "package.json": JSON.stringify({
+      scripts: { start: "node server.js" },
+      dependencies: { express: "file:./vendor/express" }
+    }),
+    "vendor/express/package.json": JSON.stringify({ name: "express", version: "4.0.0", main: "index.js" }),
+    "vendor/express/index.js": "module.exports = {};",
+    ".env.example": "OPENAI_API_KEY=\n",
+    "server.js": "require('http').createServer((req, res) => res.end(process.env.OPENAI_API_KEY || 'missing')).listen(process.env.PORT);"
+  });
+  const missingEnv = await postZipWithBase(runtimeBaseUrl, "/api/deploy", missingEnvZip, { name: "Failure Missing Env" });
+  assert(missingEnv.runtime?.status === "config_required", "missing env should create config_required runtime state");
+  assert(missingEnv.failureDiagnosis?.category === "runtime_env" || missingEnv.inspection?.failureDiagnosis?.category === "runtime_env", "missing env should expose runtime_env diagnosis");
+  assert(missingEnv.runtimeConfig?.missing?.includes("OPENAI_API_KEY"), "missing env should list OPENAI_API_KEY");
+  await requestJsonWithBase(runtimeBaseUrl, `/api/demos/${missingEnv.id}/offline`, { method: "POST" });
+  await requestJsonWithBase(runtimeBaseUrl, `/api/demos/${missingEnv.id}/delete`, { method: "POST" });
+
+  const portTimeoutZip = await createZipFromFiles("failure-port-timeout-demo", {
+    "package.json": JSON.stringify({
+      scripts: { start: "node server.js" },
+      dependencies: { express: "file:./vendor/express" }
+    }),
+    "vendor/express/package.json": JSON.stringify({ name: "express", version: "4.0.0", main: "index.js" }),
+    "vendor/express/index.js": "module.exports = {};",
+    "server.js": "setInterval(() => {}, 1000);"
+  });
+  const portTimeout = await postZipWithBase(runtimeBaseUrl, "/api/deploy", portTimeoutZip, { name: "Failure Port Timeout" }, { expectedStatus: 400 });
+  assert(portTimeout.diagnosis?.category === "runtime_start", "port timeout should expose runtime_start diagnosis");
+  assert(portTimeout.diagnosis?.aiPrompt?.includes("process.env.PORT"), "port timeout diagnosis should mention process.env.PORT");
+
+  const dependencyZip = await createZipFromFiles("failure-dependency-demo", {
+    "package.json": JSON.stringify({
+      scripts: { start: "node server.js" },
+      dependencies: { "missing-private-package": "99.99.99" }
+    }),
+    "server.js": "require('http').createServer((req, res) => res.end('dependency')).listen(process.env.PORT);"
+  });
+  const dependencyFailure = await postZipWithBase(runtimeBaseUrl, "/api/deploy", dependencyZip, { name: "Failure Dependency" }, { expectedStatus: 400 });
+  assert(
+    dependencyFailure.diagnosis?.category === "dependency_install",
+    `dependency failure should expose dependency_install diagnosis, got ${dependencyFailure.diagnosis?.category || "none"}: ${dependencyFailure.error || dependencyFailure.diagnosis?.summary || ""}`
+  );
+  assert(dependencyFailure.diagnosis?.aiPrompt?.includes("npm install"), "dependency diagnosis should mention npm install");
+
+  const redisZip = await createZipFromFiles("failure-redis-demo", {
+    "package.json": JSON.stringify({
+      scripts: { start: "node server.js" },
+      dependencies: { express: "file:./vendor/express", redis: "^4.0.0" }
+    }),
+    "vendor/express/package.json": JSON.stringify({ name: "express", version: "4.0.0", main: "index.js" }),
+    "vendor/express/index.js": "module.exports = {};",
+    "server.js": "require('http').createServer((req, res) => res.end('redis')).listen(process.env.PORT);"
+  });
+  const redisFailure = await postZipWithBase(runtimeBaseUrl, "/api/deploy", redisZip, { name: "Failure Redis" }, { expectedStatus: 400 });
+  assert(
+    redisFailure.diagnosis?.category === "unsupported",
+    `redis project should expose unsupported diagnosis, got ${redisFailure.diagnosis?.category || "none"}: ${redisFailure.error || redisFailure.diagnosis?.summary || ""}`
+  );
+  assert(redisFailure.diagnosis?.aiPrompt?.includes("Redis"), "redis diagnosis should mention Redis");
+}
+
+async function createComplexCommerceTrialZip(name, versionLabel) {
+  return createZipFromFiles(name, {
+    "package.json": JSON.stringify({
+      scripts: { start: "node server.js" },
+      dependencies: {
+        express: "file:./vendor/express",
+        mysql2: "file:./vendor/mysql2"
+      }
+    }),
+    "vendor/express/package.json": JSON.stringify({ name: "express", version: "4.0.0", main: "index.js" }),
+    "vendor/express/index.js": "module.exports = {};",
+    "vendor/mysql2/package.json": JSON.stringify({ name: "mysql2", version: "3.0.0", main: "index.js" }),
+    "vendor/mysql2/index.js": "module.exports = {};",
+    "schema.sql": [
+      "CREATE TABLE products (id VARCHAR(32) PRIMARY KEY, name VARCHAR(120), price INT);",
+      "CREATE TABLE trial_leads (id INT PRIMARY KEY, name VARCHAR(80), phone VARCHAR(32), product_id VARCHAR(32));"
+    ].join("\n"),
+    "index.html": `<!doctype html><html><head><meta charset="utf-8"><title>DemoGo Commerce Trial</title></head><body><main><h1>DemoGo Commerce Trial ${versionLabel}</h1><p>Commerce trial page for DemoGo full application smoke testing.</p><button id="lead">Book trial</button><script>fetch("./api/products").then(r=>r.json()).then(data=>{document.body.insertAdjacentHTML("beforeend","<pre>"+JSON.stringify(data.products,null,2)+"</pre>")});document.getElementById("lead").onclick=()=>fetch("./api/leads",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({name:"Web User",phone:"13800000000",productId:"sku-1"})});</script></main></body></html>`,
+    "server.js": `const http = require("http");
+const fs = require("fs");
+const path = require("path");
+const products = [
+  { id: "sku-1", name: "DemoGo Starter Kit", price: 199 },
+  { id: "sku-2", name: "DemoGo Pro Kit", price: 499 }
+];
+const page = fs.readFileSync(path.join(__dirname, "index.html"), "utf8");
+function readBody(req) {
+  return new Promise((resolve) => {
+    let body = "";
+    req.on("data", (chunk) => { body += chunk; });
+    req.on("end", () => resolve(body));
+  });
+}
+http.createServer(async (req, res) => {
+  if (req.url.startsWith("/api/products")) {
+    res.setHeader("content-type", "application/json");
+    res.end(JSON.stringify({ ok: true, products, database: process.env.MYSQL_DATABASE || "" }));
+    return;
+  }
+  if (req.url.startsWith("/api/leads") && req.method === "POST") {
+    const payload = JSON.parse(await readBody(req) || "{}");
+    res.setHeader("content-type", "application/json");
+    res.end(JSON.stringify({ ok: true, received: payload, hasDatabasePassword: Boolean(process.env.MYSQL_PASSWORD) }));
+    return;
+  }
+  res.setHeader("content-type", "text/html; charset=utf-8");
+  res.end(page);
+}).listen(process.env.PORT);`
+  });
+}
+
 async function createStaticZip(name = "smoke-demo", title = "Smoke Demo") {
   return createZipFromFiles(name, {
     "index.html": `<!doctype html><html><body><h1>${title}</h1></body></html>`
+  });
+}
+
+async function createBlockedContentZip() {
+  return createZipFromFiles(`blocked-content-${Date.now()}`, {
+    "index.html": "<!doctype html><html><body><h1>高额回报</h1><p>导师带单，稳赚不赔，先垫付后返利。</p></body></html>"
   });
 }
 
@@ -889,7 +1669,11 @@ async function getJson(endpoint) {
 }
 
 async function getText(endpoint) {
-  const response = await fetch(`${baseUrl}${endpoint}`, {
+  return fetchTextWithBase(currentBaseUrl(), endpoint);
+}
+
+async function fetchTextWithBase(sourceBaseUrl, endpoint) {
+  const response = await fetch(`${sourceBaseUrl}${endpoint}`, {
     headers: cookie ? { Cookie: cookie } : {}
   });
   if (!response.ok) throw new Error(`${endpoint} returned ${response.status}`);
@@ -933,11 +1717,15 @@ async function adminPost(endpoint, body) {
 }
 
 async function requestJson(endpoint, options = {}) {
+  return requestJsonWithBase(currentBaseUrl(), endpoint, options);
+}
+
+async function requestJsonWithBase(sourceBaseUrl, endpoint, options = {}) {
   const headers = {
     ...(options.headers || {})
   };
   if (cookie) headers.Cookie = cookie;
-  const response = await fetch(`${baseUrl}${endpoint}`, {
+  const response = await fetch(`${sourceBaseUrl}${endpoint}`, {
     ...options,
     headers
   });
@@ -954,6 +1742,39 @@ async function requestJson(endpoint, options = {}) {
     throw new Error(`${endpoint} returned ${response.status}: ${text}`);
   }
   return payload;
+}
+
+async function postZipWithBase(sourceBaseUrl, endpoint, zipPath, fields = {}, options = {}) {
+  const { fileField = "project", ...requestOptions } = options;
+  const form = new FormData();
+  const bytes = await fs.readFile(zipPath);
+  const type = zipPath.endsWith(".zip") ? "application/zip" : "application/gzip";
+  form.append(fileField, new Blob([bytes], { type }), path.basename(zipPath));
+  for (const [key, value] of Object.entries(fields)) {
+    form.append(key, String(value));
+  }
+  return requestJsonWithBase(sourceBaseUrl, endpoint, {
+    method: "POST",
+    body: form,
+    ...requestOptions
+  });
+}
+
+async function waitForRuntimeHealth(sourceBaseUrl) {
+  for (let index = 0; index < 80; index += 1) {
+    try {
+      const health = await requestJsonWithBase(sourceBaseUrl, "/api/health");
+      if (health.version === serviceVersion) return;
+    } catch {
+      // keep waiting
+    }
+    await sleep(250);
+  }
+  throw new Error(`runtime smoke server did not become healthy at ${sourceBaseUrl}`);
+}
+
+function currentBaseUrl() {
+  return globalThis.__demogoBaseUrl || baseUrl;
 }
 
 function waitProcess(proc) {

@@ -1,16 +1,20 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   adminDeleteDemo,
+  adminStopDemoRuntime,
   getAdminContentReviews,
   adminOfflineDemo,
   getAdminFeedback,
   getAdminForms,
   getAdminOverview,
   getAdminPlanRequests,
+  getAdminRuntimes,
+  getAdminSubdomainRequests,
   getAdminUsers,
   updateAdminContentReviewStatus,
   updateAdminFeedbackStatus,
-  updateAdminPlanRequestStatus
+  updateAdminPlanRequestStatus,
+  updateAdminSubdomainRequestStatus
 } from "../api/admin";
 import { Badge } from "../components/Badge";
 import { BrandLogo } from "../components/BrandLogo";
@@ -21,7 +25,7 @@ import { IcpLink } from "../components/IcpLink";
 import { Toast } from "../components/Toast";
 import { planName } from "../config/plans";
 import { demoStatusLabel, feedbackStatusLabel, planRequestStatusLabel } from "../config/statuses";
-import type { AdminMetrics, AdminUser, ContentReview, Demo, Feedback, FormSubmission, HostedForm, PlanRequest } from "../types";
+import type { AdminMetrics, AdminUser, ContentReview, Demo, FailureDiagnosis, Feedback, FormSubmission, HostedForm, PlanRequest, SubdomainRequest } from "../types";
 import { formatBytes, formatDate } from "../utils/format";
 
 type ToastTone = "info" | "success" | "warning" | "danger";
@@ -32,10 +36,12 @@ export function AdminDashboard() {
   const [demos, setDemos] = useState<Demo[]>([]);
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [requests, setRequests] = useState<PlanRequest[]>([]);
+  const [subdomainRequests, setSubdomainRequests] = useState<SubdomainRequest[]>([]);
   const [feedback, setFeedback] = useState<Feedback[]>([]);
   const [forms, setForms] = useState<HostedForm[]>([]);
   const [formSubmissions, setFormSubmissions] = useState<FormSubmission[]>([]);
   const [contentReviews, setContentReviews] = useState<ContentReview[]>([]);
+  const [runtimeDemos, setRuntimeDemos] = useState<Demo[]>([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
   const [tone, setTone] = useState<ToastTone>("info");
@@ -45,10 +51,11 @@ export function AdminDashboard() {
 
     async function loadInitialData() {
       try {
-        const [overview, usersPayload, requestsPayload, feedbackPayload, formsPayload, contentReviewsPayload] = await Promise.all([
+        const [overview, usersPayload, requestsPayload, subdomainPayload, feedbackPayload, formsPayload, contentReviewsPayload] = await Promise.all([
           getAdminOverview(),
           getAdminUsers(),
           getAdminPlanRequests(),
+          getAdminSubdomainRequests(),
           getAdminFeedback(),
           getAdminForms(),
           getAdminContentReviews()
@@ -58,10 +65,12 @@ export function AdminDashboard() {
         setDemos(overview.demos || []);
         setUsers(usersPayload.users || overview.users || []);
         setRequests(requestsPayload.requests || []);
+        setSubdomainRequests(subdomainPayload.requests || []);
         setFeedback(feedbackPayload.feedback || overview.feedback || []);
         setForms(formsPayload.forms || overview.forms || []);
         setFormSubmissions(formsPayload.submissions || []);
         setContentReviews(contentReviewsPayload.reviews || overview.contentReviews || []);
+        setRuntimeDemos((overview.demos || []).filter((demo) => demo.hostingMode === "node_runtime" || demo.database?.enabled));
       } catch (error) {
         if (mounted) show(error instanceof Error ? error.message : "运营后台数据加载失败。", "danger");
       } finally {
@@ -82,10 +91,11 @@ export function AdminDashboard() {
 
   async function loadAll() {
     try {
-      const [overview, usersPayload, requestsPayload, feedbackPayload, formsPayload, contentReviewsPayload] = await Promise.all([
+      const [overview, usersPayload, requestsPayload, subdomainPayload, feedbackPayload, formsPayload, contentReviewsPayload] = await Promise.all([
         getAdminOverview(),
         getAdminUsers(),
         getAdminPlanRequests(),
+        getAdminSubdomainRequests(),
         getAdminFeedback(),
         getAdminForms(),
         getAdminContentReviews()
@@ -94,10 +104,12 @@ export function AdminDashboard() {
       setDemos(overview.demos || []);
       setUsers(usersPayload.users || overview.users || []);
       setRequests(requestsPayload.requests || []);
+      setSubdomainRequests(subdomainPayload.requests || []);
       setFeedback(feedbackPayload.feedback || overview.feedback || []);
       setForms(formsPayload.forms || overview.forms || []);
       setFormSubmissions(formsPayload.submissions || []);
       setContentReviews(contentReviewsPayload.reviews || overview.contentReviews || []);
+      setRuntimeDemos((overview.demos || []).filter((demo) => demo.hostingMode === "node_runtime" || demo.database?.enabled));
     } catch (error) {
       show(error instanceof Error ? error.message : "运营后台数据加载失败。", "danger");
     } finally {
@@ -147,9 +159,31 @@ export function AdminDashboard() {
               onError={(text) => show(text, "danger")}
             />
         ) : null}
+        {activeView === "subdomains" ? (
+            <SubdomainRequestsAdmin
+              requests={subdomainRequests}
+              onChanged={async (text) => {
+                show(text, "success");
+                const payload = await getAdminSubdomainRequests();
+                setSubdomainRequests(payload.requests || []);
+              }}
+              onError={(text) => show(text, "danger")}
+            />
+        ) : null}
         {activeView === "demos" ? (
             <AdminDemoList
               demos={demos}
+              onChanged={async (text) => {
+                show(text, "success");
+                await refreshOverview();
+              }}
+              onError={(text) => show(text, "danger")}
+            />
+        ) : null}
+        {activeView === "runtime" ? (
+            <AdminRuntimeOps
+              metrics={metrics}
+              initialDemos={runtimeDemos}
               onChanged={async (text) => {
                 show(text, "success");
                 await refreshOverview();
@@ -182,12 +216,14 @@ export function AdminDashboard() {
   );
 }
 
-type AdminView = "overview" | "requests" | "demos" | "reviews" | "forms" | "feedback" | "users" | "settings";
+type AdminView = "overview" | "requests" | "subdomains" | "demos" | "runtime" | "reviews" | "forms" | "feedback" | "users" | "settings";
 
 function resolveInitialAdminView(): AdminView {
   const hash = window.location.hash.replace("#", "").toLowerCase();
   if (hash === "requests" || hash === "plans") return "requests";
+  if (hash === "subdomains") return "subdomains";
   if (hash === "demos" || hash === "projects") return "demos";
+  if (hash === "runtime" || hash === "runtimes") return "runtime";
   if (hash === "reviews" || hash === "content") return "reviews";
   if (hash === "forms") return "forms";
   if (hash === "feedback") return "feedback";
@@ -206,7 +242,9 @@ function AdminSidebar({
   const items: Array<[AdminView, string]> = [
     ["overview", "今日待处理"],
     ["requests", "升级申请"],
+    ["subdomains", "二级域名"],
     ["demos", "试用项目"],
+    ["runtime", "运行环境"],
     ["reviews", "内容检查"],
     ["forms", "报名/留言"],
     ["feedback", "用户问题"],
@@ -216,7 +254,7 @@ function AdminSidebar({
   return (
     <aside className="sidebar admin-sidebar">
       <a className="brand" href="/">
-        <BrandLogo variant="light" />
+        <BrandLogo />
       </a>
       <nav className="side-nav">
         {items.map(([view, label]) => (
@@ -234,7 +272,9 @@ function adminViewTitle(view: AdminView) {
   const titles: Record<AdminView, string> = {
     overview: "今日待处理",
     requests: "升级申请",
+    subdomains: "二级域名",
     demos: "试用项目",
+    runtime: "运行环境",
     reviews: "内容检查",
     forms: "报名/留言",
     feedback: "用户问题",
@@ -248,7 +288,9 @@ function adminViewSubtitle(view: AdminView) {
   const subtitles: Record<AdminView, string> = {
     overview: "先看今天要处理什么，再判断真实试用是否顺畅。",
     requests: "用户申请 Lite 或 Pro 后，在这里直接开通或拒绝。",
+    subdomains: "处理 Pro 用户提交的二级域名申请。",
     demos: "查看试用项目状态、访问量和需要注意的问题，必要时下线或删除。",
+    runtime: "查看 Node.js 运行环境和 MySQL 试用数据库，必要时停止运行实例。",
     reviews: "查看发布前内容检查结果，重点处理已拦截和待人工确认的项目。",
     forms: "查看用户通过 DemoGo 收到的报名、预约和留言记录。",
     feedback: "跟进真实试用中的问题，标记处理状态。",
@@ -280,6 +322,7 @@ function AdminOverviewView({
   return (
     <div className="view-stack">
       <AdminOpsHero metrics={metrics} requests={requests} feedback={feedback} forms={forms} contentReviews={contentReviews} />
+      <AdminTrialFunnel metrics={metrics} />
       <section className="admin-workbench-grid">
         <AdminTaskBoard demos={demos} requests={requests} feedback={feedback} forms={forms} contentReviews={contentReviews} setActiveView={setActiveView} />
         <AdminOpsSummary metrics={metrics} users={users} requests={requests} feedback={feedback} forms={forms} contentReviews={contentReviews} />
@@ -331,6 +374,59 @@ function AdminOpsHero({
           </div>
         ))}
       </div>
+    </section>
+  );
+}
+
+function AdminTrialFunnel({ metrics }: { metrics: AdminMetrics }) {
+  const funnel = metrics.trialFunnel || {};
+  const sourceBreakdown = metrics.deploySourceBreakdown || {};
+  const steps = [
+    ["首页访问", funnel.homeVisits || 0, "看到产品价值"],
+    ["注册意向", funnel.registerStarts || 0, "进入注册页"],
+    ["注册成功", funnel.registerSuccesses || 0, "创建账号"],
+    ["开始上传", funnel.uploadStarts || 0, "进入发布流程"],
+    ["发布成功", funnel.deploySuccesses || metrics.deploySuccesses || 0, "拿到试用链接"],
+    ["发布失败", funnel.deployFailures || metrics.deployFailures || 0, "需要修复"]
+  ];
+  const sources = [
+    ["网页上传", sourceBreakdown.web || 0],
+    ["DemoGo CLI", sourceBreakdown.cli || 0],
+    ["MCP", sourceBreakdown.mcp || 0],
+    ["Agent API", sourceBreakdown.agent_api || 0]
+  ];
+  return (
+    <section className="trial-funnel-board">
+      <Card className="panel">
+        <div className="panel-head">
+          <div>
+            <h2>真实试用转化</h2>
+            <p>用于观察用户从看到首页、注册、上传到生成链接的关键卡点。</p>
+          </div>
+          <Badge tone="info">轻量统计</Badge>
+        </div>
+        <div className="funnel-grid">
+          {steps.map(([label, value, note]) => (
+            <div className="funnel-step" key={label}>
+              <strong>{value}</strong>
+              <span>{label}</span>
+              <small>{note}</small>
+            </div>
+          ))}
+        </div>
+      </Card>
+      <Card className="panel deploy-source-panel">
+        <h2>发布来源</h2>
+        <p className="muted">判断用户更习惯网页上传，还是让 AI 工具直接发布。</p>
+        <div className="source-list">
+          {sources.map(([label, value]) => (
+            <div key={label}>
+              <span>{label}</span>
+              <strong>{value}</strong>
+            </div>
+          ))}
+        </div>
+      </Card>
     </section>
   );
 }
@@ -597,6 +693,85 @@ function PlanRequestDetail({
   );
 }
 
+function SubdomainRequestsAdmin({
+  requests,
+  onChanged,
+  onError
+}: {
+  requests: SubdomainRequest[];
+  onChanged: (text: string) => Promise<void>;
+  onError: (text: string) => void;
+}) {
+  const openRequests = useMemo(() => requests.filter((item) => item.status === "open"), [requests]);
+  const handledRequests = useMemo(() => requests.filter((item) => item.status !== "open"), [requests]);
+  return (
+    <section className="content-grid">
+      <Card className="panel">
+        <div className="panel-head">
+          <div>
+            <h2>二级域名申请</h2>
+            <p>Pro 用户提交后，在这里确认是否允许使用对应的 xxx.demogo.cn。</p>
+          </div>
+          <Badge tone={openRequests.length ? "warning" : "success"}>{openRequests.length ? `${openRequests.length} 个待处理` : "暂无待处理"}</Badge>
+        </div>
+        {!requests.length ? (
+          <EmptyState title="暂无二级域名申请" description="Pro 用户在项目详情里提交申请后，会显示在这里。" />
+        ) : (
+          <div className="request-card-grid">
+            {[...openRequests, ...handledRequests].map((request) => (
+              <SubdomainRequestCard key={request.id} request={request} onChanged={onChanged} onError={onError} />
+            ))}
+          </div>
+        )}
+      </Card>
+    </section>
+  );
+}
+
+function SubdomainRequestCard({
+  request,
+  onChanged,
+  onError
+}: {
+  request: SubdomainRequest;
+  onChanged: (text: string) => Promise<void>;
+  onError: (text: string) => void;
+}) {
+  const [adminNote, setAdminNote] = useState(request.adminNote || "");
+
+  async function update(status: "approved" | "rejected") {
+    try {
+      await updateAdminSubdomainRequestStatus(request.id, { status, adminNote });
+      await onChanged(status === "approved" ? "二级域名申请已通过。" : "二级域名申请已拒绝。");
+    } catch (error) {
+      onError(error instanceof Error ? error.message : "二级域名申请处理失败。");
+    }
+  }
+
+  return (
+    <article className="request-card">
+      <div className="request-main">
+        <div>
+          <h3>{request.fullDomain || `${request.subdomain}.demogo.cn`}</h3>
+          <p>{request.userEmail || "-"} · {request.demoName || request.demoSlug || "-"}</p>
+          <small>{formatDate(request.createdAt)}</small>
+        </div>
+        <Badge tone={request.status === "open" ? "warning" : request.status === "approved" ? "success" : "neutral"}>{request.statusLabel || request.status}</Badge>
+      </div>
+      {request.message ? <p>{request.message}</p> : null}
+      {request.status === "open" ? (
+        <div className="request-actions">
+          <textarea className="textarea" value={adminNote} onChange={(event) => setAdminNote(event.target.value)} placeholder="处理备注，可选" />
+          <div className="row-actions">
+            <Button variant="primary" onClick={() => update("approved")}>通过</Button>
+            <Button variant="danger" onClick={() => update("rejected")}>拒绝</Button>
+          </div>
+        </div>
+      ) : request.adminNote ? <p className="muted">处理备注：{request.adminNote}</p> : null}
+    </article>
+  );
+}
+
 function PlanRequestCard({
   request,
   onChanged,
@@ -715,6 +890,7 @@ function AdminDemoList({
                 <tr>
                   <th>试用项目</th>
                   <th>用户</th>
+                  <th>托管方式</th>
                   <th>状态</th>
                   <th>访问</th>
                   <th>需要注意</th>
@@ -729,6 +905,10 @@ function AdminDemoList({
                       <small>{demo.publicUrl || demo.slug}</small>
                     </td>
                     <td>{demo.userEmail || "-"}</td>
+                    <td>
+                      <strong>{demo.hostingModeLabel || demo.hosting?.modeLabel || "静态试用链接"}</strong>
+                      <small>{demo.projectProfile?.summary || demo.projectCategory || demo.detectedType || "-"}</small>
+                    </td>
                     <td>{demoStatusLabel(demo.status)}</td>
                     <td>{demo.usage?.visits || 0}</td>
                     <td><RiskBadges demo={demo} /></td>
@@ -746,6 +926,134 @@ function AdminDemoList({
         </AdminDetailDrawer>
       ) : null}
     </>
+  );
+}
+
+function AdminRuntimeOps({
+  metrics,
+  initialDemos,
+  onChanged,
+  onError
+}: {
+  metrics: AdminMetrics;
+  initialDemos: Demo[];
+  onChanged: (text: string) => Promise<void>;
+  onError: (text: string) => void;
+}) {
+  const [demos, setDemos] = useState<Demo[]>(initialDemos);
+  const [summary, setSummary] = useState(metrics.runtime || {});
+  const [loading, setLoading] = useState(false);
+  const showRuntimeError = useCallback((text: string) => onError(text), [onError]);
+
+  async function loadRuntimeData() {
+    try {
+      setLoading(true);
+      const payload = await getAdminRuntimes();
+      setDemos(payload.demos || []);
+      setSummary(payload.summary || {});
+    } catch (error) {
+      onError(error instanceof Error ? error.message : "运行环境数据加载失败。");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function stopRuntime(demo: Demo) {
+    if (!window.confirm("确定停止这个 Node.js 试用环境？停止后用户再次访问时，平台会尝试重新启动。")) return;
+    try {
+      await adminStopDemoRuntime(demo.id);
+      await loadRuntimeData();
+      await onChanged("运行环境已停止。");
+    } catch (error) {
+      onError(error instanceof Error ? error.message : "运行环境停止失败。");
+    }
+  }
+
+  useEffect(() => {
+    let mounted = true;
+    getAdminRuntimes()
+      .then((payload) => {
+        if (!mounted) return;
+        setDemos(payload.demos || []);
+        setSummary(payload.summary || {});
+      })
+      .catch((error) => {
+        if (mounted) showRuntimeError(error instanceof Error ? error.message : "运行环境数据加载失败。");
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [showRuntimeError]);
+
+  const stats = [
+    ["Node 项目", summary.nodeProjects || 0, "已发布过的 Node.js 试用项目"],
+    ["运行中", summary.runningRuntimes || 0, "当前内存中的运行实例"],
+    ["MySQL 库", summary.mysqlDatabases || 0, "已分配的试用数据库"],
+    ["可用库", summary.mysqlReady || 0, "状态正常的 MySQL 试用库"]
+  ];
+
+  return (
+    <Card className="panel" id="runtimeOps">
+      <div className="panel-head">
+        <div>
+          <h2>运行环境</h2>
+          <p>这里用于观察 Node.js 单服务和 MySQL 试用库。停止运行环境不会删除项目和数据库，用户再次访问时会自动尝试重启。</p>
+        </div>
+        <Button onClick={loadRuntimeData} disabled={loading}>{loading ? "刷新中..." : "刷新"}</Button>
+      </div>
+      <div className="admin-summary-grid runtime-summary-grid">
+        {stats.map(([label, value, note]) => (
+          <div key={label}>
+            <strong>{value}</strong>
+            <span>{label}</span>
+            <small>{note}</small>
+          </div>
+        ))}
+      </div>
+      {!demos.length ? (
+        <EmptyState title="暂无运行环境项目" description="Node.js 或 MySQL 项目发布后，会出现在这里。" />
+      ) : (
+        <div className="table-wrap">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>项目</th>
+                <th>用户</th>
+                <th>运行状态</th>
+                <th>试用数据库</th>
+                <th>有效期</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {demos.map((demo) => (
+                <tr key={demo.id}>
+                  <td>
+                    <strong>{demo.name || demo.slug}</strong>
+                    <small>{demo.publicUrl || demo.slug}</small>
+                  </td>
+                  <td>{demo.userEmail || "-"}</td>
+                  <td>
+                    <strong>{demo.runtime?.statusLabel || "无需运行环境"}</strong>
+                    <small>{[demo.runtime?.driver, demo.runtime?.containerName].filter(Boolean).join(" / ") || "无运行实例"}</small>
+                  </td>
+                  <td>
+                    <strong>{demo.database?.enabled ? `${demo.database.engine?.toUpperCase() || "MySQL"} · ${demo.database.statusLabel || "已启用"}` : "未分配"}</strong>
+                    <small>{demo.database?.databaseName || ""}</small>
+                  </td>
+                  <td>{formatDate(demo.expiresAt)}</td>
+                  <td>
+                    {demo.hostingMode === "node_runtime" && demo.status === "published"
+                      ? <Button onClick={() => stopRuntime(demo)}>停止运行</Button>
+                      : <span className="muted">无需操作</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Card>
   );
 }
 
@@ -926,6 +1234,9 @@ function AdminDemoDetail({
   demo: Demo;
   onUpdate: (action: "offline" | "delete", demo: Demo) => Promise<void>;
 }) {
+  const assessment = demo.projectProfile?.assessment || null;
+  const projectTypeText = assessment?.projectKindLabel || demo.projectProfile?.summary || demo.projectCategory || demo.detectedType || "-";
+
   return (
     <div className="drawer-detail-stack">
       <div className="request-main">
@@ -953,6 +1264,56 @@ function AdminDemoDetail({
           <dd>{demo.deploySourceLabel || "网页上传"}</dd>
         </div>
         <div>
+          <dt>托管架构</dt>
+          <dd>{demo.hostingModeLabel || demo.hosting?.modeLabel || "静态试用链接"}</dd>
+        </div>
+        <div>
+          <dt>项目类型</dt>
+          <dd>{projectTypeText}</dd>
+        </div>
+        <div>
+          <dt>运行状态</dt>
+          <dd>{demo.runtime?.statusLabel || demo.hosting?.runtime?.statusLabel || "无需运行环境"}</dd>
+        </div>
+        {demo.runtime?.driver || demo.runtime?.containerName ? (
+          <div>
+            <dt>运行实例</dt>
+            <dd>{[demo.runtime?.driver, demo.runtime?.containerName].filter(Boolean).join(" / ")}</dd>
+          </div>
+        ) : null}
+        {demo.database?.enabled ? (
+          <>
+            <div>
+              <dt>试用数据库</dt>
+              <dd>{demo.database.statusLabel || "已启用"} · {demo.database.engine?.toUpperCase() || "MySQL"}</dd>
+            </div>
+            <div>
+              <dt>数据库名</dt>
+              <dd>{demo.database.databaseName || "-"}</dd>
+            </div>
+            <div>
+              <dt>数据库账号</dt>
+              <dd>{demo.database.userName || "-"}</dd>
+            </div>
+            <div>
+              <dt>初始化状态</dt>
+              <dd>{demo.database.schema?.statusLabel || "未检测到初始化脚本"}</dd>
+            </div>
+          </>
+        ) : null}
+        {demo.runtimeConfig?.missing?.length ? (
+          <div>
+            <dt>缺少配置</dt>
+            <dd>{demo.runtimeConfig.missing.join("、")}</dd>
+          </div>
+        ) : null}
+        {demo.externalBackend?.provider ? (
+          <div>
+            <dt>外部后端</dt>
+            <dd>{demo.externalBackend.label || demo.externalBackend.provider} · {demo.externalBackend.statusLabel || "-"}</dd>
+          </div>
+        ) : null}
+        <div>
           <dt>文件规模</dt>
           <dd>{demo.fileCount || 0} 个文件 / {formatBytes(demo.extractedBytes)}</dd>
         </div>
@@ -965,10 +1326,26 @@ function AdminDemoDetail({
           <dd>{formatDate(demo.expiresAt)}</dd>
         </div>
       </dl>
+      <AdminProjectAssessmentPanel demo={demo} />
+      <AdminApplicationReadinessPanel demo={demo} />
+      <AdminExternalBackendPanel demo={demo} />
       <div className="risk-panel">
         <h3>需要注意</h3>
         <RiskBadges demo={demo} />
       </div>
+      {demo.runtime?.logSummary ? (
+        <div className="runtime-log-panel">
+          <h3>运行日志摘要</h3>
+          <pre>{demo.runtime.logSummary}</pre>
+        </div>
+      ) : null}
+      {demo.failureDiagnosis || demo.runtime?.failureDiagnosis ? <AdminFailureDiagnosis diagnosis={(demo.failureDiagnosis || demo.runtime?.failureDiagnosis) as FailureDiagnosis} /> : null}
+      {demo.database?.schema?.error ? (
+        <div className="runtime-log-panel">
+          <h3>数据库初始化错误</h3>
+          <pre>{demo.database.schema.error}</pre>
+        </div>
+      ) : null}
       <div className="row-actions">
         {demo.publicUrl ? <LinkButton href={demo.publicUrl} target="_blank" rel="noreferrer">打开试用链接</LinkButton> : null}
         {demo.status === "published" ? <Button onClick={() => onUpdate("offline", demo)}>下线项目</Button> : null}
@@ -976,6 +1353,159 @@ function AdminDemoDetail({
       </div>
     </div>
   );
+}
+
+function AdminProjectAssessmentPanel({ demo }: { demo: Demo }) {
+  const profile = demo.projectProfile || null;
+  const assessment = profile?.assessment || null;
+  if (!profile && !assessment) return null;
+
+  const frontend = assessment?.frameworks?.frontend || profile?.frontendFrameworks || [];
+  const backend = assessment?.frameworks?.backend || profile?.backendFrameworks || [];
+  const database = assessment?.frameworks?.database || profile?.databases || [];
+  const envVars = assessment?.environmentVariables?.required || profile?.environmentVariables?.required || [];
+  const missing = assessment?.support?.missingRequirements || [];
+  const missingRuntimeEnv = demo.runtimeConfig?.missing || [];
+  const rows = [
+    { label: "前端", value: stackItemText(frontend) },
+    { label: "后端", value: stackItemText(backend) },
+    { label: "数据", value: stackItemText(database) },
+    { label: "配置", value: envVars.length ? `${envVars.slice(0, 5).join("、")}${envVars.length > 5 ? " 等" : ""}` : "" },
+    { label: "缺口", value: missing.length ? missing.slice(0, 4).map(missingRequirementLabel).join("、") : "" },
+    { label: "待填配置", value: missingRuntimeEnv.length ? missingRuntimeEnv.join("、") : "" },
+    { label: "数据库初始化", value: demo.database?.schema?.statusLabel || "" }
+  ].filter((item) => item.value);
+
+  return (
+    <div className="admin-project-assessment">
+      <div className="admin-project-assessment-head">
+        <div>
+          <h3>{assessment?.projectKindLabel || profile?.label || "项目识别"}</h3>
+          <p>{assessment?.support?.nextAction || profile?.summary || "DemoGo 已完成项目结构识别。"}</p>
+        </div>
+        <Badge tone={assessment?.support?.canPublishNow || profile?.supported ? "success" : "warning"}>
+          {assessment?.support?.canPublishNow || profile?.supported ? "可以发布" : "先处理后发布"}
+        </Badge>
+      </div>
+      {rows.length ? (
+        <dl className="admin-project-assessment-list">
+          {rows.map((item) => (
+            <div key={item.label}>
+              <dt>{item.label}</dt>
+              <dd>{item.value}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : null}
+    </div>
+  );
+}
+
+function AdminApplicationReadinessPanel({ demo }: { demo: Demo }) {
+  const readiness = demo.applicationReadiness;
+  if (!readiness) return null;
+  const tone = readiness.status === "ready" ? "success" : readiness.status === "blocked" ? "warning" : "info";
+  const blockers = (readiness.checklist || []).filter((item) => ["missing", "blocked", "warning"].includes(item.status || ""));
+  const report = readiness.deliveryReport;
+  const rows = [
+    { label: "验收类型", value: readiness.label || readiness.kind || "" },
+    { label: "综合状态", value: `${readiness.statusLabel || "待检查"} · ${readiness.score || 0}%` },
+    { label: "交付判断", value: report?.verdictLabel || "" },
+    { label: "交付动作", value: report?.primaryAction || "" },
+    { label: "主要缺口", value: blockers.length ? blockers.slice(0, 5).map((item) => item.label).join("、") : "无明显缺口" },
+    { label: "下一步", value: readiness.missingActions?.length ? readiness.missingActions.slice(0, 3).join("；") : "" }
+  ].filter((item) => item.value);
+
+  return (
+    <div className="admin-project-assessment application-readiness-panel">
+      <div className="admin-project-assessment-head">
+        <div>
+          <h3>完整应用试用闭环</h3>
+          <p>{readiness.summary || "DemoGo 已对页面、接口、数据库、配置和版本更新形成综合判断。"}</p>
+        </div>
+        <Badge tone={tone}>{readiness.statusLabel || "待检查"}</Badge>
+      </div>
+      <dl className="admin-project-assessment-list">
+        {rows.map((item) => (
+          <div key={item.label}>
+            <dt>{item.label}</dt>
+            <dd>{item.value}</dd>
+          </div>
+        ))}
+      </dl>
+      {blockers.length ? (
+        <ul>
+          {blockers.slice(0, 5).map((item) => (
+            <li key={item.code || item.label}>{item.label}：{item.detail}</li>
+          ))}
+        </ul>
+      ) : null}
+      {report?.risks?.length ? (
+        <ul>
+          {report.risks.slice(0, 4).map((item) => <li key={item}>{item}</li>)}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
+function AdminExternalBackendPanel({ demo }: { demo: Demo }) {
+  const backend = demo.externalBackend;
+  if (!backend?.provider) return null;
+  const tone = backend.status === "ready" ? "success" : backend.status === "failed" ? "warning" : "info";
+  const rows = [
+    { label: "类型", value: backend.label || backend.provider },
+    { label: "状态", value: backend.statusLabel || backend.status },
+    { label: "缺少配置", value: backend.missingEnv?.length ? backend.missingEnv.join("、") : "" },
+    { label: "已填配置", value: backend.configuredEnv?.length ? backend.configuredEnv.join("、") : "" },
+    { label: "连接检测", value: backend.connection?.message || backend.connection?.statusLabel || "" },
+    { label: "检测时间", value: backend.connection?.checkedAt ? formatDate(backend.connection.checkedAt) : "" }
+  ].filter((item) => item.value);
+
+  return (
+    <div className="admin-project-assessment">
+      <div className="admin-project-assessment-head">
+        <div>
+          <h3>外部后端连接</h3>
+          <p>{backend.nextAction || "DemoGo 已识别该项目需要外部后端配置。"}</p>
+        </div>
+        <Badge tone={tone}>{backend.statusLabel || "外部后端"}</Badge>
+      </div>
+      {rows.length ? (
+        <dl className="admin-project-assessment-list">
+          {rows.map((item) => (
+            <div key={item.label}>
+              <dt>{item.label}</dt>
+              <dd>{item.value}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : null}
+      {backend.warnings?.length ? (
+        <ul>
+          {backend.warnings.slice(0, 4).map((item) => <li key={item}>{item}</li>)}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
+function stackItemText(items?: Array<{ label?: string; code?: string }>) {
+  const values = (items || []).map((item) => item.label || item.code).filter(Boolean);
+  return values.length ? values.join("、") : "";
+}
+
+function missingRequirementLabel(value: string) {
+  const labels: Record<string, string> = {
+    missing_build_script: "缺少网页生成命令",
+    missing_start_script: "缺少应用启动命令",
+    ssr_runtime_planned: "需要完整应用运行能力",
+    external_backend_config: "需要外部后端配置",
+    unsupported_database: "数据库连接能力还不完整",
+    environment_variables: "需要补充运行配置",
+    unsupported_runtime: "运行环境暂不支持"
+  };
+  return labels[value] || value;
 }
 
 function RiskBadges({ demo }: { demo: Demo & { riskSummary?: Array<{ type: string; label: string }> } }) {
@@ -987,10 +1517,53 @@ function RiskBadges({ demo }: { demo: Demo & { riskSummary?: Array<{ type: strin
   return (
     <div className="badge-row">
       {risks.map((risk) => (
-        <Badge key={`${risk.type}-${risk.label}`} tone={risk.type === "api" || risk.type === "blocked" ? "warning" : "info"}>{risk.label}</Badge>
+        <Badge key={`${risk.type}-${risk.label}`} tone={["api", "blocked", "external_backend_warning"].includes(risk.type) ? "warning" : "info"}>{risk.label}</Badge>
       ))}
     </div>
   );
+}
+
+function AdminFailureDiagnosis({ diagnosis }: { diagnosis: FailureDiagnosis }) {
+  return (
+    <div className="failure-diagnosis admin-diagnosis">
+      <div className="section-mini-head">
+        <div>
+          <h3>{diagnosis.title || "失败诊断"}</h3>
+          <p>{diagnosis.summary || "需要查看失败阶段和日志后处理。"}</p>
+        </div>
+        <Badge tone={diagnosis.severity === "blocked" ? "warning" : "info"}>{adminFailureCategoryLabel(diagnosis.category)}</Badge>
+      </div>
+      <div className="diagnosis-grid">
+        {diagnosis.evidence?.length ? (
+          <div>
+            <strong>依据</strong>
+            <ul>{diagnosis.evidence.slice(0, 6).map((item) => <li key={item}>{item}</li>)}</ul>
+          </div>
+        ) : null}
+        {diagnosis.userActions?.length ? (
+          <div>
+            <strong>建议动作</strong>
+            <ul>{diagnosis.userActions.slice(0, 5).map((item) => <li key={item}>{item}</li>)}</ul>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function adminFailureCategoryLabel(category?: string) {
+  const labels: Record<string, string> = {
+    quota: "额度",
+    content: "内容",
+    package: "项目包",
+    unsupported: "能力边界",
+    runtime_env: "运行配置",
+    dependency_install: "依赖安装",
+    build: "构建",
+    runtime_start: "启动",
+    database_init: "数据库"
+  };
+  return labels[category || ""] || "其他";
 }
 
 function AdminUsers({ users, compact = false }: { users: AdminUser[]; compact?: boolean }) {

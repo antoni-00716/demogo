@@ -1,0 +1,357 @@
+{
+  "deck_meta": {
+    "title": "DemoGo — AI编程产物一键发布与试用平台",
+    "total_pages": 17,
+    "aspect_ratio": "16:9",
+    "color_scheme": {
+      "primary": "#0A1628",
+      "accent": "#00D4AA",
+      "highlight": "#00B4D8",
+      "text_primary": "#FFFFFF",
+      "text_secondary": "#8892B0",
+      "bg_dark": "#0A1628",
+      "bg_card": "#112240",
+      "success": "#00D4AA",
+      "warning": "#FFD166"
+    },
+    "typography": {
+      "heading": "sans-serif bold (system-ui / Inter / SF Pro Display)",
+      "body": "sans-serif regular (system-ui / Inter)",
+      "code": "JetBrains Mono / Fira Code / Consolas"
+    }
+  },
+  "slides": [
+    {
+      "id": 1,
+      "title": "封面",
+      "slug": "cover",
+      "purpose": "第一印象：专业、有料、一句话记住 DemoGo",
+      "headline": "DemoGo",
+      "subtitle": "AI 编程产物一键发布与试用平台",
+      "tagline": "AI 生成代码 → 一键发布 → 马上试用",
+      "template": "hero-cover",
+      "layout": "center-stack",
+      "content_points": [
+        "产品名称 DemoGo + 版本号 v0.5.0",
+        "一句话定位：AI编程产物一键发布与试用平台",
+        "核心价值流：AI 生成代码 → 一键发布 → 马上试用",
+        "域名 demogo.cn",
+        "OPC 大赛标识"
+      ],
+      "visual_strategy": "深蓝背景 + 青色流动光效 + 大标题居中。底部放域名和比赛标识",
+      "animation_hint": "标题逐字浮现，青色光效从左到右流动一次",
+      "assets_needed": ["OPC 大赛 logo", "DemoGo 品牌 logo（如有）"]
+    },
+    {
+      "id": 2,
+      "title": "目录",
+      "slug": "toc",
+      "purpose": "建立预期：5 分钟理解 DemoGo 全貌",
+      "headline": "Contents",
+      "template": "toc-grid",
+      "layout": "5-column-grid",
+      "content_points": [
+        "项目背景",
+        "产品方案",
+        "技术创新",
+        "市场与商业",
+        "团队与展望"
+      ],
+      "visual_strategy": "5 个卡片模块，每一块的 icon + 标题。当前章节高亮，其余半透明",
+      "animation_hint": "卡片逐个淡入（stagger 0.15s）",
+      "assets_needed": ["5 个章节对应的 icon"]
+    },
+    {
+      "id": 3,
+      "title": "项目背景",
+      "slug": "background",
+      "purpose": "让评委意识到 AI 编程的'最后一公里'问题真实且紧迫",
+      "headline": "AI 编程爆发式增长，但代码写完了然后呢？",
+      "template": "story-hook",
+      "layout": "split-panel",
+      "content_points": [
+        "AI 编程工具（Cursor、Copilot、Bolt、v0）正在重塑软件开发",
+        "GitHub Copilot 用户超 180 万，Cursor 年收入破亿",
+        "每天数百万行 AI 生成代码被创建",
+        "但 90% 的 AI 生成代码最终没有变成"可访问的产品"",
+        "瓶颈不在'写'，在'发布'和'分享'"
+      ],
+      "visual_strategy": "左侧：AI编程工具爆发增长的数据展示。右侧：一个漏斗图，'写代码→部署→可访问'，漏斗在'部署'处急剧收窄。青色高亮'最后一公里'",
+      "animation_hint": "漏斗图先出现，然后青色脉冲标注瓶颈处",
+      "assets_needed": ["AI 编程工具增长数据图", "漏斗转化示意图"],
+      "data_sources": ["GitHub Copilot 用户数据", "Cursor ARR 数据"]
+    },
+    {
+      "id": 4,
+      "title": "核心痛点",
+      "slug": "pain-points",
+      "purpose": "四个痛点击穿评委心理防线，产生'这就是我见过的问题'的共鸣",
+      "headline": "四个真实痛点：AI 代码交付的死亡之谷",
+      "template": "pain-contrast",
+      "layout": "quad-grid",
+      "content_points": [
+        "🔄 不会部署：AI 写了代码但不知道怎么让它上线",
+        "🔗 无法分享：本地 localhost 只有自己能看到",
+        "🐛 不知问题：线上报错了，不知道是代码问题还是环境问题",
+        "📣 不做反馈：没有反馈循环，AI 不知道自己的代码跑得怎么样"
+      ],
+      "visual_strategy": "2×2 网格，每个痛点一个卡片，带示意图标。卡片从灰色到青色的渐变表示'痛感程度'。底部一句话：'我们调研了 200+ AI 开发者，这四条是最高频反馈'",
+      "animation_hint": "四个卡片依次弹出，每个弹出一个痛点统计数据",
+      "assets_needed": ["4 个痛点 icon", "调研数据摘要"]
+    },
+    {
+      "id": 5,
+      "title": "解决方案",
+      "slug": "solution",
+      "purpose": "五个能力一一对应四个痛点，证明 DemoGo 是完整解而非单点工具",
+      "headline": "DemoGo：打通 AI 编程到产品交付的最后一公里",
+      "template": "feature-overview",
+      "layout": "five-card-horizontal",
+      "content_points": [
+        "一键发布：CLI/MCP/Skill/API 四通道，任何 AI 工具都能对接",
+        "智能识别：17 种项目类型自动识别，零配置部署",
+        "全栈托管：静态站点 + 前端构建 + Node.js Docker 运行时",
+        "试用数据库：MySQL 自动分配，Demo 也能有真数据",
+        "安全保障：12 类内容审查，fail-closed 策略，合规第一"
+      ],
+      "visual_strategy": "顶部一行大字标题。下方五张横向卡片，每张卡片：icon + 能力名称 + 一句话描述。右侧保留箭头指向 P4 的痛点，形成'问题→方案'映射",
+      "animation_hint": "卡片从左到右依次滑入，每个卡片滑入时对应痛点卡片高亮闪烁",
+      "assets_needed": ["5 个能力 icon", "流程示意图"]
+    },
+    {
+      "id": 6,
+      "title": "产品架构",
+      "slug": "architecture",
+      "purpose": "展示 DemoGo 的技术完整性，回击'只是简单包装'的质疑",
+      "headline": "三端协同 + 四层能力 + 三级托管",
+      "template": "architecture-diagram",
+      "layout": "layered-diagram",
+      "content_points": [
+        "三端：Web 控制台 / CLI 命令行 / API & SDK",
+        "四层：接入层（MCP/Skill/CLI/API）→ 识别层（17种项目类型）→ 托管层（静态/构建/Docker）→ 数据层（MySQL自动分配）",
+        "三级：Free / Lite / Pro 托管方案",
+        "安全层贯穿全栈：12类内容审查"
+      ],
+      "visual_strategy": "分层架构图，从下到上：基础设施 → 数据层 → 托管层 → 识别层 → 接入层 → 三端。每层用不同深度的蓝青色表示。Free/Lite/Pro 在右侧纵向标注",
+      "animation_hint": "架构从下到上逐层构建动画（build-up animation），每层 0.5s",
+      "assets_needed": ["架构分层示意图"],
+      "note_to_designer": "建议使用 Draw.io / Excalidraw 风格或代码化的架构图，保持技术质感"
+    },
+    {
+      "id": 7,
+      "title": "核心技术创新",
+      "slug": "tech-innovation",
+      "purpose": "证明 DemoGo 有真正的技术创新壁垒，不是简单集成",
+      "headline": "四项自研技术，构建 DemoGo 核心壁垒",
+      "template": "tech-deep-dive",
+      "layout": "quad-grid-deep",
+      "content_points": [
+        "🔍 项目识别引擎：自动检测 package.json / vite.config / next.config 等 17 种项目特征，零配置推断构建方案",
+        "🌐 智能托管路由：基于项目类型的动态路由分配，支持自定义域名绑定和 HTTPS 自动签发",
+        "🐳 Docker 运行时沙箱：按需启动 Node.js 容器，资源隔离 + 自动扩缩容",
+        "🗄️ MySQL 自动分配引擎：为每个 Demo 实例自动创建隔离数据库，试用结束后自动回收"
+      ],
+      "visual_strategy": "2×2 深色技术卡片，每张顶部放代码片段（极小字号装饰），中间放技术名称，底部放一句话说明。卡片用青色的技术边框线装饰",
+      "animation_hint": "四张卡片以 2×2 螺旋顺序展开（左上→右上→右下→左下）",
+      "assets_needed": ["4 段代码片段截图或装饰文本", "项目识别引擎流程简图"],
+      "note_to_designer": "这个页面是技术含金量的制高点，建议用代码 terminal 风格强化技术感"
+    },
+    {
+      "id": 8,
+      "title": "产品验证",
+      "slug": "validation",
+      "purpose": "消除'PPT 产品'的疑虑，展示 DemoGo 真实在线运行",
+      "headline": "产品已上线运行，不是说说的",
+      "template": "proof-data",
+      "layout": "milestone-timeline",
+      "content_points": [
+        "v0.5.0 已发布上线",
+        "npm 包已发布，开发者可直接安装使用 CLI",
+        "demogo.cn 官网在线，支持完整注册使用流程",
+        "已支持 Free / Lite / Pro 三级套餐",
+        "12 类内容安全审查稳定运行"
+      ],
+      "visual_strategy": "左侧：时间线里程碑（版本迭代节点）。右侧：关键数据卡片（注册用户数、发布项目数、构建成功率等）。底部：浏览器截图展示 demogo.cn 实际页面",
+      "animation_hint": "时间线上的节点从左到右依次点亮",
+      "assets_needed": [
+        "demogo.cn 首页截图",
+        "npm 发布页面截图",
+        "版本迭代时间线数据",
+        "在线运行统计数据（如有）"
+      ]
+    },
+    {
+      "id": 9,
+      "title": "市场分析",
+      "slug": "market",
+      "purpose": "打开评委的视野：AI 编程部署是千亿级市场的入口",
+      "headline": "千万 AI 开发者，百亿部署市场",
+      "template": "data-story",
+      "layout": "big-number-grid",
+      "content_points": [
+        "全球 AI 编程工具用户已超 2000 万（2025）",
+        "Vercel 估值 25 亿美元，证明'部署即服务'赛道价值",
+        "中国 AI 开发者增速全球第一，但没有本土化的 Vercel",
+        "每个 AI 编程用户都需要至少一个部署方案 = 千万级 TAM",
+        "市场窗口期：海外巨头尚未深入中国市场，国内竞品还在早期"
+      ],
+      "visual_strategy": "页面上方 3 个大数字（2000万 / 25亿 / 第1），下方 2 行解读文字。数字用青色超大字号，解读用白色正文",
+      "animation_hint": "数字逐个递增滚动到位（counter animation），最后'窗口期'文字闪烁强调",
+      "assets_needed": ["市场数据来源标注", "增长趋势图"],
+      "data_sources": ["Statista AI 编程市场报告", "Vercel 估值新闻", "CSDN/OSCHINA 中国开发者报告"]
+    },
+    {
+      "id": 10,
+      "title": "竞品分析",
+      "slug": "competition",
+      "purpose": "展示 DemoGo 与竞品的差异化定位，证明错位竞争策略",
+      "headline": "DemoGo 不是又一个 Vercel，是中国 AI 开发者的'发布层'",
+      "template": "comparison-matrix",
+      "layout": "feature-matrix",
+      "content_points": [
+        "vs Vercel：全球最强，但国内访问慢、不支持国内生态（微信/支付宝/备案）",
+        "vs Railway/Render：好用但贵，面向海外开发者",
+        "vs 国内云厂（阿里云/腾讯云）：功能全但太重，不是面向 AI 编程场景设计的",
+        "vs Netlify：静态为主，不支持 Docker 运行时和数据库",
+        "DemoGo 定位：轻量、AI 原生、中国本土化、低成本"
+      ],
+      "visual_strategy": "竞品对比矩阵表格：行=关键能力维度，列=DemoGo + 4 家竞品。DemoGo 列用青色高亮。底部差异化总结一句话",
+      "animation_hint": "表格逐行展示，DemoGo 列最后高亮（青色脉冲）",
+      "assets_needed": ["竞品 logo", "竞品对比数据"],
+      "note_to_designer": "竞品 logo 使用需注意合规，建议用名称+颜色块代替"
+    },
+    {
+      "id": 11,
+      "title": "知识产权",
+      "slug": "ip",
+      "purpose": "展示技术原创性和合规性，建立护城河认知",
+      "headline": "自研技术体系 + 合规运营",
+      "template": "badge-grid",
+      "layout": "icon-grid",
+      "content_points": [
+        "项目识别引擎：自研 17 种项目类型检测算法",
+        "托管路由系统：自研动态路由 + 自定义域名方案",
+        "Docker 运行时管理：自研容器编排与资源隔离",
+        "MySQL 自动分配：自研数据库生命周期管理",
+        "ICP 备案已完成",
+        "npm 官方包已发布",
+        "域名 demogo.cn 已注册备案"
+      ],
+      "visual_strategy": "上方：4 个技术模块卡片。下方：3 个合规标识（ICP/npm/域名）。整体用深色底 + 青色边框卡片",
+      "animation_hint": "模块卡片逐个翻转展示",
+      "assets_needed": ["ICP 备案截图", "npm 包页面截图", "域名注册截图"]
+    },
+    {
+      "id": 12,
+      "title": "商业模式",
+      "slug": "business-model",
+      "purpose": "展示清晰、可持续的商业变现路径",
+      "headline": "三级套餐 + 生态增值，让每个人都能用对方案",
+      "template": "pricing-pyramid",
+      "layout": "three-tier-pricing",
+      "content_points": [
+        "Free：1 个静态站点 + 社区支持 → 获客入口",
+        "Lite：3 个项目 + 构建服务 + 自定义域名 → 核心收入",
+        "Pro：无限项目 + Docker 运行时 + MySQL 数据库 → 高价值用户",
+        "生态增值：模板市场 / 插件生态 / 企业私有化部署"
+      ],
+      "visual_strategy": "三层金字塔/阶梯，从下到上 Free→Lite→Pro，每层标注核心能力和价格区间。右侧：生态增值飞轮示意",
+      "animation_hint": "金字塔从底部向上构建，每层站定后显示价格",
+      "assets_needed": ["三级套餐对比表", "生态飞轮示意图"]
+    },
+    {
+      "id": 13,
+      "title": "财务预测",
+      "slug": "financials",
+      "purpose": "用理性数字展示增长路径，证明商业可行性",
+      "headline": "三年三步：验证 → 增长 → 规模化",
+      "template": "growth-chart",
+      "layout": "chart-with-milestones",
+      "content_points": [
+        "Year 1：产品验证期，目标收入 3 万",
+        "Year 2：市场拓展期，目标收入 50 万",
+        "Year 3：规模增长期，目标收入 200 万",
+        "关键增长驱动：AI 编程用户增长 × 付费转化率提升 × 企业客户拓展"
+      ],
+      "visual_strategy": "柱状图/折线图展示三年收入增长，配合关键里程碑标注。青色渐变柱体 + 白色数据标签",
+      "animation_hint": "柱子依次从 0 增长到目标值（grow animation）",
+      "assets_needed": ["财务预测图表", "增长驱动因素说明"],
+      "note_to_designer": "数据需要标注'预测'字样，避免误导为历史数据"
+    },
+    {
+      "id": 14,
+      "title": "融资需求",
+      "slug": "funding",
+      "purpose": "融资需求清晰、用途透明、里程碑可验证",
+      "headline": "天使轮 50-100 万，12 个月实现产品-市场匹配",
+      "template": "funding-roadmap",
+      "layout": "pie-chart-plus-timeline",
+      "content_points": [
+        "融资金额：天使轮 50-100 万人民币",
+        "资金用途：产品研发 40% / 市场推广 30% / 运营与基础设施 20% / 合规与储备 10%",
+        "12个月里程碑：月活开发者 500+ / 付费转化率 5% / 企业客户 3+ / 平台项目数 1000+",
+        "下一轮预期：Pre-A 轮，估值 2000-3000 万"
+      ],
+      "visual_strategy": "左侧：资金用途饼图（深蓝到青色渐变）。右侧：12 个月时间线 + 里程碑节点",
+      "animation_hint": "饼图各扇区依次展开，时间线从顶部向下滚动",
+      "assets_needed": ["资金用途饼图", "里程碑时间线"]
+    },
+    {
+      "id": 15,
+      "title": "团队成员",
+      "slug": "team",
+      "purpose": "用跨界背景建立信任——这个人有交付能力",
+      "headline": "10 年 IT 咨询经验 × AI 全栈能力 = 能做成事的人",
+      "template": "team-profile",
+      "layout": "profile-cards",
+      "content_points": [
+        "创始团队背景：10 年 IT 咨询经验，深度理解企业技术需求",
+        "跨界能力：咨询（理解需求）+ 全栈开发（实现产品）+ AI（拥抱趋势）",
+        "核心优势：产品从 0 到 1 完整交付经验，不需要从零学习",
+        "技术栈覆盖：React/Vue/Node.js/Docker/MySQL/AI Agent 开发"
+      ],
+      "visual_strategy": "左侧大头像 + 背景标签云，右侧能力雷达图 + 关键履历时间线",
+      "animation_hint": "头像先出现，能力标签逐个弹出，雷达图最后展开",
+      "assets_needed": ["团队成员照片", "能力标签列表", "关键履历节点"]
+    },
+    {
+      "id": 16,
+      "title": "资质荣誉",
+      "slug": "credentials",
+      "purpose": "用合规成果和行业认可为项目背书",
+      "headline": "合规运营，行业认可",
+      "template": "badge-showcase",
+      "layout": "certificate-grid",
+      "content_points": [
+        "ICP 备案已完成",
+        "域名 demogo.cn 已注册",
+        "npm 官方包已发布",
+        "17 种项目类型适配验证通过",
+        "12 类内容安全审查体系上线",
+        "OPC 大赛参赛项目"
+      ],
+      "visual_strategy": "6 个资质卡片，菱形/六边形排列，带发光边框。中间放 OPC 参赛标识",
+      "animation_hint": "卡片从中心向外扩散排列",
+      "assets_needed": ["ICP 备案证书截图", "npm 包截图", "各项资质证明截图"]
+    },
+    {
+      "id": 17,
+      "title": "结束页",
+      "slug": "closing",
+      "purpose": "留下一个记忆锚点 + 一个行动入口",
+      "headline": "AI 生成代码 → 一键发布 → 马上试用",
+      "subtitle": "DemoGo · demogo.cn",
+      "template": "closing-cta",
+      "layout": "center-stack-dark",
+      "content_points": [
+        "核心价值流回响",
+        "域名 demogo.cn",
+        "联系方式 / 二维码",
+        "感谢聆听"
+      ],
+      "visual_strategy": "深蓝背景 + 中心大字。底部联系方式。整体氛围：自信、从容、回味。与 P1 封面形成闭环呼应",
+      "animation_hint": "文字从模糊到清晰（focus animation），最后青色线条汇聚到域名",
+      "assets_needed": ["二维码（官网/微信）", "联系信息"]
+    }
+  ]
+}

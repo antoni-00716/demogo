@@ -56,6 +56,9 @@ async function main() {
   const forms = await readJson("forms.json", []);
   const formSubmissions = await readJson("form-submissions.json", []);
   const planUpgradeRequests = await readJson("plan-upgrade-requests.json", []);
+  const emailVerifications = await readJson("email-verifications.json", []);
+  const subdomainRequests = await readJson("subdomain-requests.json", []);
+  const trialEvents = await readJson("trial-events.json", []);
 
   await writeDataFile(path.join(dataDir, "users.json"), users);
   await writeDataFile(path.join(dataDir, "sessions.json"), sessions);
@@ -67,6 +70,9 @@ async function main() {
   await writeDataFile(path.join(dataDir, "forms.json"), forms);
   await writeDataFile(path.join(dataDir, "form-submissions.json"), formSubmissions);
   await writeDataFile(path.join(dataDir, "plan-upgrade-requests.json"), planUpgradeRequests);
+  await writeDataFile(path.join(dataDir, "email-verifications.json"), emailVerifications);
+  await writeDataFile(path.join(dataDir, "subdomain-requests.json"), subdomainRequests);
+  await writeDataFile(path.join(dataDir, "trial-events.json"), trialEvents);
 
   await writeMigrationStatus({
     status: "imported",
@@ -81,7 +87,10 @@ async function main() {
       feedback: feedback.length,
       forms: forms.length,
       formSubmissions: formSubmissions.length,
-      planUpgradeRequests: planUpgradeRequests.length
+      planUpgradeRequests: planUpgradeRequests.length,
+      emailVerifications: emailVerifications.length,
+      subdomainRequests: subdomainRequests.length,
+      trialEvents: trialEvents.length
     },
     createdAt: new Date().toISOString()
   });
@@ -98,6 +107,9 @@ async function main() {
   console.log(`forms=${forms.length}`);
   console.log(`formSubmissions=${formSubmissions.length}`);
   console.log(`planUpgradeRequests=${planUpgradeRequests.length}`);
+  console.log(`emailVerifications=${emailVerifications.length}`);
+  console.log(`subdomainRequests=${subdomainRequests.length}`);
+  console.log(`trialEvents=${trialEvents.length}`);
 }
 
 async function applySchema() {
@@ -111,6 +123,7 @@ async function applySchema() {
     await pool.query(statement);
   }
   await ensureContentReviewColumns(pool);
+  await ensureAuditLogColumns(pool);
 }
 
 async function ensurePlanFormColumns(pool) {
@@ -140,12 +153,31 @@ async function ensureContentReviewColumns(pool) {
   }
 }
 
+async function ensureAuditLogColumns(pool) {
+  const columns = await readTableColumnDetails(pool, "audit_logs");
+  const id = columns.get("id");
+  const type = String(id?.Type || "").toLowerCase();
+  const match = type.match(/varchar\((\d+)\)/);
+  const length = match ? Number(match[1]) : 0;
+  if (length > 0 && length < 96) {
+    await pool.query("ALTER TABLE audit_logs MODIFY COLUMN id VARCHAR(96) NOT NULL");
+  }
+}
+
 async function readTableColumns(pool, tableName) {
   if (!/^[a-z0-9_]+$/i.test(tableName)) {
     throw new Error(`Unsafe table name: ${tableName}`);
   }
   const [rows] = await pool.query(`SHOW COLUMNS FROM \`${tableName}\``);
   return new Set(rows.map((row) => String(row.Field || "").toLowerCase()));
+}
+
+async function readTableColumnDetails(pool, tableName) {
+  if (!/^[a-z0-9_]+$/i.test(tableName)) {
+    throw new Error(`Unsafe table name: ${tableName}`);
+  }
+  const [rows] = await pool.query(`SHOW COLUMNS FROM \`${tableName}\``);
+  return new Map(rows.map((row) => [String(row.Field || "").toLowerCase(), row]));
 }
 
 async function countExistingBusinessRows() {
@@ -162,7 +194,7 @@ async function backupJsonData() {
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
   const backupDir = path.join(dataDir, `backup-before-mysql-${stamp}`);
   await fs.mkdir(backupDir, { recursive: true });
-  for (const fileName of ["users.json", "sessions.json", "demos.json", "deployment-events.json", "content-reviews.json", "audit-logs.json", "feedback.json", "forms.json", "form-submissions.json", "plan-upgrade-requests.json"]) {
+  for (const fileName of ["users.json", "sessions.json", "demos.json", "deployment-events.json", "content-reviews.json", "audit-logs.json", "feedback.json", "forms.json", "form-submissions.json", "plan-upgrade-requests.json", "email-verifications.json", "subdomain-requests.json", "trial-events.json"]) {
     const source = path.join(dataDir, fileName);
     try {
       await fs.copyFile(source, path.join(backupDir, fileName));

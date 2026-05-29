@@ -1,8 +1,9 @@
-﻿import { gzipSync } from "node:zlib";
+import { gzipSync } from "node:zlib";
 import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 
-export const VERSION = "0.2.8";
+export const VERSION = readVersion();
 export const MAX_FILES = 800;
 export const MAX_BYTES = 50 * 1024 * 1024;
 
@@ -17,6 +18,7 @@ export const unsafeProjectDirectoryNames = new Set([
 ]);
 
 const EXCLUDED_DIRS = new Set([
+  ".demogo",
   ".git",
   ".hg",
   ".svn",
@@ -51,6 +53,23 @@ const SENSITIVE_EXTENSIONS = [
   ".crt",
   ".cer"
 ];
+
+function readVersion() {
+  const candidates = [
+    path.resolve(process.cwd(), "VERSION"),
+    path.resolve(process.cwd(), "..", "VERSION"),
+    path.resolve(process.cwd(), "..", "..", "VERSION"),
+    path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "VERSION")
+  ];
+  for (const filePath of candidates) {
+    try {
+      return readFileSync(filePath, "utf8").trim();
+    } catch {
+      // Try the next packaged or repository-level VERSION file.
+    }
+  }
+  return "0.9.0";
+}
 
 export async function assertDirectory(dir) {
   try {
@@ -224,6 +243,103 @@ export async function checkApiHealth(apiBase) {
   return payload;
 }
 
+export async function updateArchive({ apiBase, token, archivePath, demoRef, source = "cli", userAgent = `demogo-cli/${VERSION}` }) {
+  const formData = new FormData();
+  formData.set("source", source);
+  formData.set("demoId", demoRef);
+  formData.set(
+    "project",
+    new Blob([await readFile(archivePath)], { type: "application/gzip" }),
+    path.basename(archivePath)
+  );
+
+  let response;
+  try {
+    response = await fetch(`${normalizeApiBase(apiBase)}/api/agent/update`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "User-Agent": userAgent,
+        "X-DemoGo-Deploy-Source": source
+      },
+      body: formData
+    });
+  } catch {
+    throw new Error(`无法连接 DemoGo：${normalizeApiBase(apiBase)}。请检查 API 地址是否正确，或稍后再试。`);
+  }
+
+  return parseDeploymentResponse(response);
+}
+
+async function parseDeploymentResponse(response) {
+  const text = await response.text();
+  const payload = parseJson(text);
+  if (!response.ok) {
+    const message = payload?.error || readableHttpError(response.status, text);
+    const diagnosis = payload?.failureDiagnosis || payload?.inspection?.failureDiagnosis;
+    if (diagnosis) {
+      const details = [
+        "",
+        `失败类别：${diagnosis.title || diagnosis.category || "未知"}`,
+        diagnosis.summary ? `原因：${diagnosis.summary}` : "",
+        ...(diagnosis.evidence || []).map((e) => `证据：${e}`),
+        ...(diagnosis.userActions || []).map((a) => `建议：${a}`),
+        diagnosis.aiPrompt ? `\n给 AI 工具的修改建议：\n${diagnosis.aiPrompt}` : ""
+      ].filter(Boolean).join("\n");
+      throw new Error(`${message}${details}`);
+    }
+    const shouldShowFixPrompt = response.status === 400 || payload?.inspection?.canPublish === false;
+    const fixPrompt = shouldShowFixPrompt
+      ? payload?.inspection?.fixPrompt || payload?.inspection?.ruleReport?.fixPrompt || ""
+      : "";
+    const details = fixPrompt ? `\n\n给 AI 工具的修改建议：\n${fixPrompt}` : "";
+    throw new Error(`${message}${details}`);
+  }
+  return payload;
+}
+
+export async function checkAgentToken(apiBase, token, userAgent = `demogo-cli/${VERSION}`) {
+  let response;
+  try {
+    response = await fetch(`${normalizeApiBase(apiBase)}/api/agent/token-check`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "User-Agent": userAgent
+      }
+    });
+  } catch {
+    throw new Error(`无法连接 DemoGo：${normalizeApiBase(apiBase)}。请检查平台地址。`);
+  }
+  const text = await response.text();
+  const payload = parseJson(text);
+  if (!response.ok || !payload?.ok) {
+    throw new Error(payload?.error || readableHttpError(response.status, text));
+  }
+  return payload;
+}
+
+export async function getProjectDetails(apiBase, token, demoId, userAgent = `demogo-cli/${VERSION}`) {
+  let response;
+  try {
+    response = await fetch(`${normalizeApiBase(apiBase)}/api/agent/project/${demoId}`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "User-Agent": userAgent
+      }
+    });
+  } catch {
+    throw new Error(`无法连接 DemoGo：${normalizeApiBase(apiBase)}。请检查平台地址。`);
+  }
+  const text = await response.text();
+  const payload = parseJson(text);
+  if (!response.ok) {
+    throw new Error(payload?.error || readableHttpError(response.status, text));
+  }
+  return payload;
+}
+
 export function normalizeApiBase(value) {
   return String(value || "").trim().replace(/\/+$/, "");
 }
@@ -353,4 +469,7 @@ function readableHttpError(status, text) {
   if (text?.trim().startsWith("<")) return "服务器返回了异常页面，本次发布没有完成。";
   return `DemoGo 发布失败：HTTP ${status}`;
 }
+
+
+
 

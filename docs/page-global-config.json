@@ -1,0 +1,14 @@
+{
+  "slideStyle": "Tech",
+  "colorScheme": "深蓝科技风格",
+  "primaryColor": "#1A56DB",
+  "accentColor1": "#0EA5E9",
+  "accentColor2": "#10B981",
+  "neutralColor": "#6B7280",
+  "background": {
+    "type": "color",
+    "value": "#F8FAFC"
+  },
+  "fontTitle": "'Montserrat', 'Noto Sans SC', sans-serif",
+  "fontBody": "'Inter', 'Noto Sans SC', sans-serif"
+}

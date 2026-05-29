@@ -4,7 +4,15 @@ import { isMysqlConfigured, query, transaction } from "./mysql.js";
 
 export { isMysqlConfigured };
 
+const metadataActions = new Set([
+  "deployment_job",
+  "email_verification",
+  "subdomain_request",
+  "trial_event"
+]);
+
 export async function readDataFile(filePath, fallback) {
+  if (!isMysqlConfigured()) return fallback;
   const collection = collectionFromPath(filePath);
   if (!collection) return fallback;
 
@@ -19,10 +27,14 @@ export async function readDataFile(filePath, fallback) {
   if (collection === "formSubmissions") return readFormSubmissions();
   if (collection === "planUpgradeRequests") return readPlanUpgradeRequests();
   if (collection === "contentReviews") return readContentReviews();
+  if (collection === "emailVerifications") return readMetadataCollection("email_verification", 1000);
+  if (collection === "subdomainRequests") return readMetadataCollection("subdomain_request", 1000);
+  if (collection === "trialEvents") return readMetadataCollection("trial_event", 5000);
   return fallback;
 }
 
 export async function writeDataFile(filePath, value) {
+  if (!isMysqlConfigured()) return false;
   const collection = collectionFromPath(filePath);
   if (!collection) return false;
 
@@ -70,6 +82,18 @@ export async function writeDataFile(filePath, value) {
     await replaceContentReviews(value);
     return true;
   }
+  if (collection === "emailVerifications") {
+    await replaceMetadataCollection("email_verification", value);
+    return true;
+  }
+  if (collection === "subdomainRequests") {
+    await replaceMetadataCollection("subdomain_request", value);
+    return true;
+  }
+  if (collection === "trialEvents") {
+    await replaceMetadataCollection("trial_event", value);
+    return true;
+  }
   return false;
 }
 
@@ -86,6 +110,9 @@ function collectionFromPath(filePath) {
   if (name === "form-submissions.json") return "formSubmissions";
   if (name === "plan-upgrade-requests.json") return "planUpgradeRequests";
   if (name === "content-reviews.json") return "contentReviews";
+  if (name === "email-verifications.json") return "emailVerifications";
+  if (name === "subdomain-requests.json") return "subdomainRequests";
+  if (name === "trial-events.json") return "trialEvents";
   return null;
 }
 
@@ -409,7 +436,12 @@ async function replaceDeploymentJobs(jobs) {
 }
 
 async function readAuditLogs() {
-  const rows = await query("SELECT * FROM audit_logs WHERE action <> 'deployment_job' ORDER BY created_at DESC LIMIT 1000");
+  const rows = await query(`
+    SELECT * FROM audit_logs
+    WHERE action NOT IN ('deployment_job', 'email_verification', 'subdomain_request', 'trial_event')
+    ORDER BY created_at DESC
+    LIMIT 1000
+  `);
   return rows.map((row) => ({
     id: row.id,
     action: row.action,
@@ -425,9 +457,12 @@ async function readAuditLogs() {
 
 async function replaceAuditLogs(logs) {
   await transaction(async (connection) => {
-    await connection.execute("DELETE FROM audit_logs WHERE action <> 'deployment_job'");
+    await connection.execute(`
+      DELETE FROM audit_logs
+      WHERE action NOT IN ('deployment_job', 'email_verification', 'subdomain_request', 'trial_event')
+    `);
     for (const log of Array.isArray(logs) ? logs : []) {
-      if (log.action === "deployment_job") continue;
+      if (metadataActions.has(log.action)) continue;
       await connection.execute(`
         INSERT INTO audit_logs (
           id, action, actor_type, actor_id, target_type, target_id,
@@ -443,6 +478,40 @@ async function replaceAuditLogs(logs) {
         log.ip || null,
         stringifyJson(log.metadata || {}),
         dateOrNull(log.createdAt) || new Date()
+      ]);
+    }
+  });
+}
+
+async function readMetadataCollection(action, limit = 1000) {
+  const rows = await query(`
+    SELECT * FROM audit_logs
+    WHERE action = ?
+    ORDER BY created_at DESC
+    LIMIT ${Number(limit) || 1000}
+  `, [action]);
+  return rows.map((row) => parseJson(row.metadata_json, null)).filter(Boolean);
+}
+
+async function replaceMetadataCollection(action, items) {
+  await transaction(async (connection) => {
+    await connection.execute("DELETE FROM audit_logs WHERE action = ?", [action]);
+    for (const item of Array.isArray(items) ? items : []) {
+      await connection.execute(`
+        INSERT INTO audit_logs (
+          id, action, actor_type, actor_id, target_type, target_id,
+          ip, metadata_json, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `, [
+        `${action}-${item.id || crypto.randomUUID()}`,
+        action,
+        item.actorType || "system",
+        item.userId || null,
+        action,
+        item.id || null,
+        item.ip || null,
+        stringifyJson(item),
+        dateOrNull(item.updatedAt || item.createdAt) || new Date()
       ]);
     }
   });

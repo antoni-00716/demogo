@@ -1,0 +1,3 @@
+display_name: DemoGo Deploy
+short_description: Publish or update projects as DemoGo trial links.
+default_prompt: Publish this project to DemoGo.

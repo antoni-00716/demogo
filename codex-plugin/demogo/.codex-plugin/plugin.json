@@ -1,0 +1,48 @@
+{
+  "name": "demogo",
+  "version": "0.9.0",
+  "description": "Publish projects from Codex to DemoGo and return shareable trial links.",
+  "author": {
+    "name": "DemoGo",
+    "email": "antoni16@163.com",
+    "url": "https://demogo.cn"
+  },
+  "homepage": "https://demogo.cn",
+  "repository": "https://demogo.cn",
+  "license": "UNLICENSED",
+  "keywords": [
+    "demogo",
+    "deploy",
+    "trial-link",
+    "ai-coding",
+    "codex",
+    "mcp",
+    "frontend",
+    "node"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "DemoGo",
+    "shortDescription": "Publish projects as shareable trial links.",
+    "longDescription": "DemoGo helps Codex publish the current project as a shareable trial link. It can create a new link, update an existing link, check the project before publishing, and return practical failure guidance when publishing cannot complete.",
+    "developerName": "DemoGo",
+    "category": "Coding",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "websiteURL": "https://demogo.cn",
+    "privacyPolicyURL": "https://demogo.cn/privacy.html",
+    "termsOfServiceURL": "https://demogo.cn/terms.html",
+    "defaultPrompt": [
+      "Publish this project to DemoGo.",
+      "Update my DemoGo trial link.",
+      "Check whether this project can be published."
+    ],
+    "brandColor": "#35E0FF",
+    "screenshots": []
+  }
+}
+

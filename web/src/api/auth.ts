@@ -18,10 +18,26 @@ export function login(email: string, password: string) {
   });
 }
 
-export function register(email: string, password: string) {
-  return api<{ user: User }>("/api/auth/register", {
+export function getRegisterOptions() {
+  return api<{
+    emailVerificationEnabled: boolean;
+    emailConfigured: boolean;
+    emailRequired: boolean;
+    canRegister: boolean;
+  }>("/api/auth/register-options");
+}
+
+export function sendVerificationCode(email: string, password: string) {
+  return api<{ ok: true; expiresInSeconds?: number; resendAfterSeconds?: number }>("/api/auth/send-verification-code", {
     method: "POST",
     body: toJsonBody({ email, password })
+  });
+}
+
+export function register(email: string, password: string, verificationCode?: string) {
+  return api<{ user: User }>("/api/auth/register", {
+    method: "POST",
+    body: toJsonBody({ email, password, verificationCode })
   });
 }
 

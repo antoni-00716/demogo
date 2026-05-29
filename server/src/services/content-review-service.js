@@ -31,7 +31,7 @@ const RULES = [
     severity: "block",
     category: "诈骗或高风险金融引导",
     patterns: [
-      /刷单|返利|日赚|躺赚|稳赚|保本收益|高额回报|无风险套利|兼职返佣|先垫付|导师带单|内幕消息|包赚|稳赚不赔|快速回本/g,
+      /刷单|投资返利|日赚|躺赚|稳赚|保本收益|高额回报|无风险套利|兼职返佣|先垫付|导师带单|内幕消息|包赚|稳赚不赔|快速回本/g,
       /贷款秒批|无抵押贷款|黑户贷款|征信修复|套现|代办信用卡|刷流水/g
     ],
     suggestion: "请删除刷单返利、保本收益、贷款套现、征信修复等高风险宣传内容。"
@@ -74,37 +74,49 @@ const RULES = [
   },
   {
     id: "sensitive_collection",
-    severity: "review",
-    category: "敏感信息收集",
+    severity: "block",
+    category: "高敏信息收集",
     patterns: [
-      /身份证号|身份证照片|银行卡号|银行卡照片|验证码|短信验证码|支付密码|登录密码|人脸照片|手持身份证/g
+      /身份证号|身份证照片|银行卡号|银行卡照片|验证码|短信验证码|支付密码|登录密码|人脸照片|手持身份证/g,
+      /\b(idcard|id_card|identity|bankcard|bank_card|smscode|sms_code|facephoto|face_photo)\b/gi,
+      /<input[^>]+type=["']?password["']?[^>]*>/gi,
+      /<input[^>]+(?:name|id|placeholder)=["'][^"']*(?:password|密码|验证码|身份证|银行卡)[^"']*["'][^>]*>/gi
     ],
-    suggestion: "如果只是演示页面，请不要收集身份证、银行卡、验证码、密码或人脸照片等敏感信息。"
+    suggestion: "请不要在公开试用页收集身份证、银行卡、验证码、密码、人脸照片等高敏信息。"
+  },
+  {
+    id: "normal_lead_collection",
+    severity: "notice",
+    category: "正常获客留资",
+    patterns: [
+      /姓名|手机号|联系电话|手机号码|邮箱|公司名称|职位|预约|报名|咨询|获取方案|领取资料|申请试用|提交需求|联系我们/g
+    ],
+    suggestion: "正常报名、预约、咨询和获客留资可以发布；请确保页面说明收集用途。"
   },
   {
     id: "external_contact",
-    severity: "review",
-    category: "外部联系方式或导流",
+    severity: "notice",
+    category: "联系方式展示",
     patterns: [
       /加微信|联系微信|扫码加群|QQ群|Telegram|WhatsApp|QQ群号|客服微信/g
     ],
-    suggestion: "如页面需要联系方式，请说明真实主体和用途，避免出现诱导私聊或不明导流。"
+    suggestion: "联系方式和社群入口可以用于正常获客；请避免配合高收益、赌博、色情、违法交易等内容。"
   },
   {
     id: "payment_or_order",
-    severity: "review",
-    category: "支付或订单相关",
+    severity: "notice",
+    category: "支付或订单演示提示",
     patterns: [
       /立即付款|在线支付|支付定金|转账|收款码|订单支付|购买套餐|充值/g
     ],
-    suggestion: "当前 DemoGo 不托管真实支付和订单后台。请确认页面只是演示，不要引导用户实际付款。"
+    suggestion: "DemoGo 当前不托管真实支付和订单后台；如果只是产品演示，可以继续发布。"
   }
 ];
 
 const SUSPICIOUS_URL_RULES = [
   {
     id: "suspicious_url",
-    severity: "review",
+    severity: "notice",
     category: "可疑外部链接",
     suggestion: "请确认外部链接真实可信，避免跳转到不明下载、支付、私聊或高风险页面。"
   }
@@ -141,7 +153,7 @@ export async function reviewArchiveContent(analysis, options = {}) {
   const highestSeverity = resolveHighestSeverity(findings);
   return applyExternalReviewDecision({
     id: options.id || "",
-    status: highestSeverity === "block" ? "blocked" : highestSeverity === "review" ? "review_required" : "passed",
+    status: reviewStatusFromSeverity(highestSeverity),
     provider: "local_rules",
     engine: options.mode === "external" ? "local_rules_external_pending" : "local_rules",
     summary: summarizeFindings(highestSeverity, findings),
@@ -188,7 +200,7 @@ export async function reviewDirectoryContent(rootDir, options = {}) {
   const highestSeverity = resolveHighestSeverity(findings);
   return applyExternalReviewDecision({
     id: options.id || "",
-    status: highestSeverity === "block" ? "blocked" : highestSeverity === "review" ? "review_required" : "passed",
+    status: reviewStatusFromSeverity(highestSeverity),
     provider: "local_rules",
     engine: options.mode === "external" ? "local_rules_external_pending" : "local_rules",
     summary: summarizeFindings(highestSeverity, findings),
@@ -346,24 +358,32 @@ function reviewImagePath(relativePath) {
   return [{
     id: `image_path_review-${relativePath}`,
     ruleId: "image_path_review",
-    severity: "review",
-    category: "图片可能包含二维码或支付引导",
+    severity: "notice",
+    category: "图片可能包含二维码或联系方式",
     sourceFile: relativePath,
     snippet: relativePath,
-    suggestion: "当前本地规则只能根据文件名识别可疑图片。上线试用前建议接入阿里云或腾讯云图片审核。"
+    suggestion: "二维码、微信和收款图片不自动阻断发布；请确保用途是正常展示、咨询或演示。"
   }];
 }
 
 function resolveHighestSeverity(findings) {
   if (findings.some((item) => item.severity === "block")) return "block";
   if (findings.some((item) => item.severity === "review")) return "review";
+  if (findings.some((item) => item.severity === "notice")) return "notice";
   return "pass";
+}
+
+function reviewStatusFromSeverity(severity) {
+  if (severity === "block") return "blocked";
+  if (severity === "review") return "review_required";
+  return "passed";
 }
 
 function summarizeFindings(severity, findings) {
   if (severity === "pass") return "内容检查通过，可以继续生成试用链接。";
   const categories = Array.from(new Set(findings.map((item) => item.category))).slice(0, 3).join("、");
   if (severity === "block") return `内容检查未通过，发现 ${categories || "高风险内容"}。`;
+  if (severity === "notice") return `内容检查通过，发现 ${categories || "一般提示"}，不影响生成试用链接。`;
   return `内容需要人工确认，发现 ${categories || "疑似风险内容"}。`;
 }
 
@@ -372,7 +392,7 @@ function publicFinding(finding) {
     id: finding.id,
     ruleId: finding.ruleId,
     severity: finding.severity,
-    severityLabel: finding.severity === "block" ? "拦截" : "待确认",
+    severityLabel: finding.severity === "block" ? "拦截" : finding.severity === "review" ? "待确认" : "提示",
     category: finding.category,
     sourceFile: finding.sourceFile,
     snippet: finding.snippet,
@@ -399,13 +419,26 @@ function isSuspiciousUrl(url) {
 }
 
 function normalizeText(content) {
-  return String(content || "")
+  const source = String(content || "");
+  const attributeText = extractReviewAttributeText(source);
+  return `${source} ${attributeText}`
     .replace(/<script\b[^>]*>/gi, " ")
     .replace(/<\/script>/gi, " ")
     .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, " ")
     .replace(/<[^>]+>/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function extractReviewAttributeText(content) {
+  const result = [];
+  const pattern = /\b(?:placeholder|aria-label|title|alt|name|id|value)\s*=\s*(["'])(.*?)\1/gi;
+  let match;
+  while ((match = pattern.exec(content))) {
+    if (match[2]) result.push(match[2]);
+    if (result.length >= 200) break;
+  }
+  return result.join(" ");
 }
 
 function maskSnippet(text, index, matchText) {

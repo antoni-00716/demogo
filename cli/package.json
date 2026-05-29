@@ -1,17 +1,17 @@
-{
-  "name": "@demogo-cn/cli",
-  "version": "0.2.8",
-  "description": "DemoGo CLI for generating shareable trial links from AI-built pages.",
-  "type": "module",
-  "bin": {
-    "demogo": "bin/demogo.js"
-  },
-  "files": [
-    "bin",
-    "lib"
-  ],
-  "engines": {
-    "node": ">=18.0.0"
-  },
-  "license": "UNLICENSED"
+﻿{
+    "name":  "@demogo-cn/cli",
+    "version":  "0.9.3",
+    "description":  "DemoGo CLI for generating shareable trial links from AI-built pages.",
+    "type":  "module",
+    "bin":  {
+                "demogo":  "bin/demogo.js"
+            },
+    "files":  [
+                  "bin",
+                  "lib"
+              ],
+    "engines":  {
+                    "node":  "\u003e=18.0.0"
+                },
+    "license":  "UNLICENSED"
 }

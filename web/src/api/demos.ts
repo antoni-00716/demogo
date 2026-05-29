@@ -1,5 +1,5 @@
 import { api } from "./client";
-import type { Demo, DeployEvent, DeploymentStep, Quota } from "../types";
+import type { Demo, DeployEvent, DeploymentStep, FailureDiagnosis, ProjectAssessment, Quota, SubdomainRequest } from "../types";
 
 export type Inspection = {
   canPublish?: boolean;
@@ -17,6 +17,16 @@ export type Inspection = {
   publishableBytes?: number;
   formFields?: Array<{ name?: string; label?: string; type?: string }>;
   apiCalls?: Array<{ url?: string; method?: string; isLocal?: boolean }>;
+  projectArchitecture?: Demo["architecture"];
+  hosting?: Demo["hosting"];
+  hostingMode?: string;
+  hostingModeLabel?: string;
+  runtime?: Demo["runtime"];
+  externalBackend?: Demo["externalBackend"];
+  applicationReadiness?: Demo["applicationReadiness"];
+  projectProfile?: Demo["projectProfile"];
+  projectAssessment?: ProjectAssessment;
+  projectCategory?: string;
   issues?: string[];
   suggestions?: string[];
   recommendations?: string[];
@@ -31,6 +41,7 @@ export type Inspection = {
     aiPrompt?: string;
   };
   contentReview?: Demo["contentReview"];
+  failureDiagnosis?: FailureDiagnosis | null;
 };
 
 export type DemoDetail = {
@@ -44,6 +55,7 @@ export type DeployResponse = Demo & {
   deploymentEvents?: DeploymentStep[];
   buildLog?: string;
   quota?: Quota;
+  diagnosis?: FailureDiagnosis | null;
 };
 
 export type DeploymentJob = {
@@ -58,7 +70,8 @@ export type DeploymentJob = {
   inspection?: Inspection | null;
   deploymentEvents?: DeploymentStep[];
   steps?: DeploymentStep[];
-  error?: { message?: string; statusCode?: number } | null;
+  error?: { message?: string; statusCode?: number; diagnosis?: FailureDiagnosis | null } | null;
+  diagnosis?: FailureDiagnosis | null;
   contentReview?: Demo["contentReview"] | null;
   createdAt?: string;
   updatedAt?: string;
@@ -89,6 +102,24 @@ export function getDemoDetail(id: string) {
 
 export function getDemoEvents(id: string) {
   return api<{ events: DeploymentStep[] }>(`/api/demos/${id}/events`);
+}
+
+export function updateDemoSlug(id: string, slug: string) {
+  return api<{ demo: Demo; quota: Quota }>(`/api/demos/${id}/slug`, {
+    method: "POST",
+    body: JSON.stringify({ slug })
+  });
+}
+
+export function createSubdomainRequest(id: string, subdomain: string, message = "") {
+  return api<{ request: unknown }>(`/api/demos/${id}/subdomain-requests`, {
+    method: "POST",
+    body: JSON.stringify({ subdomain, message })
+  });
+}
+
+export function getSubdomainRequests() {
+  return api<{ requests: SubdomainRequest[] }>("/api/subdomain-requests");
 }
 
 export function getDemoInspection(id: string) {
@@ -152,6 +183,21 @@ export function offlineDemo(id: string) {
 
 export function restoreDemo(id: string) {
   return api<{ demo: Demo; quota?: Quota }>(`/api/demos/${id}/restore`, { method: "POST" });
+}
+
+export function restartDemoRuntime(id: string) {
+  return api<{ demo: Demo; runtime?: Demo["runtime"]; diagnosis?: FailureDiagnosis | null }>(`/api/demos/${id}/runtime/restart`, { method: "POST" });
+}
+
+export function saveDemoRuntimeEnv(id: string, env: Record<string, string>) {
+  return api<{ demo: Demo; runtimeConfig?: Demo["runtimeConfig"]; externalBackend?: Demo["externalBackend"] }>(`/api/demos/${id}/runtime-env`, {
+    method: "POST",
+    body: JSON.stringify({ env })
+  });
+}
+
+export function resetDemoDatabase(id: string) {
+  return api<{ demo: Demo; database?: Demo["database"] }>(`/api/demos/${id}/database/reset`, { method: "POST" });
 }
 
 export function deleteDemo(id: string) {

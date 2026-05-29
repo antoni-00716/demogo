@@ -50,3 +50,17 @@ data/
 uploads/
 backups/
 coverage/
+
+# Redundant / non-core project directories
+frontend/
+frontend/node_modules/
+final/
+artifacts/
+.trae/
+.workbuddy/
+# Backup and temp files
+*_orig.js
+*_fixed.js
+*_backup.js
+_*.cjs
+_*.mjs

@@ -1,5 +1,5 @@
 import { api, toJsonBody } from "./client";
-import type { AdminMetrics, AdminUser, ContentReview, Demo, Feedback, FormSubmission, HostedForm, PlanRequest } from "../types";
+import type { AdminMetrics, AdminUser, ContentReview, Demo, Feedback, FormSubmission, HostedForm, PlanRequest, SubdomainRequest } from "../types";
 
 export function getAdminOverview() {
   return api<{
@@ -56,6 +56,19 @@ export function updateAdminPlanRequestStatus(id: string, input: { status: "appro
   });
 }
 
+export function getAdminSubdomainRequests(filters: { status?: string } = {}) {
+  const params = new URLSearchParams();
+  if (filters.status) params.set("status", filters.status);
+  return api<{ requests: SubdomainRequest[] }>(`/api/admin/subdomain-requests${params.toString() ? `?${params}` : ""}`);
+}
+
+export function updateAdminSubdomainRequestStatus(id: string, input: { status: "approved" | "rejected"; adminNote?: string }) {
+  return api<{ request: SubdomainRequest }>(`/api/admin/subdomain-requests/${id}/status`, {
+    method: "POST",
+    body: toJsonBody(input)
+  });
+}
+
 export function getAdminFeedback(filters: { search?: string; type?: string; status?: string } = {}) {
   const params = new URLSearchParams();
   if (filters.search) params.set("search", filters.search);
@@ -69,6 +82,14 @@ export function updateAdminFeedbackStatus(id: string, status: Feedback["status"]
     method: "POST",
     body: toJsonBody({ status })
   });
+}
+
+export function getAdminRuntimes() {
+  return api<{ summary: NonNullable<AdminMetrics["runtime"]>; demos: Demo[]; runtimes: Array<NonNullable<Demo["runtime"]> & { slug?: string }> }>("/api/admin/runtimes");
+}
+
+export function adminStopDemoRuntime(id: string) {
+  return api<{ demo: Demo; runtime?: Demo["runtime"] }>(`/api/admin/demos/${id}/runtime/stop`, { method: "POST" });
 }
 
 export function adminOfflineDemo(id: string) {

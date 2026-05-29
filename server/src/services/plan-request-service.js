@@ -61,3 +61,8 @@ export function planRequestStatusLabel(status) {
   };
   return map[status || "open"] || map.open;
 }
+
+export function canUpgradePlan(currentPlan, requestedPlan) {
+  const rank = { free: 0, lite: 1, pro: 2 };
+  return (rank[requestedPlan] ?? 0) > (rank[currentPlan || "free"] ?? 0);
+}

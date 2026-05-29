@@ -1,6 +1,24 @@
-﻿import process from "node:process";
+import fs from "node:fs";
+import path from "node:path";
+import process from "node:process";
 
-export const serviceVersion = "0.2.8";
+function readVersion() {
+  const candidates = [
+    path.resolve(process.cwd(), "VERSION"),
+    path.resolve(process.cwd(), "..", "VERSION"),
+    path.resolve(process.cwd(), "..", "..", "VERSION")
+  ];
+  for (const filePath of candidates) {
+    try {
+      return fs.readFileSync(filePath, "utf8").trim();
+    } catch {
+      // Try the next packaged or repository-level VERSION file.
+    }
+  }
+  return "0.5.0";
+}
+
+export const serviceVersion = readVersion();
 
 export const port = Number(process.env.PORT || 3001);
 export const publicBaseUrl = process.env.PUBLIC_BASE_URL || "https://demogo.cn";
@@ -20,11 +38,36 @@ export const buildMode = process.env.DEMOGO_BUILD_MODE || "auto";
 export const dockerImage = process.env.DEMOGO_BUILD_DOCKER_IMAGE || "node:20-alpine";
 export const dockerMemory = process.env.DEMOGO_BUILD_DOCKER_MEMORY || "512m";
 export const dockerCpus = process.env.DEMOGO_BUILD_DOCKER_CPUS || "1";
+export const runtimeEnabled = process.env.DEMOGO_RUNTIME_ENABLED === "1";
+export const runtimeNodeEnabled = process.env.DEMOGO_RUNTIME_NODE_ENABLED === "1";
+export const runtimeDriver = process.env.DEMOGO_RUNTIME_DRIVER || "docker";
+export const runtimeRootDir = process.env.DEMOGO_RUNTIME_ROOT_DIR || "";
+export const runtimeDockerImage = process.env.DEMOGO_RUNTIME_DOCKER_IMAGE || "node:20-alpine";
+export const runtimeMemory = process.env.DEMOGO_RUNTIME_MEMORY || "512m";
+export const runtimeCpus = process.env.DEMOGO_RUNTIME_CPUS || "1";
+export const runtimeTtlMinutes = Number(process.env.DEMOGO_RUNTIME_TTL_MINUTES || 120);
+export const runtimeStartTimeoutSeconds = Number(process.env.DEMOGO_RUNTIME_START_TIMEOUT_SECONDS || 180);
+export const runtimeMaxInstances = Number(process.env.DEMOGO_RUNTIME_MAX_INSTANCES || 10);
+export const demoDbEnabled = process.env.DEMOGO_DEMO_DB_ENABLED === "1";
+export const demoDbMock = process.env.DEMOGO_DEMO_DB_MOCK === "1";
+export const demoDbAdminHost = process.env.DEMOGO_DB_ADMIN_HOST || process.env.DEMOGO_DB_HOST || "";
+export const demoDbAdminPort = Number(process.env.DEMOGO_DB_ADMIN_PORT || process.env.DEMOGO_DB_PORT || 3306);
+export const demoDbAdminUser = process.env.DEMOGO_DB_ADMIN_USER || "";
+export const demoDbAdminPassword = process.env.DEMOGO_DB_ADMIN_PASSWORD || "";
+export const demoDbHost = process.env.DEMOGO_DEMO_DB_HOST || "172.17.0.1";
+export const demoDbPort = Number(process.env.DEMOGO_DEMO_DB_PORT || 3306);
 export const contentReviewMode = process.env.DEMOGO_CONTENT_REVIEW_MODE || "local";
 export const contentReviewFailClosed = process.env.DEMOGO_CONTENT_REVIEW_FAIL_CLOSED !== "0";
 export const contentReviewMaxTextBytes = Number(process.env.DEMOGO_CONTENT_REVIEW_MAX_TEXT_KB || 1024) * 1024;
 export const contentReviewExternalEndpoint = process.env.DEMOGO_CONTENT_REVIEW_EXTERNAL_ENDPOINT || "";
 export const contentReviewExternalToken = process.env.DEMOGO_CONTENT_REVIEW_EXTERNAL_TOKEN || "";
+export const smtpHost = process.env.SMTP_HOST || "";
+export const smtpPort = Number(process.env.SMTP_PORT || 587);
+export const smtpUser = process.env.SMTP_USER || "";
+export const smtpPass = process.env.SMTP_PASS || "";
+export const smtpFrom = process.env.SMTP_FROM || smtpUser;
+export const smtpSecure = process.env.SMTP_SECURE === "1" || smtpPort === 465;
+export const emailVerificationEnabled = process.env.DEMOGO_EMAIL_VERIFICATION_ENABLED !== "0";
 
 export const plans = {
   free: {
@@ -63,5 +106,3 @@ export function normalizePlanCode(value) {
   const plan = String(value || "").trim().toLowerCase();
   return plans[plan] ? plan : "";
 }
-
-

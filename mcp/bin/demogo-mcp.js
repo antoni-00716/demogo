@@ -13,9 +13,12 @@ import {
   createProjectArchive,
   deployArchive,
   formatBytes,
+  checkAgentToken,
+  checkApiHealth,
   normalizeApiBase,
   safeArchiveName,
-  summarizeProject
+  summarizeProject,
+  updateArchive
 } from "../lib/core.js";
 
 const tools = [
@@ -44,11 +47,37 @@ const tools = [
     }
   },
   {
+    name: "demogo_update_project",
+    description: "打包当前项目并更新已有 DemoGo 试用链接，原链接保持不变。",
+    inputSchema: {
+      type: "object",
+      properties: {
+        dir: { type: "string", description: "项目目录，默认当前目录。" },
+        demoId: { type: "string", description: "要更新的 Demo ID、链接后缀或原试用链接。" },
+        apiBase: { type: "string", description: "DemoGo 平台地址。也可以通过 DEMOGO_API_BASE 环境变量提供。" },
+        token: { type: "string", description: "DemoGo AI 发布口令，默认读取 DEMOGO_AGENT_TOKEN。" }
+      },
+      required: ["demoId"]
+    }
+  },
+  {
     name: "demogo_get_config",
     description: "查看 DemoGo MCP 当前可用配置来源。",
     inputSchema: {
       type: "object",
       properties: {}
+    }
+  },
+  {
+    name: "demogo_doctor",
+    description: "检查 DemoGo 平台地址和 AI 发布口令是否可用，适合发布前诊断。",
+    inputSchema: {
+      type: "object",
+      properties: {
+        apiBase: { type: "string", description: "DemoGo 平台地址。默认读取 DEMOGO_API_BASE。" },
+        token: { type: "string", description: "DemoGo AI 发布口令。默认读取 DEMOGO_AGENT_TOKEN。" }
+      },
+      required: []
     }
   }
 ];
@@ -112,9 +141,57 @@ async function handleRequest(request) {
 
 async function callTool(name, args) {
   if (name === "demogo_get_config") return textResult(JSON.stringify(getConfigSummary(), null, 2));
+  if (name === "demogo_doctor") return doctor(args);
   if (name === "demogo_check_project") return checkProject(args);
   if (name === "demogo_deploy_project") return deployProject(args);
+  if (name === "demogo_update_project") return updateProject(args);
   throw new Error(`未知工具：${name}`);
+}
+
+async function doctor(args) {
+  const apiBase = normalizeApiBase(args.apiBase || process.env.DEMOGO_API_BASE);
+  const token = String(args.token || process.env.DEMOGO_AGENT_TOKEN || "").trim();
+  if (!apiBase) {
+    return textResult(JSON.stringify({
+      ok: false,
+      category: "missing_api_base",
+      title: "缺少 DemoGo 平台地址",
+      action: "请提供 apiBase，或设置 DEMOGO_API_BASE。"
+    }, null, 2));
+  }
+
+  const health = await checkApiHealth(apiBase, `demogo-mcp/${VERSION}`);
+  if (!token) {
+    return textResult(JSON.stringify({
+      ok: true,
+      platform: {
+        ok: true,
+        service: health.service,
+        version: health.version
+      },
+      token: {
+        ok: false,
+        category: "missing_agent_token",
+        title: "缺少 DemoGo AI 发布口令",
+        action: "请在 DemoGo 用户端生成 AI 发布口令，并设置 DEMOGO_AGENT_TOKEN。"
+      }
+    }, null, 2));
+  }
+
+  const tokenCheck = await checkAgentToken(apiBase, token, `demogo-mcp/${VERSION}`);
+  return textResult(JSON.stringify({
+    ok: true,
+    platform: {
+      ok: true,
+      service: health.service,
+      version: health.version
+    },
+    token: {
+      ok: true,
+      prefix: tokenCheck.prefix || "",
+      account: tokenCheck.user?.email || tokenCheck.email || ""
+    }
+  }, null, 2));
 }
 
 async function checkProject(args) {
@@ -172,6 +249,53 @@ async function deployProject(args) {
       autoFormEnabled: Boolean(result.autoFormEnabled || result.inspection?.autoFormEnabled),
       contentReviewStatus: result.contentReviewStatus || result.contentReview?.status || "",
       nextStep: result.nextStep || "请打开链接检查页面是否符合预期。"
+    }, null, 2));
+  } finally {
+    await rm(path.dirname(archivePath), { recursive: true, force: true });
+  }
+}
+
+async function updateProject(args) {
+  const apiBase = normalizeApiBase(args.apiBase || process.env.DEMOGO_API_BASE);
+  const token = String(args.token || process.env.DEMOGO_AGENT_TOKEN || "").trim();
+  const demoRef = String(args.demoId || args.id || args.slug || args.url || "").trim();
+  if (!apiBase) throw new Error("缺少 DemoGo 平台地址。请提供 apiBase，或设置 DEMOGO_API_BASE。");
+  if (!token) throw new Error("缺少 DemoGo AI 发布口令。请提供 token，或设置 DEMOGO_AGENT_TOKEN。");
+  if (!demoRef) throw new Error("缺少要更新的 Demo ID、链接后缀或原试用链接。");
+
+  const projectDir = path.resolve(String(args.dir || "."));
+  await assertDirectory(projectDir);
+  assertSafeProjectDirectory(projectDir);
+  const files = await collectFiles(projectDir);
+  if (!files.length) throw new Error("当前目录没有可发布文件。");
+
+  const archivePath = path.join(await mkdtemp(path.join(os.tmpdir(), "demogo-mcp-")), `${safeArchiveName(demoRef)}.tar.gz`);
+  try {
+    await createProjectArchive(projectDir, files, archivePath);
+    const archiveStats = await stat(archivePath);
+    if (archiveStats.size > MAX_BYTES) {
+      throw new Error(`打包后文件超过 50MB，请减少大文件后重试。当前约 ${formatBytes(archiveStats.size)}。`);
+    }
+    const result = await updateArchive({
+      apiBase,
+      token,
+      archivePath,
+      demoRef,
+      source: "mcp",
+      userAgent: `demogo-mcp/${VERSION}`
+    });
+    return textResult(JSON.stringify({
+      ok: true,
+      message: "DemoGo 试用项目已更新，原链接保持不变。",
+      projectName: result.projectName || result.name || "",
+      publicUrl: result.publicUrl,
+      version: result.version,
+      deploySource: result.deploySource || "mcp",
+      deploySourceLabel: result.deploySourceLabel || "DemoGo MCP",
+      detectedType: result.detectedType || "",
+      autoFormEnabled: Boolean(result.autoFormEnabled || result.inspection?.autoFormEnabled),
+      contentReviewStatus: result.contentReviewStatus || result.contentReview?.status || "",
+      nextStep: result.nextStep || "请刷新原链接检查页面是否符合预期。"
     }, null, 2));
   } finally {
     await rm(path.dirname(archivePath), { recursive: true, force: true });
