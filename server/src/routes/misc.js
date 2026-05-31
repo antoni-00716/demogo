@@ -1,6 +1,8 @@
 import path from "node:path";
 import { existsSync } from "node:fs";
-import { demoRoot, serviceVersion, publicBaseUrl } from "../config.js";
+import { join as pathJoin } from "node:path";
+import { demoRoot, dataDir, serviceVersion, publicBaseUrl, runtimeEnabled, runtimeNodeEnabled, runtimeDockerImage, runtimeMemory, runtimeCpus, runtimeTtlMinutes, runtimeStartTimeoutSeconds, runtimeMaxInstances } from "../config.js";
+import { readJson } from "../lib/data-access.js";
 import { createHostingCapabilities } from "../services/hosting-architecture-service.js";
 import { getClientIp } from "../lib/request-utils.js";
 import { writeTrialEvent } from "../lib/trial-log.js";
@@ -14,7 +16,18 @@ app.get("/api/health", (_req, res) => {
 });
 
 app.get("/api/hosting/capabilities", (_req, res) => {
-  res.json({ ...createHostingCapabilities(), version: serviceVersion });
+  res.json({ capabilities: createHostingCapabilities({
+    version: serviceVersion,
+    runtimeEnabled,
+    runtimeNodeEnabled,
+    demoDatabaseReady: false,
+    runtimeDockerImage,
+    runtimeMemory,
+    runtimeCpus,
+    runtimeTtlMinutes,
+    runtimeStartTimeoutSeconds,
+    runtimeMaxInstances
+  }), version: serviceVersion });
 });
 
 app.post("/api/trial-events", async (req, res) => {
@@ -36,9 +49,26 @@ app.post("/api/trial-events", async (req, res) => {
   }
 });
 
-app.get("/d/:slug", async (req, res) => {
-  const previewPath = path.join(demoRoot, req.params.slug);
-  if (existsSync(previewPath)) return res.redirect("/d/" + req.params.slug + "/");
+app.get("/d/:slug", async (req, res, next) => {
+  // Express matches /d/slug/ against this route without strict routing.
+  // Only redirect bare paths (no trailing slash) to avoid infinite redirect loop.
+  if (!req.url.endsWith("/")) {
+    const previewPath = path.join(demoRoot, req.params.slug);
+    if (existsSync(previewPath)) return res.redirect("/d/" + req.params.slug + "/");
+  }
+
+  // Check if slug is an alias for another demo
+  try {
+    const demosFile = pathJoin(dataDir, "demos.json");
+    const demos = await readJson(demosFile, []);
+    const targetDemo = demos.find((d) =>
+      d.status === "published" &&
+      Array.isArray(d.aliases) &&
+      d.aliases.includes(req.params.slug)
+    );
+    if (targetDemo) return res.redirect(302, "/d/" + targetDemo.slug + "/");
+  } catch (_) {}
+
   res.status(404).send("Demo not found");
 });
 

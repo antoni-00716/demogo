@@ -4,7 +4,7 @@ export function registerAdminRoutes(app, deps) {
     readJson, writeJson,
     usersFile, demosFile, feedbackFile, planRequestsFile,
     formsFile, formSubmissionsFile, contentReviewsFile,
-    auditLogsFile, deploymentEventsFile, trialEventsFile,
+    auditLogsFile, deploymentEventsFile, trialEventsFile, subdomainRequestsFile,
     flushUsageStats,
     filterAdminUsers, filterAdminDemos, filterAdminForms, filterSubdomainRequests,
     adminUserSummary, adminDemoSummary,
@@ -75,7 +75,7 @@ export function registerAdminRoutes(app, deps) {
           contentReviews: contentReviews.length,
           blockedContentReviews: contentReviews.filter((item) => item.status === "blocked").length,
           pendingContentReviews: contentReviews.filter((item) => item.status === "review_required").length,
-          pendingContentReviewResolutions: contentReviews.filter((item) => contentReviewResolutionStatus(item) === "pending").length,
+          pendingContentReviewResolutions: contentReviews.filter((item) => contentReviewResolutionStatus(item) === "pending_review").length,
           aiDeploys: aiDeployAuditLogs.length,
           deploySuccesses: deploymentEvents.filter((item) => item.eventType === "success" && item.status === "success").length,
           deployFailures: failedDeploymentEvents.length,
@@ -133,11 +133,13 @@ export function registerAdminRoutes(app, deps) {
       const reviews = await readJson(contentReviewsFile, []);
       const review = reviews.find((r) => r.id === req.params.id);
       if (!review) { res.status(404).json({ error: "Content review not found" }); return; }
-      const newStatus = String(req.body?.status || "").trim();
-      if (!["passed", "blocked"].includes(newStatus)) { res.status(400).json({ error: "Invalid status" }); return; }
+      const newStatus = String(req.body?.status || req.body?.resolutionStatus || "").trim();
+      const validStatuses = ["passed", "blocked", "pending", "pending_review", "confirmed_violation", "approved", "rejected"];
+      if (!validStatuses.includes(newStatus)) { res.status(400).json({ error: "Invalid status" }); return; }
       review.resolutionStatus = newStatus;
       review.resolvedAt = new Date().toISOString();
       review.resolvedBy = "admin";
+      review.adminNote = req.body?.adminNote || "";
       await writeJson(contentReviewsFile, reviews);
       res.json({ review: publicAdminContentReview(review) });
     } catch (error) { next(error); }
@@ -214,6 +216,17 @@ export function registerAdminRoutes(app, deps) {
       if (!["approved", "rejected"].includes(status)) { res.status(400).json({ error: "Invalid status" }); return; }
       requests[idx].status = status;
       requests[idx].resolvedAt = new Date().toISOString();
+
+      // Update user plan when approved
+      if (status === "approved") {
+        const users = await readJson(usersFile, []);
+        const userIdx = users.findIndex((u) => u.id === requests[idx].userId);
+        if (userIdx !== -1) {
+          users[userIdx].plan = requests[idx].requestedPlan || requests[idx].plan || "lite";
+          await writeJson(usersFile, users);
+        }
+      }
+
       await writeJson(planRequestsFile, requests);
       res.json({ request: requests[idx] });
     } catch (error) { next(error); }
@@ -237,6 +250,9 @@ export function registerAdminRoutes(app, deps) {
       if (!["approved", "rejected"].includes(status)) { res.status(400).json({ error: "Invalid status" }); return; }
       requests[idx].status = status;
       requests[idx].resolvedAt = new Date().toISOString();
+      if (req.body?.adminNote) {
+        requests[idx].adminNote = String(req.body.adminNote).trim().slice(0, 500);
+      }
       await writeJson(subdomainRequestsFile, requests);
       res.json({ request: requests[idx] });
     } catch (error) { next(error); }

@@ -46,6 +46,7 @@ const child = spawn(process.execPath, ["src/server.js"], {
 });
 
 let cookie = "";
+child.stderr.pipe(process.stderr);
 
 try {
   await waitForHealth();
@@ -785,7 +786,7 @@ async function inspectBlockedContentProject() {
   const reviews = await adminGet("/api/admin/content-reviews");
   const blockedReview = (reviews.reviews || []).find((item) => item.status === "blocked");
   assert(blockedReview, "admin should see blocked content review");
-  assert(blockedReview.resolutionStatus === "pending", "blocked content review should wait for admin handling");
+  assert(blockedReview.resolutionStatus === "pending_review", "blocked content review should wait for admin handling");
   const handled = await adminPost(`/api/admin/content-reviews/${blockedReview.id}/status`, {
     resolutionStatus: "confirmed_violation",
     adminNote: "smoke test confirmed"
@@ -972,8 +973,34 @@ http.createServer((req, res) => {
     await requestJsonWithBase(runtimeBaseUrl, `/api/demos/${deploy.id}/runtime/restart`, { method: "POST" });
     const restartedPayload = await requestJsonWithBase(runtimeBaseUrl, `/d/${deploy.slug}/api/hello`);
     assert(restartedPayload.from === "node-runtime", "node runtime should respond after explicit restart");
-    await requestJsonWithBase(runtimeBaseUrl, `/api/demos/${deploy.id}/offline`, { method: "POST" });
-    await requestJsonWithBase(runtimeBaseUrl, `/api/demos/${deploy.id}/delete`, { method: "POST" });
+    // Retry offline on Windows to handle EBUSY file locks
+    let offlineDone = false;
+    for (let retry = 0; retry < 5 && !offlineDone; retry++) {
+      try {
+        await requestJsonWithBase(runtimeBaseUrl, `/api/demos/${deploy.id}/offline`, { method: "POST" });
+        offlineDone = true;
+      } catch (err) {
+        if (retry < 4 && err.message && err.message.includes("EBUSY")) {
+          await new Promise((r) => setTimeout(r, 3000));
+          continue;
+        }
+        throw err;
+      }
+    }
+    // Retry delete on Windows to handle EBUSY file locks
+    let deleteDone = false;
+    for (let retry = 0; retry < 5 && !deleteDone; retry++) {
+      try {
+        await requestJsonWithBase(runtimeBaseUrl, `/api/demos/${deploy.id}/delete`, { method: "POST" });
+        deleteDone = true;
+      } catch (err) {
+        if (retry < 4 && err.message && err.message.includes("EBUSY")) {
+          await new Promise((r) => setTimeout(r, 3000));
+          continue;
+        }
+        throw err;
+      }
+    }
 
     const envZip = await createZipFromFiles("env-runtime-demo", {
       "package.json": JSON.stringify({

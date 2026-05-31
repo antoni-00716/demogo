@@ -1,4 +1,4 @@
-export type PlanCode = "free" | "lite" | "pro";
+﻿export type PlanCode = "free" | "lite" | "pro";
 
 export type Plan = {
   code: PlanCode;
@@ -17,8 +17,8 @@ export const plans: Plan[] = [
     onlineDemos: 1,
     monthlyDeploys: 3,
     retentionDays: 7,
-    description: "先试一次，验证能不能跑通",
-    linkBenefit: "系统自动分配试用链接"
+    description: "免费开始，适合第一次试用",
+    linkBenefit: "自动分配链接，打开就能用"
   },
   {
     code: "lite",
@@ -26,8 +26,8 @@ export const plans: Plan[] = [
     onlineDemos: 3,
     monthlyDeploys: 20,
     retentionDays: 30,
-    description: "适合用户演示和小范围试用",
-    linkBenefit: "可使用更清晰的项目访问地址"
+    description: "适合持续演示和小范围分享",
+    linkBenefit: "可以自定义链接后缀，更好记"
   },
   {
     code: "pro",
@@ -35,8 +35,8 @@ export const plans: Plan[] = [
     onlineDemos: 10,
     monthlyDeploys: 60,
     retentionDays: 30,
-    description: "适合持续验证多个 AI 产品原型",
-    linkBenefit: "可申请专属二级域名"
+    description: "适合长期使用，同时管理多个作品",
+    linkBenefit: "支持专属二级域名，更专业"
   }
 ];
 

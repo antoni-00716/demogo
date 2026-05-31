@@ -1,4 +1,4 @@
-// DemoGo v0.9.3 - 归档分析器（从 server.js 提取）
+﻿﻿// DemoGo v0.9.3 - 归档分析器（从 server.js 提取）
 // 负责：ZIP/TAR 解包、路径安全分类、条目检测、表单字段提取
 
 import crypto from "node:crypto";
@@ -9,6 +9,16 @@ import * as tar from "tar";
 import unzipper from "unzipper";
 import { uploadDir, maxZipSizeMb } from "../config.js";
 import { blockedExactNames, ignoredPathParts, ignoredExactNames, ignoredExtensions, archiveIgnoredPathParts, blockedExtensions } from "./security-rules.js";
+import { cleanProjectName, decodeHtmlEntities } from "./project-utils.js";
+
+async function exists(filePath) {
+  try {
+    await fs.access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export async function promoteSingleHtmlEntry(targetDir, entryFile) {
   if (!entryFile || entryFile === "index.html" || entryFile.includes("/")) return false;
@@ -169,8 +179,7 @@ export async function analyzeZipEntries(zipPath) {
 
   const paths = publishableEntries.map((item) => item.relativePath);
   const textAnalysis = await analyzeTextEntries(textEntries);
-  const envHints = await analyzeEnvironmentVariableHints(publishableEntries);
-  if (paths.includes("package.json")) {
+  const envHints = await analyzeEnvironmentVariableHints(publishableEntries);  if (paths.includes("package.json")) {
     packageJsonInfo = await analyzePackageJson(publishableEntries.find((item) => item.relativePath === "package.json"));
   }
   return {
@@ -272,8 +281,7 @@ export async function analyzeTarEntries(tarPath, options = {}) {
 
     const paths = publishableEntries.map((item) => item.relativePath);
     const textAnalysis = await analyzeTextEntries(textEntries);
-    const envHints = await analyzeEnvironmentVariableHints(publishableEntries);
-    if (paths.includes("package.json")) {
+    const envHints = await analyzeEnvironmentVariableHints(publishableEntries);    if (paths.includes("package.json")) {
       packageJsonInfo = await analyzePackageJson(publishableEntries.find((item) => item.relativePath === "package.json"));
     }
 
@@ -738,7 +746,7 @@ export function createInvalidArchiveInspection(archiveType, technicalReason = ""
     status: "blocked",
     canPublish: false,
     detectedType: "unknown",
-    label: inspectionTypeLabel("unknown"),
+    label: "????",
     summary: "压缩包不完整或格式异常，DemoGo 无法读取项目文件。",
     issues: [
       `压缩包缺少完整的 ${archiveType} 目录信息，可能是生成、下载或上传过程中被截断。`
@@ -763,7 +771,7 @@ export function createInvalidArchiveInspection(archiveType, technicalReason = ""
     formFields: [],
     apiCalls: [],
     ruleReport: {
-      projectCategory: inspectionTypeLabel("unknown"),
+      projectCategory: "????",
       publishability: "暂时无法发布",
       risks: technicalReason ? [`${archiveType} 读取失败：${technicalReason}`] : [],
       recommendations: [

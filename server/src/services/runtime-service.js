@@ -19,7 +19,8 @@ export function createRuntimeConfig(config = {}) {
     ttlMinutes: Number(config.runtimeTtlMinutes || 120),
     startTimeoutSeconds: Number(config.runtimeStartTimeoutSeconds || 45),
     maxInstances: Number(config.runtimeMaxInstances || 10),
-    demoDatabaseReady: Boolean(config.demoDatabaseReady)
+    demoDatabaseReady: Boolean(config.demoDatabaseReady),
+    env: config.env || {}
   };
 }
 
@@ -29,6 +30,13 @@ export function canStartNodeRuntime(inspection = {}, config = {}) {
   const supportedSsrRuntime = isSupportedSingleServiceSsr(inspection);
   const externalBackend = inspection.externalBackend || {};
   const usesSupabaseExternalBackend = profileUsesSupabase(profile) || externalBackend.provider === "supabase";
+  const assessment = inspection.projectAssessment || {};
+  const requiredEnv = assessment.environmentVariables?.required || [];
+  const providedEnvKeys = Object.keys(config.env || {});
+  const missingEnv = requiredEnv.filter((key) => !providedEnvKeys.includes(key.toUpperCase()) && key.toUpperCase() !== "PORT");
+  if (missingEnv.length > 0) {
+    return { ok: false, configRequired: true, missing: missingEnv, reason: "missing env config: " + missingEnv.join(", ") };
+  }
   if (!config.enabled || !config.nodeEnabled) {
     return { ok: false, reason: "Node.js 运行器尚未开启。" };
   }
@@ -71,6 +79,24 @@ export function profileUsesSupabase(profile = {}) {
   return values.includes("supabase");
 }
 
+function createRuntimeEnvFailureDiagnosis(inspection, missing = []) {
+  const assessment = inspection.projectAssessment || {};
+  return {
+    category: "runtime_env",
+    severity: "warning",
+    title: "??????",
+    summary: "???????????????????????",
+    evidence: missing.length ? ["???????" + missing.join("?")] : [],
+    userActions: [
+      "????????????????",
+      "????? .env.example??????????????",
+      "?????? .env ????????"
+    ],
+    aiPrompt: "?????????" + (missing.length ? missing.join("?") : "???") + "????????????????? .env.example ??????",
+    createdAt: new Date().toISOString()
+  };
+}
+
 export function isSupportedSingleServiceSsr(inspection = {}) {
   const profile = inspection.projectProfile || {};
   const frameworks = [
@@ -85,9 +111,16 @@ export function isSupportedSingleServiceSsr(inspection = {}) {
 }
 
 export async function startNodeRuntime({ slug, projectDir, inspection, config, env = {} }) {
-  const runtimeConfig = createRuntimeConfig(config);
+  const runtimeConfig = createRuntimeConfig({ ...config, env });
   const eligibility = canStartNodeRuntime(inspection, runtimeConfig);
   if (!eligibility.ok) {
+    if (eligibility.configRequired) {
+      return {
+        status: "config_required",
+        statusLabel: "??????",
+        failureDiagnosis: createRuntimeEnvFailureDiagnosis(inspection, eligibility.missing || [])
+      };
+    }
     throw createRuntimeError(eligibility.reason);
   }
   await stopRuntime(slug);

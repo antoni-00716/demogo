@@ -61,8 +61,9 @@ export function summarizeDeploySources(auditLogs = [], demos = []) {
 }
 
 export function countBy(items, getter) {
+  const resolve = typeof getter === "function" ? getter : (item) => item?.[getter];
   return (Array.isArray(items) ? items : []).reduce((acc, item) => {
-    const key = getter(item);
+    const key = resolve(item);
     if (!key) return acc;
     acc[key] = (acc[key] || 0) + 1;
     return acc;
@@ -150,4 +151,4 @@ export function summarizeResponseLimits(quota) {
     monthlyDeploys: quota.monthlyDeploys || null
   };
 }
-
+

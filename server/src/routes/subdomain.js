@@ -1,4 +1,4 @@
-import crypto from "node:crypto";
+﻿import crypto from "node:crypto";
 import { join as pathJoin } from "node:path";
 import { dataDir } from "../config.js";
 import { readJson, writeJson } from "../lib/data-access.js";
@@ -46,7 +46,7 @@ app.post("/api/demos/:id/subdomain-requests", requireUser, async (req, res, next
       res.status(404).json({ error: "????????" });
       return;
     }
-    if (demo.userPlan !== "pro") {
+    if (demo.plan !== "pro") {
       res.status(403).json({ error: "Pro ???????????" });
       return;
     }

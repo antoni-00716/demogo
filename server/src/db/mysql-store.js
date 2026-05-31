@@ -608,7 +608,7 @@ async function replaceForms(items) {
         item.demoSlug || item.demo_slug || null,
         item.demoName || item.demo_name || null,
         item.publicToken || item.public_token || crypto.randomBytes(24).toString("hex"),
-        item.name || "DemoGo 表单",
+        item.name || "DemoGo 琛ㄥ崟",
         item.status || "active",
         stringifyJson(item.fields || []),
         Number(item.submissionCount || item.submission_count || 0),
@@ -795,7 +795,7 @@ async function replaceContentReviews(items) {
 }
 
 function defaultContentReviewResolution(status) {
-  return ["blocked", "review_required", "failed"].includes(String(status || "")) ? "pending" : "resolved";
+  return ["blocked", "review_required", "failed"].includes(String(status || "")) ? "pending_review" : "resolved";
 }
 
 function inspectionFromRow(row) {

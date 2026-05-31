@@ -1,11 +1,21 @@
 // DemoGo v0.9.3 - Build service functions (extracted from server.js)
 // Enhanced backup: build-service.js.enhanced
+import crypto from "node:crypto";
+import { execFile } from "node:child_process";
 import path from "node:path";
 import fs from "node:fs/promises";
 import { isNonCollectableControl, filterAutoHostableFormFields } from "../lib/form-field-utils.js";
+import { normalizeFormFields } from "./form-service.js";
+import { promoteSingleHtmlEntry } from "../lib/archive-analyzer.js";
+import { buildMode, buildTimeoutMs, dockerImage, dockerMemory, dockerCpus } from "../config.js";
 
 export function createBuildService(deps) {
-  const { exists, createProjectError, inspectionTypeLabel, createUserFacingInspection } = deps;
+  const {
+    exists, createProjectError, inspectionTypeLabel, createUserFacingInspection,
+    readJson, writeJson, formsFile, formSubmissionsFile,
+    writeAuditLog, publicForm, publicBaseUrl, calculateFormQuota,
+    demosFile
+  } = deps;
 
 async function detectBuildAndNormalizeOutput(targetDir, inspection) {
   const packageJsonPath = path.join(targetDir, "package.json");
@@ -165,7 +175,8 @@ async function ensureAutoHostedForm({ user, demo, inspection, targetDir, now = n
     forms.unshift(item);
   }
   await writeJson(formsFile, forms.slice(0, 2000));
-  await injectAutoFormScript(targetDir, publicForm(item, { publicBaseUrl }));
+  const pubForm = publicForm(item, { publicBaseUrl });
+  await injectAutoFormScript(targetDir, pubForm);
   await writeAuditLog({
     action: existingIndex >= 0 ? "refresh_auto_form_hosting" : "auto_create_form_hosting",
     actorType: "system",
@@ -178,7 +189,7 @@ async function ensureAutoHostedForm({ user, demo, inspection, targetDir, now = n
       fieldCount: item.fields.length
     }
   });
-  return { form: item };
+  return { form: pubForm };
 }
 
 
@@ -311,6 +322,7 @@ async function commandAvailable(command) {
 }
 
 function explainBuildError(error) {
+  console.error("[BUILD ERROR]", error?.message || error);
   const message = String(error?.message || "");
   if (error?.killed || message.includes("ETIMEDOUT")) {
     return "项目生成时间过长，系统已停止处理。常见原因是依赖过多、上传了无关依赖目录，或项目配置异常。建议先在 AI 编程工具中生成 dist/build 后再上传。";

@@ -42,7 +42,7 @@ export function registerDeployRoutes(app, deps) {
   } catch (error) {
     next(error);
   } finally {
-    await fs.rm(uploadedFile.path, { force: true });
+    await fsPromises.rm(uploadedFile.path, { force: true });
   }
 });
 

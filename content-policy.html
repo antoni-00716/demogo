@@ -1,47 +1,71 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>内容发布规范 - DemoGo</title>
+  <title>内容政策 - DemoGo</title>
   <style>
-    body { margin: 0; color: #14242a; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif; line-height: 1.75; background: #fff; }
-    main { width: min(860px, calc(100vw - 40px)); margin: 0 auto; padding: 56px 0 80px; }
-    a { color: #0d947d; text-decoration: none; }
-    h1 { margin: 0 0 18px; font-size: 36px; line-height: 1.2; }
-    h2 { margin: 34px 0 10px; font-size: 22px; }
-    p, li { color: #52666c; }
+    body {
+      margin: 0; color: #1c1917;
+      font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      line-height: 1.75; background:
+        radial-gradient(ellipse at 50% 0%, rgba(6, 182, 212, 0.04), transparent 50%),
+        #fdfdfc;
+    }
+    main { width: min(760px, calc(100vw - 48px)); margin: 0 auto; padding: 56px 0 80px; }
+    a { color: #2563eb; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    h1 { margin: 0 0 8px; font-size: 36px; line-height: 1.2; font-weight: 800; letter-spacing: -0.02em; }
+    h2 { margin: 36px 0 10px; font-size: 22px; font-weight: 700; }
+    p, li { color: #57534e; font-size: 15px; }
+    ul { padding-left: 20px; }
     .top { margin-bottom: 28px; }
-    .notice { padding: 16px 18px; border: 1px solid #d8e3e6; border-radius: 8px; background: #f3f7f8; color: #52666c; }
+    .top p { color: #78716c; font-size: 14px; }
+    .notice { padding: 16px 18px; border: 1px solid #e7e5e4; border-radius: 12px; background: #fafaf9; color: #57534e; font-size: 14px; }
+    .back { display: inline-block; margin-bottom: 28px; color: #78716c; font-size: 14px; font-weight: 500; }
+    .back:hover { color: #1c1917; text-decoration: none; }
+    .allow { padding: 2px 10px; border-radius: 999px; background: #dcfce7; color: #15803d; font-size: 12px; font-weight: 600; }
+    .block { padding: 2px 10px; border-radius: 999px; background: #fee2e2; color: #b91c1c; font-size: 12px; font-weight: 600; }
+    footer { padding: 32px 0; border-top: 1px solid #e7e5e4; margin-top: 48px; color: #a8a29e; font-size: 13px; }
   </style>
 </head>
 <body>
-  <main>
-    <div class="top"><a href="index.html">返回首页</a></div>
-    <h1>DemoGo 内容发布规范</h1>
-    <p class="notice">DemoGo 服务的是 AI 小产品 Demo 试用，不是开放内容发布平台。所有用户发布内容都应遵守法律法规和平台规则。</p>
+<main>
+  <a class="back" href="/">← 返回 DemoGo 首页</a>
+  <h1>内容政策</h1>
+  <div class="top">
+    <p>更新日期：2025 年 6 月</p>
+  </div>
+  <div class="notice">
+    DemoGo 希望成为一个安全、可信的试用链接平台。上传内容前，请确认你的内容符合以下政策。
+  </div>
 
-    <h2>1. 允许发布的内容</h2>
-    <ul>
-      <li>AI 编程生成的产品原型、工具页面、活动页、表单页和数据看板。</li>
-      <li>用于客户试用、教学展示、项目汇报和阶段性交付的 Demo。</li>
-      <li>不涉及敏感数据、不采集高风险个人信息、不提供生产级交易能力的演示项目。</li>
-    </ul>
+  <h2>允许的内容</h2>
+  <ul>
+    <li><span class="allow">允许</span> 产品原型、设计演示、活动页面、报名预约页</li>
+    <li><span class="allow">允许</span> 营销推广页、产品介绍、服务展示</li>
+    <li><span class="allow">允许</span> 收集姓名、手机号、邮箱、公司、职位、留言等常规信息</li>
+    <li><span class="allow">允许</span> 工具型页面，如计算器、生成器、查询工具</li>
+  </ul>
 
-    <h2>2. 禁止发布的内容</h2>
-    <ul>
-      <li>违反法律法规、监管要求、公序良俗或侵犯他人权益的内容。</li>
-      <li>色情低俗、赌博、诈骗、钓鱼、仿冒登录、虚假投资、灰色引流或恶意营销内容。</li>
-      <li>恶意软件、病毒、木马、挖矿、攻击工具、代理转发、爬虫采集、下载站或资源分发服务。</li>
-      <li>未经授权使用的商标、素材、代码、数据、接口或第三方内容。</li>
-      <li>采集身份证、银行卡、密码、人脸、精确定位、通讯录等敏感个人信息的 Demo。</li>
-    </ul>
+  <h2>禁止的内容</h2>
+  <ul>
+    <li><span class="block">禁止</span> 诈骗、虚假宣传、传销或非法集资相关内容</li>
+    <li><span class="block">禁止</span> 赌博、博彩或相关引导内容</li>
+    <li><span class="block">禁止</span> 色情、低俗或违反公序良俗的内容</li>
+    <li><span class="block">禁止</span> 违法交易、违禁品买卖相关内容</li>
+    <li><span class="block">禁止</span> 恶意软件下载、钓鱼页面或诱导用户泄露敏感信息</li>
+    <li><span class="block">禁止</span> 收集身份证号、银行卡号、密码、验证码、人脸照片等高敏信息</li>
+  </ul>
 
-    <h2>3. 平台处理措施</h2>
-    <p>DemoGo 有权对疑似违规项目进行限制访问、隐藏、下线、删除、封禁账号、保留日志、配合权利人投诉或监管要求处理。</p>
+  <h2>内容审核机制</h2>
+  <p>DemoGo 使用自动化工具对上传内容进行初步安全检查。自动化检查无法识别图片、视频、音频中的真实内容，只能对文件名做有限风险提示。</p>
+  <p>如果发现违规内容，DemoGo 有权：拒绝生成链接、下架已发布的内容、暂停或关闭相关账号。</p>
 
-    <h2>4. 举报与下线</h2>
-    <p>如发现 DemoGo 链接存在违规、侵权或安全风险，请发送链接、截图和说明至 <a href="mailto:hello@demogo.cn">hello@demogo.cn</a>。我们会尽快核查处理。</p>
-  </main>
+  <h2>免责声明</h2>
+  <p>自动化检查不是完整人工审核，也不是正式第三方内容安全服务。用户应对自己上传的内容承担全部责任。如果你发现违规内容，请及时联系 DemoGo 团队。</p>
+
+  <footer>© DemoGo. 让产品连接真实世界。</footer>
+</main>
 </body>
 </html>

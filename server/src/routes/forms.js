@@ -20,7 +20,7 @@ app.get("/api/forms", requireUser, async (req, res, next) => {
   try {
     const forms = await readJson(formsFile, []);
     const mine = forms.filter(f => f.userId === req.user.id && f.status !== "deleted");
-    res.json({ forms: mine.slice(0, 50), quota: calculateFormQuota(req.user, mine) });
+    res.json({ forms: mine.slice(0, 50).map(f => publicForm(f, { publicBaseUrl })), quota: calculateFormQuota(req.user, mine) });
   } catch (error) { next(error); }
 });
 
@@ -36,12 +36,12 @@ app.post("/api/forms", requireUser, async (req, res, next) => {
     const quota = calculateFormQuota(req.user, forms.filter(f => f.userId === req.user.id));
     if (quota.remaining <= 0) { res.status(403).json({ error: "表单数量已达上限" }); return; }
     const existing = forms.find(f => f.demoId === demoId && f.userId === req.user.id && f.status !== "deleted");
-    if (existing) { res.status(409).json({ error: "该项目已有表单" }); return; }
+    if (existing) { res.json({ form: publicForm(existing, { publicBaseUrl }) }); return; }
     const now = new Date().toISOString();
     const token = crypto.randomUUID().replace(/-/g, "").slice(0, 16);
     const item = {
       id: crypto.randomUUID(), userId: req.user.id, userEmail: req.user.email,
-      demoId: demo.id, demoSlug: demo.slug, token, fields: fieldDefs,
+      demoId: demo.id, demoSlug: demo.slug, publicToken: token, fields: fieldDefs,
       status: "active", publicUrl: publicBaseUrl.replace(/\/$/, "") + "/f/" + token,
       createdAt: now, updatedAt: now
     };
@@ -52,7 +52,7 @@ app.post("/api/forms", requireUser, async (req, res, next) => {
       targetType: "form", targetId: item.id, ip: getClientIp(req),
       metadata: { demoId: item.demoId, demoSlug: item.demoSlug, fieldCount: fieldDefs.length }
     });
-    res.json({ form: publicForm(item) });
+    res.json({ form: publicForm(item, { publicBaseUrl }) });
   } catch (error) { next(error); }
 });
 
@@ -63,7 +63,7 @@ app.get("/api/forms/:id", requireUser, async (req, res, next) => {
     if (!form) { res.status(404).json({ error: "未找到该表单" }); return; }
     const submissions = await readJson(formSubmissionsFile, []);
     res.json({
-      form: publicForm(form),
+      form: publicForm(form, { publicBaseUrl }),
       submissions: submissions.filter(s => s.formId === form.id).slice(0, 200).map(publicFormSubmission)
     });
   } catch (error) { next(error); }
@@ -90,14 +90,14 @@ app.post("/api/forms/:id/status", requireUser, async (req, res, next) => {
 app.post("/api/public/forms/:token/submit", async (req, res, next) => {
   try {
     const forms = await readJson(formsFile, []);
-    const form = forms.find(f => f.token === req.params.token && f.status === "active");
+    const form = forms.find(f => (f.publicToken || f.token) === req.params.token && f.status === "active");
     if (!form) { res.status(404).json({ error: "表单不存在或已关闭" }); return; }
     const payload = sanitizeSubmissionPayload(req.body || {}, form.fields);
     const submissions = await readJson(formSubmissionsFile, []);
     const now = new Date().toISOString();
     const sub = {
       id: crypto.randomUUID(), formId: form.id, demoId: form.demoId,
-      data: payload, ip: getClientIp(req), createdAt: now
+      payload: payload, ip: getClientIp(req), createdAt: now
     };
     submissions.unshift(sub);
     await writeJson(formSubmissionsFile, submissions.slice(0, 5000));

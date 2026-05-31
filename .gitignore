@@ -63,4 +63,7 @@ artifacts/
 *_fixed.js
 *_backup.js
 _*.cjs
-_*.mjs
+_*.mjs# Temp/baseline/test files
+temp_baseline/
+web/test-inject.cjs
+server/data/

@@ -1,4 +1,7 @@
-﻿export function createHostingCapabilities(config = {}) {
+import { profileUsesSupabase, isSupportedSingleServiceSsr } from "./runtime-service.js";
+
+export function createHostingCapabilities(config = {}) {
+
   const runtimeEnabled = Boolean(config.runtimeEnabled);
   const nodeRuntimeEnabled = runtimeEnabled && Boolean(config.runtimeNodeEnabled);
   const demoDatabaseReady = Boolean(config.demoDatabaseReady);
@@ -311,11 +314,9 @@ function isFrontendBuildType(type) {
   return type === "source";
 }
 
-// isSupportedSingleServiceSsr imported from runtime-service.js
 
 function hasSupabaseProject(inspection = {}) {
   return profileUsesSupabase(inspection.projectProfile || {}) || inspection.externalBackend?.provider === "supabase";
 }
 
-// profileUsesSupabase imported from runtime-service.js
 

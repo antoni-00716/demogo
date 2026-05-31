@@ -42,7 +42,7 @@ export function createContentReviewWrappers(deps) {
   }
 
   function defaultContentReviewResolutionStatus(status) {
-    if (status === "failed") return "pending_review";
+    if (status === "failed" || status === "blocked" || status === "review_required") return "pending_review";
     if (status === "review") return "pending_review";
     return "auto_cleared";
   }
@@ -139,7 +139,7 @@ export function createContentReviewWrappers(deps) {
 
   function attachContentReviewToInspection(inspection, review) {
     if (!inspection) return inspection;
-    const blocked = review?.status === "failed" || review?.status === "review";
+    const blocked = review?.status === "failed" || review?.status === "review" || review?.status === "blocked" || review?.status === "review_required";
     return {
       ...inspection,
       contentReview: publicAdminContentReview(review),
@@ -179,14 +179,14 @@ export function createContentReviewWrappers(deps) {
 
   function contentReviewResolutionStatus(review) {
     if (review?.resolutionStatus) return normalizeContentReviewResolutionStatus(review.resolutionStatus) || "pending_review";
-    if (review?.status === "failed") return "pending_review";
+    if (review?.status === "failed" || review?.status === "blocked" || review?.status === "review_required") return "pending_review";
     if (review?.status === "review") return "pending_review";
     return "auto_cleared";
   }
 
   function normalizeContentReviewResolutionStatus(value) {
     const v = String(value || "").trim().toLowerCase();
-    const valid = ["pending_review", "auto_cleared", "approved", "rejected"];
+    const valid = ["pending_review", "auto_cleared", "approved", "rejected", "blocked", "passed", "confirmed_violation"];
     return valid.includes(v) ? v : "";
   }
 

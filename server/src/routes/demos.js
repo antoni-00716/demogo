@@ -1,7 +1,8 @@
-// DemoGo v0.9.3 - Demo management routes (extracted from server.js)
+﻿// DemoGo v0.9.3 - Demo management routes (extracted from server.js)
 // Covers: GET/POST /api/demos/* (user-facing demo CRUD + runtime management)
 
 import { loadAllDemos, findUserDemo, saveAllDemos, saveAllDemosWithLock } from "../lib/demo-helpers.js";
+import path from "node:path";
 import { normalizeCustomSlug, canCustomizeSlug, isReservedSlug, isSlugClaimedByDemo, isExpired } from "../lib/slug-utils.js";
 
 export function registerDemosRoutes(app, deps) {
@@ -27,7 +28,7 @@ export function registerDemosRoutes(app, deps) {
     createApplicationReadiness,
     publicRuntimeEnv,
     publicDemoDatabase, resetDemoDatabase,
-    fs: fsPromises,
+    fs,
     path: pathModule,
   } = deps;
 
@@ -189,7 +190,7 @@ export function registerDemosRoutes(app, deps) {
     }
 
     await stopRuntime(demo.slug);
-    await deleteDemoFiles(demo);
+    await deleteDemoFiles(demo.slug);
     demos[demoIndex] = {
       ...demo,
       status: "deleted",
@@ -439,28 +440,6 @@ export function registerDemosRoutes(app, deps) {
   }
 });
 
-  // --- POST /api/demos/:id/update ---
-  app.post("/api/demos/:id/update", requireUser, uploadProjectArchive, async (req, res, next) => {
-  const uploadedFile = req.file;
-  const user = req.user;
-  const clientIp = getClientIp(req);
-
-  if (!uploadedFile) {
-    res.status(400).json({ error: "请上传 .zip、.tar.gz 或 .tgz 项目包" });
-    return;
-  }
-
-  try {
-    res.json(await performUpdateDeployment({
-      demoId: req.params.id,
-      uploadedFile,
-      user,
-      clientIp
-    }));
-  } catch (error) {
-    next(error);
-  }
-});
 
   // --- POST /api/demos/:id/runtime/restart ---
   app.post("/api/demos/:id/runtime/restart", requireUser, async (req, res, next) => {

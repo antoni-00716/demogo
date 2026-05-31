@@ -1,6 +1,8 @@
 import { plans } from "../config.js";
+import { isExpired as defaultIsExpired } from "../lib/slug-utils.js";
 
-export function calculateQuota(user, allDemos, isExpired) {
+export function calculateQuota(user, allDemos, _isExpired) {
+  const isExpired = typeof _isExpired === "function" ? _isExpired : defaultIsExpired;
   const plan = plans[user.plan || "free"] || plans.free;
   const userDemos = allDemos.filter((demo) => demo.userId === user.id);
   const liveDemos = userDemos.filter((demo) => demo.status === "published" && !isExpired(demo));
@@ -26,8 +28,9 @@ export function calculateQuota(user, allDemos, isExpired) {
 }
 
 export function getDeployEvents(demo) {
-  if (Array.isArray(demo.deployEvents) && demo.deployEvents.length) {
-    return demo.deployEvents.filter((event) => event?.at);
+  const events = demo.deployEvents || demo.deploymentEvents;
+  if (Array.isArray(events) && events.length) {
+    return events.filter((event) => event?.at || event?.createdAt);
   }
 
   return demo.createdAt ? [{ type: "create", at: demo.createdAt }] : [];

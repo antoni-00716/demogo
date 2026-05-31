@@ -1,3 +1,6 @@
+﻿// DemoGo v0.9.3 - User-facing deploy event summaries
+// Aggregates deployment events across user demos for display
+
 import { plans } from "../config.js";
 import { getDeployEvents, planName } from "./quota-service.js";
 
@@ -7,13 +10,13 @@ export function userDeployEvents(user, demos, options = {}) {
   const userDemos = demos.filter((demo) => demo.userId === user.id);
   const events = userDemos.flatMap((demo) => {
     return getDeployEvents(demo).map((event, index) => ({
-      id: `${demo.id}-${event.type || "deploy"}-${event.at || index}`,
+      id: `${demo.id}-${event.type || event.eventType || "deploy"}-${event.at || index}`,
       demoId: demo.id,
       demoSlug: demo.slug,
       demoName: demo.name || demo.slug,
       demoStatus: demo.status,
-      type: normalizeDeployEventType(event.type),
-      typeLabel: deployEventLabel(event.type),
+      type: normalizeDeployEventType(event),
+      typeLabel: deployEventLabel(event),
       at: event.at || demo.createdAt,
       version: Number(event.version || index + 1),
       publicUrl: demo.publicUrl || null
@@ -44,10 +47,20 @@ function startOfCurrentMonth() {
   return date;
 }
 
-function normalizeDeployEventType(type) {
-  return type === "update" ? "update" : "create";
+function normalizeDeployEventType(event) {
+  // Support both old job-style (type field) and new step-style (detail.action)
+  if (event && typeof event === "object") {
+    if (event.type === "update" || event.detail?.action === "update") return "update";
+    return "create";
+  }
+  return event === "update" ? "update" : "create";
 }
 
-function deployEventLabel(type) {
-  return type === "update" ? "更新 Demo" : "发布 Demo";
+function deployEventLabel(event) {
+  // Support both old job-style (type field) and new step-style (detail.action)
+  if (event && typeof event === "object") {
+    if (event.type === "update" || event.detail?.action === "update") return "更新 Demo";
+    return "发布 Demo";
+  }
+  return event === "update" ? "更新 Demo" : "发布 Demo";
 }

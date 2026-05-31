@@ -3,6 +3,7 @@ import crypto from "node:crypto";
 
 export function createDeploymentJobService(deps) {
   const { readJson, writeJson, deploymentJobsFile, deploymentEventsFile } = deps;
+  const handlerRegistry = { processCreateJob: null, processUpdateJob: null };
 
   // --- Deployment steps ---
 
@@ -120,6 +121,7 @@ export function createDeploymentJobService(deps) {
       inspection: job.inspection || job.result?.inspection || null,
       contentReview: job.contentReview || job.result?.contentReview || null,
       error: job.error || null,
+      diagnosis: job.diagnosis || null,
       createdAt: job.createdAt,
       updatedAt: job.updatedAt,
       startedAt: job.startedAt || null,
@@ -150,6 +152,7 @@ export function createDeploymentJobService(deps) {
       contentReview: job.contentReview || job.result?.contentReview || null,
       steps: Array.isArray(job.steps) ? job.steps : [],
       error: job.error || null,
+      diagnosis: job.diagnosis || null,
       createdAt: job.createdAt,
       updatedAt: job.updatedAt,
       startedAt: job.startedAt || null,
@@ -247,10 +250,31 @@ export function createDeploymentJobService(deps) {
       startedAt: new Date().toISOString()
     });
     try {
-      // The actual deployment execution is triggered by the caller
+      let result;
+      if (job.action === "update" && handlerRegistry.processUpdateJob) {
+        result = await handlerRegistry.processUpdateJob(job);
+      } else if (handlerRegistry.processCreateJob) {
+        result = await handlerRegistry.processCreateJob(job);
+      }
+      if (result) {
+          markDeploymentStep(job.steps, "success", "success", "试用链接已生成。");
+          const steps = completeDeploymentSteps(job.steps || [], { demoId: result.id || job.demoId });
+        await appendDeploymentEvents(steps);
+        await updateDeploymentJob(jobId, {
+          status: "success",
+          statusLabel: "已生成",
+          message: "试用链接已生成。",
+          result,
+          steps,
+          inspection: result.inspection || null,
+          contentReview: result.contentReview || null,
+          finishedAt: new Date().toISOString()
+        });
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : "发布失败";
       const events = error.deploymentEvents || await readDeploymentEventsForDeployment(jobId);
+      const diagnosis = error.inspection?.failureDiagnosis || error.diagnosis || null;
       await updateDeploymentJob(jobId, {
         status: "failed",
         statusLabel: "生成失败",
@@ -259,7 +283,8 @@ export function createDeploymentJobService(deps) {
         finishedAt: new Date().toISOString(),
         steps: events?.length ? events : markJobStepsFailed(job.steps, message),
         inspection: error.inspection || job.inspection || null,
-        contentReview: error.contentReview || job.contentReview || null
+        contentReview: error.contentReview || job.contentReview || null,
+        diagnosis
       });
     }
   }
@@ -269,6 +294,7 @@ export function createDeploymentJobService(deps) {
     appendDeploymentEvents, readDeploymentEventsForDemo, readDeploymentEventsForDeployment,
     sanitizeDeploymentJob, deploymentJobStatusLabel, publicDeploymentJob, markJobStepsFailed,
     saveDeploymentJob, updateDeploymentJob, findDeploymentJob,
-    createDeploymentJob, runDeploymentJob
+    createDeploymentJob, runDeploymentJob,
+    setHandlers: (h) => { if (h) Object.assign(handlerRegistry, h); }
   };
 }

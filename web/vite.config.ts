@@ -1,13 +1,40 @@
-import { resolve } from "node:path";
-import { defineConfig } from "vite";
+﻿import { resolve } from "node:path";
+import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 
+function stripSecureCookies(): Plugin {
+  return {
+    name: "strip-secure-cookies",
+    configureServer(server) {
+      server.middlewares.use((_req, res, next) => {
+        const orig = res.setHeader.bind(res);
+        res.setHeader = function (name, value) {
+          if (name.toLowerCase() === "set-cookie") {
+            const strip = (s: string) => s.replace(/;\s*Secure/gi, "").replace(/;\s*SameSite=\w+/gi, "");
+            if (typeof value === "string") value = strip(value);
+            else if (Array.isArray(value)) value = value.map(strip);
+          }
+          return orig(name, value);
+        };
+        next();
+      });
+    }
+  };
+}
+
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), stripSecureCookies()],
   server: {
     proxy: {
-      "/api": "http://127.0.0.1:3001",
-      "/d": "http://127.0.0.1:3001"
+      "/api": {
+        target: "http://127.0.0.1:3001",
+        changeOrigin: true,
+        cookieDomainRewrite: { "*": "" }
+      },
+      "/d": {
+        target: "http://127.0.0.1:3001",
+        changeOrigin: true
+      }
     }
   },
   build: {

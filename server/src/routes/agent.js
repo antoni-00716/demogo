@@ -6,6 +6,7 @@
     uploadProjectArchive,
     handleCreateDeployment,
     handleUpdateDeployment,
+    getClientIp,
   } = deps;
 
   // --- /api/agent/project/:id ---
@@ -40,6 +41,8 @@
 
   // --- /api/agent/update ---
   app.post("/api/agent/update", requireAgentToken, uploadProjectArchive, async (req, res, next) => {
-    return handleUpdateDeployment(req, res, next, { actor: "agent" });
+    const demoRef = req.body?.demoId || req.body?.id || "";
+    if (!demoRef) { res.status(400).json({ error: "请提供要更新的项目ID或链接" }); return; }
+    return handleUpdateDeployment(req, res, next, { actor: "agent", demoRef });
   });
 }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useReducer, useState, type DragEvent, type FormEvent } from "react";
+﻿import { useCallback, useEffect, useReducer, useState, type DragEvent, type FormEvent } from "react";
 import { useAppStore } from "../stores/appStore";
 import { deployReducer, createInitialDeployState } from "./dashboard/deployReducer";
 import { getAgentToken, getMe, logout, resetAgentToken } from "../api/auth";
@@ -144,6 +144,7 @@ export function UserDashboard() {
     return () => {
       mounted = false;
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- zustand setters have stable references
   }, []);
 
   async function refreshDemos(preferredDemoId = selectedDemoId) {
@@ -625,8 +626,8 @@ function Sidebar({
   const items: Array<[DashboardView, string]> = [
     ["overview", "工作台"],
     ["upload", "生成新链接"],
-    ["projects", "我的项目"],
-    ["agent", "AI 帮我发布"],
+    ["projects", "我的作品"],
+    ["agent", "让 AI 帮我"],
     ["plan", "套餐与额度"],
     ["history", "生成记录"],
     ["feedback", "反馈问题"]
@@ -649,11 +650,11 @@ function Sidebar({
 }
 
 function dashboardViewTitle(view: DashboardView) {
-  if (view === "agent") return "AI 帮我发布";
+  if (view === "agent") return "让 AI 帮我";
   const titles: Record<Exclude<DashboardView, "agent">, string> = {
     overview: "工作台",
     upload: "生成新链接",
-    projects: "我的项目",
+    projects: "我的作品",
     plan: "套餐与额度",
     history: "生成记录",
     feedback: "反馈问题"
@@ -764,7 +765,7 @@ function OverviewView({
         </div>
         <div className="focus-item">
           <span>下一步建议</span>
-          <strong>{demos.length ? "复制链接发给试用对象" : "上传项目包或让 AI 发布"}</strong>
+          <strong>{demos.length ? "复制链接发给别人试用" : "上传作品或让 AI 帮你"}</strong>
         </div>
       </div>
       <div className="dashboard-project-workspace">
@@ -792,7 +793,7 @@ function QuickCreatePanel({ onCreate }: { onCreate: () => void }) {
     <Card className="panel quick-create-panel">
       <div>
         <h2>下一步做什么</h2>
-        <p>如果项目已经在 AI 工具里做好，优先让 AI 直接发布；如果已经有项目包，就从这里上传。</p>
+        <p>如果作品已经在 AI 工具里做好了，优先让 AI 直接发布；如果已经有文件包，就从这里上传。</p>
       </div>
       <Button variant="primary" onClick={onCreate}>开始上传</Button>
     </Card>
@@ -1164,7 +1165,7 @@ function DemoList({
     <Card className="panel project-list-panel" id="demos">
       <div className="panel-head">
         <div>
-          <h2>我的项目</h2>
+          <h2>我的作品</h2>
           <p>每个项目都有一个试用链接。查看详情后可以复制、更新、下线、恢复、删除，也能看报名/留言和生成记录。</p>
         </div>
         <Button onClick={onCreate}>生成新链接</Button>
@@ -2516,7 +2517,7 @@ function DeployHistory({
               {events.slice(0, 8).map((event) => (
                 <tr key={event.id}>
                   <td>{formatDate(event.at)}</td>
-                  <td>{(event as any).name || event.demoSlug}</td>
+                  <td>{event.demoName || event.demoSlug}</td>
                   <td>{event.typeLabel}</td>
                   <td>V{event.version || 1}</td>
                 </tr>

@@ -3,11 +3,19 @@ import { join as pathJoin } from "node:path";
 import { dataDir, publicBaseUrl, plans } from "../config.js";
 import { readDataFile, writeDataFile } from "../db/mysql-store.js";
 import { isExpired, platformHost } from "./slug-utils.js";
-import { isUnsafeExternalSecretKey, externalBackendEnvValues } from "../services/external-backend-service.js";
-import { demoDatabaseEnv } from "../services/demo-database-service.js";
-
+import { createExternalBackendConfigStatus, isUnsafeExternalSecretKey, externalBackendEnvValues, externalBackendEnvKeys, publicExternalBackend } from "../services/external-backend-service.js";
+import { demoDatabaseEnv, publicDemoDatabase } from "../services/demo-database-service.js";
+import { createApplicationReadiness, publicApplicationReadiness } from "../services/application-readiness-service.js";
+import { contentReviewStatusLabel } from "../services/content-review-service.js";
+import { deploySourceLabel } from "./deploy-helpers.js";
 const demosFile = pathJoin(dataDir, "demos.json");
 const usersFile = pathJoin(dataDir, "users.json");
+
+function createHttpError(message, statusCode = 400) {
+  const error = new Error(message);
+  error.statusCode = statusCode;
+  return error;
+}
 
 export function filterAdminDemos(demos, filters) {
   const search = String(filters.search || "").toLowerCase();

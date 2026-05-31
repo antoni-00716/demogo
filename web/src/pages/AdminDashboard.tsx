@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+﻿import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   adminDeleteDemo,
   adminStopDemoRuntime,
@@ -243,8 +243,8 @@ function AdminSidebar({
     ["overview", "今日待处理"],
     ["requests", "升级申请"],
     ["subdomains", "二级域名"],
-    ["demos", "试用项目"],
-    ["runtime", "运行环境"],
+    ["demos", "作品管理"],
+    ["runtime", "运行状态"],
     ["reviews", "内容检查"],
     ["forms", "报名/留言"],
     ["feedback", "用户问题"],
@@ -273,8 +273,8 @@ function adminViewTitle(view: AdminView) {
     overview: "今日待处理",
     requests: "升级申请",
     subdomains: "二级域名",
-    demos: "试用项目",
-    runtime: "运行环境",
+    demos: "作品管理",
+    runtime: "运行状态",
     reviews: "内容检查",
     forms: "报名/留言",
     feedback: "用户问题",
@@ -289,9 +289,9 @@ function adminViewSubtitle(view: AdminView) {
     overview: "先看今天要处理什么，再判断真实试用是否顺畅。",
     requests: "用户申请 Lite 或 Pro 后，在这里直接开通或拒绝。",
     subdomains: "处理 Pro 用户提交的二级域名申请。",
-    demos: "查看试用项目状态、访问量和需要注意的问题，必要时下线或删除。",
-    runtime: "查看 Node.js 运行环境和 MySQL 试用数据库，必要时停止运行实例。",
-    reviews: "查看发布前内容检查结果，重点处理已拦截和待人工确认的项目。",
+    demos: "查看作品状态、访问量和需要注意的问题，必要时下线或删除。",
+    runtime: "查看运行环境和试用数据库状态，必要时停止运行实例。",
+    reviews: "查看发布前内容检查结果，重点处理已拦截和待人工确认的内容。",
     forms: "查看用户通过 DemoGo 收到的报名、预约和留言记录。",
     feedback: "跟进真实试用中的问题，标记处理状态。",
     users: "查看用户套餐、在线试用项目和注册时间。",
@@ -356,14 +356,14 @@ function AdminOpsHero({
     ["用户问题", openFeedback, "待跟进"],
     ["内容检查", riskReviews, "待处理"],
     ["报名/留言", metrics.activeForms || forms.length || 0, "收集中"],
-    ["在线试用项目", metrics.liveDemos || 0, "试用中"]
+    ["在线作品", metrics.liveDemos || 0, "试用中"]
   ];
   return (
     <section className="admin-ops-hero">
       <div>
         <Badge tone="success">运营工作台</Badge>
         <h2>今天要处理什么，先在这里看清楚。</h2>
-        <p>升级申请、用户问题、内容检查和异常项目集中到一个入口，运营人员不用在多个页面里找线索。</p>
+        <p>升级申请、用户问题、内容检查和异常作品集中到一个入口，运营人员不用在多个页面里找线索。</p>
       </div>
       <div className="admin-pending-list">
         {pendingItems.map(([label, value, note]) => (
@@ -385,9 +385,9 @@ function AdminTrialFunnel({ metrics }: { metrics: AdminMetrics }) {
     ["首页访问", funnel.homeVisits || 0, "看到产品价值"],
     ["注册意向", funnel.registerStarts || 0, "进入注册页"],
     ["注册成功", funnel.registerSuccesses || 0, "创建账号"],
-    ["开始上传", funnel.uploadStarts || 0, "进入发布流程"],
-    ["发布成功", funnel.deploySuccesses || metrics.deploySuccesses || 0, "拿到试用链接"],
-    ["发布失败", funnel.deployFailures || metrics.deployFailures || 0, "需要修复"]
+    ["开始上传", funnel.uploadStarts || 0, "进入生成流程"],
+    ["发布成功", funnel.deploySuccesses || metrics.deploySuccesses || 0, "拿到链接"],
+    ["发布失败", funnel.deployFailures || metrics.deployFailures || 0, "需要处理"]
   ];
   const sources = [
     ["网页上传", sourceBreakdown.web || 0],
@@ -417,7 +417,7 @@ function AdminTrialFunnel({ metrics }: { metrics: AdminMetrics }) {
       </Card>
       <Card className="panel deploy-source-panel">
         <h2>发布来源</h2>
-        <p className="muted">判断用户更习惯网页上传，还是让 AI 工具直接发布。</p>
+        <p className="muted">判断用户更习惯自己上传，还是让 AI 工具帮忙。</p>
         <div className="source-list">
           {sources.map(([label, value]) => (
             <div key={label}>
@@ -481,7 +481,7 @@ function AdminTaskBoard({
     {
       title: "内容检查",
       count: riskReviews.length,
-      description: "发布前发现的高风险内容要优先处理，避免问题链接被公开传播。",
+      description: "生成链接前发现的高风险内容要优先处理，避免问题链接被公开传播。",
       sample: riskReviews[0] ? `${riskReviews[0].projectName || riskReviews[0].fileName || "-"} · ${riskReviews[0].resolutionStatusLabel || riskReviews[0].statusLabel || riskReviews[0].status}` : "暂无内容风险",
       action: "查看检查",
       view: "reviews",
@@ -497,11 +497,11 @@ function AdminTaskBoard({
       tone: activeForms.length ? "info" : "success"
     },
     {
-      title: "需要关注的项目",
+      title: "需要关注的作品",
       count: riskDemos.length,
       description: "生成失败、访问异常或内容风险，需要运营能快速定位。",
       sample: riskDemos[0] ? `${riskDemos[0].name || riskDemos[0].slug} · ${riskDemos[0].riskSummary?.[0]?.label || demoStatusLabel(riskDemos[0].status)}` : "暂无明显问题",
-      action: "查看项目",
+      action: "查看作品",
       view: "demos",
       tone: riskDemos.length ? "info" : "success"
     }
@@ -549,8 +549,8 @@ function AdminOpsSummary({
 }) {
   const stats = [
     ["注册用户", metrics.users || users.length || 0, "观察试用增长"],
-    ["在线项目", metrics.liveDemos || 0, "正在被打开"],
-    ["AI 发布", metrics.aiDeploys || 0, "AI 工具调用"],
+    ["在线作品", metrics.liveDemos || 0, "正在被打开"],
+    ["AI 生成", metrics.aiDeploys || 0, "AI 工具调用"],
     ["发布失败", metrics.deployFailures || 0, failureReasonNote(metrics.failureReasons)],
     ["报名/留言", metrics.formSubmissions || 0, `${forms.length} 个入口`],
     ["升级申请", requests.filter((item) => item.status === "open").length, "待处理"],
@@ -878,7 +878,7 @@ function AdminDemoList({
         <div className="panel-head">
           <div>
             <h2>试用项目</h2>
-            <p>查看项目状态、访问量和需要注意的问题。具体干预动作放在详情里处理。</p>
+            <p>查看作品状态、访问量和需要注意的问题。具体干预动作放在详情里处理。</p>
           </div>
         </div>
         {!demos.length ? (

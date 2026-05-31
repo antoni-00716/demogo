@@ -1,4 +1,4 @@
-export class ApiError extends Error {
+﻿export class ApiError extends Error {
   status: number;
   payload?: unknown;
 
@@ -51,6 +51,7 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
 
       const response = await fetch(path, {
         ...fetchOptions,
+        credentials: 'include',
         headers,
         signal: controller.signal
       });

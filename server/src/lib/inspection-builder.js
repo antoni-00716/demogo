@@ -1,10 +1,21 @@
-﻿// DemoGo v0.9.3 - Inspection builder functions (extracted from server.js)
+﻿﻿// DemoGo v0.9.3 - Inspection builder functions (extracted from server.js)
 // Enhanced backup: inspection-builder.js.enhanced
 import path from "node:path";
 import fs from "node:fs/promises";
+import { hasSourceProjectIndicators, hasBackendIndicators, hasSsrIndicators, detectSingleHtmlEntry } from "./archive-analyzer.js";
+import { filterAutoHostableFormFields } from "./form-field-utils.js";
+import { classifyProject } from "../services/project-classifier-service.js";
 
 export function createInspectionBuilder(deps) {
-  const { filterAutoHostableFormFields, isSupportedArchiveName, detectArchiveType } = deps;
+  const { isSupportedArchiveName, detectArchiveType, maxExtractedFiles, maxExtractedBytes } = deps;
+
+function formatBytes(bytes) {
+  const value = Number(bytes || 0);
+  if (value >= 1024 * 1024 * 1024) return (value / 1024 / 1024 / 1024).toFixed(1) + "GB";
+  if (value >= 1024 * 1024) return (value / 1024 / 1024).toFixed(1) + "MB";
+  if (value >= 1024) return Math.round(value / 1024) + "KB";
+  return value + "B";
+}
 
 function readZipEntryText(entry) {
   return new Promise((resolve, reject) => {
@@ -225,6 +236,43 @@ function createFixPrompt(context) {
   return parts.join("\n\n");
 }
 
+function detectRuntime(profile, flags) {
+  const needsRuntime = Boolean(flags.hasBackend || flags.hasSsr || profile.type === "node_service" || profile.type === "fullstack_framework");
+  if (!needsRuntime) return null;
+  return {
+    engine: profile.backendFrameworks?.[0]?.code || "node",
+    status: "planned",
+    statusLabel: "????",
+    hasStartScript: Boolean(profile.assessment?.signals?.hasStartScript),
+    requiresDatabase: Boolean(profile.databases?.length),
+    requiresMysql: Boolean(profile.databases?.some((d) => d.code === "mysql")),
+    requiresPostgres: Boolean(profile.databases?.some((d) => d.code === "postgres")),
+    requiresMongo: Boolean(profile.databases?.some((d) => d.code === "mongo")),
+    requiresRedis: false,
+    requiresOtherDatabase: false,
+    requiresWebSocket: false
+  };
+}
+
+function createExternalBackendSummary(profile) {
+  const databases = profile.databases || [];
+  const supabaseDb = databases.find((item) => item.code === "supabase");
+  if (!supabaseDb) return null;
+  const required = (profile.environmentVariables?.required || []);
+  const missingEnv = [];
+  const hasUrl = required.some((k) => /SUPABASE_URL/i.test(k));
+  const hasAnonKey = required.some((k) => /SUPABASE_ANON_KEY/i.test(k));
+  if (hasUrl) missingEnv.push("SUPABASE_URL");
+  if (hasAnonKey) missingEnv.push("SUPABASE_ANON_KEY");
+  return {
+    provider: "supabase",
+    configured: false,
+    status: missingEnv.length ? "missing" : "pending",
+    missingEnv,
+    connectionChecked: false
+  };
+}
+
 function createInspectionSummary(analysis) {
   const hasRootIndex = analysis.paths.includes("index.html");
   const hasDistIndex = analysis.paths.includes("dist/index.html");
@@ -240,6 +288,10 @@ function createInspectionSummary(analysis) {
   const hasBuiltEntry = hasDistIndex || hasBuildIndex || hasOutIndex;
   const status = determineInspectionStatus(analysis, { hasRootIndex, hasDistIndex, hasBuildIndex, hasOutIndex, hasPublicIndex, hasPackageJson, hasBuildScript, hasBackend, hasSsr, singleHtmlEntry });
   const detectedType = detectInspectionType({ hasRootIndex, hasDistIndex, hasBuildIndex, hasOutIndex, hasPublicIndex, hasPackageJson, hasBuildScript, hasSourceIndicators, hasBackend, hasSsr, singleHtmlEntry });
+    const projectProfile = classifyProject(analysis, { detectedType, hasBackend, hasSsr, hasPackageJson, hasBuildScript });
+  const projectAssessment = projectProfile.assessment || null;
+  const externalBackend = createExternalBackendSummary(projectProfile);
+  const runtime = detectRuntime(projectProfile, { hasBackend, hasSsr, hasPackageJson, hasBuildScript });
   const issues = [];
   const suggestions = [];
   const ignoredNames = analysis.ignoredFiles.slice(0, 5);
@@ -308,6 +360,13 @@ function createInspectionSummary(analysis) {
     status,
     canPublish: status === "pass" || status === "warning",
     detectedType,
+    projectProfile,
+    projectCategory: projectProfile.label,
+    projectAssessment,
+    hostingMode: projectAssessment.support.publishMode || "",
+    hostingModeLabel: projectAssessment.projectKindLabel || "",
+    externalBackend,
+    runtime,
     label: inspectionTypeLabel(detectedType),
     summary: inspectionSummary(status, detectedType),
     issues,
@@ -346,6 +405,7 @@ function createInspectionSummary(analysis) {
     }),
     ...createUserFacingInspection({
       status,
+      projectProfile,
       detectedType,
       entryFile,
       singleHtmlEntry,
@@ -461,7 +521,7 @@ function inspectionSummary(status, type) {
 
 function createUserFacingInspection(context) {
   const localApis = context.apiCalls.filter((item) => item.isLocal);
-  const unsupportedNotes = [];
+  const unsupportedNotes = [...(context.projectProfile?.unsupportedReasons || [])];
   const supportNotes = [];
   let userLabel = inspectionTypeLabel(context.detectedType);
   let userSummary = "这个项目可以发布，别人能打开页面。";
@@ -512,6 +572,18 @@ function createUserFacingInspection(context) {
     userSummary = context.issues[0] || "这个项目当前暂不支持发布，请按提示调整后重新上传。";
   }
 
+  let autoFormEnabled = false;
+  let autoFormReason = "";
+  if (context.formFields.length) {
+    const hostable = filterAutoHostableFormFields(context.formFields);
+    if (hostable.length) {
+      autoFormEnabled = true;
+    } else {
+      autoFormEnabled = false;
+      autoFormReason = "检测到页面填写控件，但不像报名、预约或留言表单，已跳过自动表单收集";
+    }
+  }
+
   return {
     userLabel,
     userSummary,
@@ -519,6 +591,8 @@ function createUserFacingInspection(context) {
     userStatusLabel: context.status === "blocked" ? "暂不支持" : "支持",
     supportNotes,
     unsupportedNotes,
+    autoFormEnabled,
+    autoFormReason: autoFormReason || void 0,
     fixPrompt: createFixPrompt(context)
   };
 }
