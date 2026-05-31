@@ -1,21 +1,28 @@
-{
-    "name": "demogo-server",
-    "version": "0.9.3",
-    "private": true,
-    "type": "module",
-    "scripts": {
-        "start": "node src/server.js",
-        "dev": "node --watch src/server.js",
-        "check": "node --check src/server.js && node --check src/config.js && node --check src/middleware/auth.js && node --check src/services/deployment-job-service.js && node --check src/services/content-review-wrapper.js && node --check src/services/application-readiness-service.js && node --check src/services/content-review-service.js && node --check src/services/demo-database-service.js && node --check src/services/external-backend-service.js && node --check src/services/failure-diagnosis-service.js && node --check src/services/hosting-architecture-service.js && node --check src/services/project-classifier-service.js && node --check src/services/runtime-service.js && node --check src/services/quota-service.js && node --check src/services/deploy-event-service.js && node --check src/services/feedback-service.js && node --check src/services/form-service.js && node --check src/services/plan-request-service.js && node --check src/services/user-service.js && node --check src/db/mysql.js && node --check src/db/mysql-store.js && node --check src/db/migrate-json-to-mysql.js && node --check src/db/verify-migration.js && node --check src/tests/smoke-test.js && node --check src/lib/slug-utils.js && node --check src/lib/demo-helpers.js && node --check src/routes/demos.js && node --check src/routes/subdomain.js && node --check src/routes/admin.js && node --check src/routes/deploy.js && node --check src/routes/auth.js && node --check src/routes/agent.js && node --check src/routes/misc.js && node --check src/routes/forms.js && node --check src/routes/feedback.js && node --check src/routes/plan-upgrade.js && node --check src/lib/security-rules.js && node --check src/lib/archive-analyzer.js && node --check src/lib/inspection-builder.js && node --check src/services/build-service.js && node --check src/lib/trial-log.js && node --check src/lib/request-utils.js && node --check src/lib/audit-log.js && node --check src/lib/data-access.js && node --check src/services/trial-analytics-service.js",
-        "test:smoke": "node src/tests/smoke-test.js"
-    },
-    "dependencies": {
-        "cookie-parser": "^1.4.7",
-        "express": "^4.19.2",
-        "multer": "^2.0.2",
-        "mysql2": "^3.22.3",
-        "nodemailer": "^6.10.1",
-        "tar": "^7.5.15",
-        "unzipper": "^0.12.3"
-    }
+﻿{
+    "name":  "demogo-server",
+    "version":  "0.9.4",
+    "private":  true,
+    "type":  "module",
+    "scripts":  {
+                    "dev":  "node --watch src/server.js",
+                    "check":  "node --check src/server.js \u0026\u0026 node --check src/config.js \u0026\u0026 node --check src/middleware/auth.js \u0026\u0026 node --check src/services/deployment-job-service.js \u0026\u0026 node --check src/services/content-review-wrapper.js \u0026\u0026 node --check src/services/application-readiness-service.js \u0026\u0026 node --check src/services/content-review-service.js \u0026\u0026 node --check src/services/demo-database-service.js \u0026\u0026 node --check src/services/external-backend-service.js \u0026\u0026 node --check src/services/failure-diagnosis-service.js \u0026\u0026 node --check src/services/hosting-architecture-service.js \u0026\u0026 node --check src/services/project-classifier-service.js \u0026\u0026 node --check src/services/runtime-service.js \u0026\u0026 node --check src/services/quota-service.js \u0026\u0026 node --check src/services/deploy-event-service.js \u0026\u0026 node --check src/services/feedback-service.js \u0026\u0026 node --check src/services/form-service.js \u0026\u0026 node --check src/services/plan-request-service.js \u0026\u0026 node --check src/services/user-service.js \u0026\u0026 node --check src/db/mysql.js \u0026\u0026 node --check src/db/mysql-store.js \u0026\u0026 node --check src/db/migrate-json-to-mysql.js \u0026\u0026 node --check src/db/verify-migration.js \u0026\u0026 node --check src/tests/smoke-test.js \u0026\u0026 node --check src/lib/slug-utils.js \u0026\u0026 node --check src/lib/demo-helpers.js \u0026\u0026 node --check src/routes/demos.js \u0026\u0026 node --check src/routes/subdomain.js \u0026\u0026 node --check src/routes/admin.js \u0026\u0026 node --check src/routes/deploy.js \u0026\u0026 node --check src/routes/auth.js \u0026\u0026 node --check src/routes/agent.js \u0026\u0026 node --check src/routes/misc.js \u0026\u0026 node --check src/routes/forms.js \u0026\u0026 node --check src/routes/feedback.js \u0026\u0026 node --check src/routes/plan-upgrade.js \u0026\u0026 node --check src/lib/security-rules.js \u0026\u0026 node --check src/lib/archive-analyzer.js \u0026\u0026 node --check src/lib/inspection-builder.js \u0026\u0026 node --check src/services/build-service.js \u0026\u0026 node --check src/lib/trial-log.js \u0026\u0026 node --check src/lib/request-utils.js \u0026\u0026 node --check src/lib/audit-log.js \u0026\u0026 node --check src/lib/data-access.js \u0026\u0026 node --check src/services/trial-analytics-service.js \u0026\u0026 node --check src/lib/password-utils.js \u0026\u0026 node --check src/lib/login-rate-limiter.js \u0026\u0026 node --check src/lib/session-store.js \u0026\u0026 node --check src/lib/deploy-rate-limiter.js \u0026\u0026 node --check src/email/mailer.js \u0026\u0026 node --check src/middleware/request-id.js \u0026\u0026 node --check src/middleware/security.js",
+                    "test":  "node --test src/tests/*.test.mjs",
+                    "test:smoke":  "node src/tests/smoke-test.js",
+                    "test:integration":  "node src/tests/integration-test.mjs",
+                    "start":  "node src/server.js"
+                },
+    "dependencies":  {
+                         "cookie-parser":  "^1.4.7",
+                         "express":  "^4.22.2",
+                         "multer":  "^2.0.2",
+                         "mysql2":  "^3.22.3",
+                         "pino":  "^10.3.1",
+                         "tar":  "^7.5.15",
+                         "unzipper":  "^0.12.3"
+                     },
+    "devDependencies":  {
+                            "archiver":  "^8.0.0",
+                            "form-data":  "^4.0.5",
+                            "jszip":  "^3.10.1"
+                        }
 }

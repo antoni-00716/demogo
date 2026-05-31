@@ -3,6 +3,7 @@ import { execFile } from "node:child_process";
 import { createWriteStream } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import process from "node:process";
 import cookieParser from "cookie-parser";
 import express from "express";
@@ -61,7 +62,9 @@ import {
   uploadDir,
   usageFlushIntervalMs
 } from "./config.js";
+import logger from "./lib/logger.js";
 import { isMysqlConfigured, readDataFile, writeDataFile } from "./db/mysql-store.js";
+import { closePool } from "./db/mysql.js";
 import {
   userDeployEvents
 } from "./services/deploy-event-service.js";
@@ -111,7 +114,7 @@ import {
   createContentReviewError,
   publicContentReview,
   reviewArchiveContent,
-  reviewDirectoryContent
+  reviewDirectoryContent,
 } from "./services/content-review-service.js";
 import {
   createHostingCapabilities,
@@ -142,6 +145,20 @@ import {
   stopExpiredRuntimes,
   stopRuntime
 } from "./services/runtime-service.js";
+import { hashPassword, verifyPassword, hashVerificationCode, createVerifyEmailCode } from "./lib/password-utils.js";
+import { normalizeEmail, createLoginRateLimiter } from "./lib/login-rate-limiter.js";
+import { createSessionStore, setSessionCookie, createAgentTokenRecord, publicAgentToken, verifyAgentToken, parseAgentToken } from "./lib/session-store.js";
+import { createDeployRateLimiter } from "./lib/deploy-rate-limiter.js";
+import { requestIdMiddleware } from "./middleware/request-id.js";
+import { securityHeadersMiddleware } from "./middleware/security.js";
+import { createRateLimiter, createStrictRateLimiter } from "./middleware/rate-limiter.js";
+import { isEmailConfigured, sendVerificationEmail, createSmtpMailer } from "./email/mailer.js";
+import { createAuthMiddleware } from "./middleware/auth.js";
+import { createContentReviewProvider } from "./services/content-review-provider.js";
+import { csrfMiddleware } from "./middleware/csrf.js";
+import { apiVersionMiddleware } from "./middleware/api-version.js";
+import { startCleanupService } from "./services/cleanup-service.js";
+import { registerAgentRoutes } from "./routes/agent.js";
 
 const app = express();
 
@@ -220,6 +237,7 @@ const emailVerificationsFile = path.join(dataDir, "email-verifications.json");
 const subdomainRequestsFile = path.join(dataDir, "subdomain-requests.json");
 const trialEventsFile = path.join(dataDir, "trial-events.json");
 const loginFailureBuckets = new Map();
+
 const loginFailureWindowMs = 10 * 60 * 1000;
 const loginFailureLimit = 5;
 const verificationCodeTtlMs = 10 * 60 * 1000;
@@ -258,9 +276,32 @@ const uploadProjectArchive = [
 ];
 
 app.use("/d/:slug", routeRuntimeDemo);
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
+app.use(securityHeadersMiddleware);
+app.use("/api/auth/login", createStrictRateLimiter({ maxRequests: parseInt(process.env.DEMOGO_LOGIN_RATE_LIMIT || "10") }).middleware);
+app.use("/api/auth/send-verification-code", createStrictRateLimiter({ maxRequests: parseInt(process.env.DEMOGO_VERIFY_RATE_LIMIT || "3") }).middleware);
+app.use("/api", createRateLimiter({ maxRequests: parseInt(process.env.DEMOGO_API_RATE_LIMIT || "60") }).middleware);
+
+// --- Extracted module initializations ---
+const loginRateLimiter = createLoginRateLimiter({ loginFailureLimit, loginFailureWindowMs });
+const checkLoginFailureRate = loginRateLimiter.checkLoginFailureRate;
+const recordLoginFailure = loginRateLimiter.recordLoginFailure;
+const clearLoginFailures = loginRateLimiter.clearLoginFailures;
+const sessionStore = createSessionStore({ readJson, writeJson, sessionsFile });
+const createSession = sessionStore.createSession;
+const deployRateLimiter = createDeployRateLimiter({ readJson, auditLogsFile, deployRateLimit, deployRateWindowMs });
+const checkDeployRateLimit = deployRateLimiter.checkDeployRateLimit;
+const verifyEmailCodeModule = createVerifyEmailCode({ readJson, writeJson, emailVerificationsFile, verificationMaxAttempts });
+const verifyEmailCode = verifyEmailCodeModule.verifyEmailCode;
+const markEmailCodeUsed = verifyEmailCodeModule.markEmailCodeUsed;
+const mailer = createSmtpMailer({ smtpHost, smtpPort, smtpUser, smtpPass, smtpFrom, smtpSecure, publicBaseUrl });
+const sendSmtpMail = mailer.sendSmtpMail;
+
+app.use(requestIdMiddleware);
+app.use(express.json({ limit: "1mb" }));
+app.use(express.urlencoded({ extended: false, limit: "1mb" }));
 app.use(cookieParser());
+app.use(csrfMiddleware);
+app.use(apiVersionMiddleware);
 app.use("/d", express.static(demoRoot));
 
 app.post("/api/trial-events", async (req, res, next) => {
@@ -286,6 +327,7 @@ app.post("/api/trial-events", async (req, res, next) => {
   }
 });
 
+// ===== STATIC FILE SERVING =====
 app.get("/d/:slug", async (req, res, next) => {
   try {
     if (await redirectDemoAlias(req, res)) return;
@@ -308,6 +350,7 @@ app.get("/d/:slug/*", async (req, res, next) => {
   }
 });
 
+// ===== HEALTH & CAPABILITIES =====
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true, service: "demogo-server", version: serviceVersion });
 });
@@ -348,12 +391,13 @@ async function routeRuntimeDemo(req, res, next) {
   }
 }
 
+// ===== AUTH ROUTES =====
 app.get("/api/auth/register-options", (_req, res) => {
   res.json({
     emailVerificationEnabled,
-    emailConfigured: isEmailConfigured(),
+    emailConfigured: isEmailConfigured({ smtpHost, smtpPort, smtpUser, smtpPass, smtpFrom }),
     emailRequired: emailVerificationEnabled,
-    canRegister: !emailVerificationEnabled || isEmailConfigured()
+    canRegister: !emailVerificationEnabled || isEmailConfigured({ smtpHost, smtpPort, smtpUser, smtpPass, smtpFrom })
   });
 });
 
@@ -363,7 +407,7 @@ app.post("/api/auth/send-verification-code", async (req, res, next) => {
       res.json({ ok: true, message: "当前未开启邮箱验证码。" });
       return;
     }
-    if (!isEmailConfigured()) {
+    if (!isEmailConfigured({ smtpHost, smtpPort, smtpUser, smtpPass, smtpFrom })) {
       res.status(503).json({ error: "邮箱验证码暂未配置，请联系 DemoGo 管理员。" });
       return;
     }
@@ -403,7 +447,7 @@ app.post("/api/auth/send-verification-code", async (req, res, next) => {
       lastSentAt: new Date(now).toISOString(),
       expiresAt: new Date(now + verificationCodeTtlMs).toISOString()
     };
-    await sendVerificationEmail(email, code);
+    await sendVerificationEmail(email, code, { sendSmtpMail });
     await writeJson(emailVerificationsFile, [
       record,
       ...records.filter((item) => !(item.email === email && item.purpose === "register" && !item.usedAt)).slice(0, 999)
@@ -416,15 +460,15 @@ app.post("/api/auth/send-verification-code", async (req, res, next) => {
 
 await expireDemos();
 setInterval(() => {
-  expireDemos().catch((error) => console.error("Failed to expire demos", error));
+  expireDemos().catch((error) => logger.error({ err: error }, "Failed to expire demos"));
 }, 60 * 60 * 1000);
 
 setInterval(() => {
-  flushUsageStats().catch((error) => console.error("Failed to flush usage stats", error));
+  flushUsageStats().catch((error) => logger.error({ err: error }, "Failed to flush usage stats"));
 }, usageFlushIntervalMs);
 
 setInterval(() => {
-  stopExpiredRuntimes().catch((error) => console.error("Failed to stop expired runtimes", error));
+  stopExpiredRuntimes().catch((error) => logger.error({ err: error }, "Failed to stop expired runtimes"));
 }, 60 * 1000);
 
 app.get("/api/demo-track/:slug", async (req, res) => {
@@ -457,7 +501,7 @@ app.post("/api/auth/register", async (req, res, next) => {
     }
 
     if (emailVerificationEnabled) {
-      if (!isEmailConfigured()) {
+      if (!isEmailConfigured({ smtpHost, smtpPort, smtpUser, smtpPass, smtpFrom })) {
         res.status(503).json({ error: "邮箱验证码暂未配置，请联系 DemoGo 管理员。" });
         return;
       }
@@ -594,6 +638,7 @@ app.post("/api/agent-token", requireUser, async (req, res, next) => {
   }
 });
 
+// ===== AGENT TOKEN & PROJECT =====
 app.get("/api/agent/token-check", requireAgentToken, async (req, res) => {
   res.json({
     ok: true,
@@ -625,6 +670,7 @@ app.get("/api/agent/project/:id", requireAgentToken, async (req, res, next) => {
   }
 });
 
+// ===== DEMOS CRUD =====
 app.get("/api/demos", async (req, res, next) => {
   try {
     await flushUsageStats();
@@ -691,6 +737,7 @@ app.get("/api/demos/:id/inspection", requireUser, async (req, res, next) => {
   }
 });
 
+// ===== DEPLOY EVENTS & JOBS =====
 app.get("/api/deploy-events", requireUser, async (req, res, next) => {
   try {
     const demos = await readJson(demosFile, []);
@@ -713,6 +760,7 @@ app.get("/api/deployment-jobs/:id", requireUser, async (req, res, next) => {
   }
 });
 
+// ===== FORMS =====
 app.get("/api/forms", requireUser, async (req, res, next) => {
   try {
     const [forms, submissions] = await Promise.all([
@@ -882,6 +930,7 @@ app.post("/api/forms/:id/status", requireUser, async (req, res, next) => {
   }
 });
 
+// ===== PUBLIC FORM SUBMISSION =====
 app.post("/api/public/forms/:token/submit", async (req, res, next) => {
   try {
     const token = String(req.params.token || "").trim();
@@ -941,6 +990,7 @@ app.post("/api/public/forms/:token/submit", async (req, res, next) => {
   }
 });
 
+// ===== ADMIN ROUTES =====
 app.get("/api/admin/overview", requireAdmin, async (req, res, next) => {
   try {
     await flushUsageStats();
@@ -1366,6 +1416,7 @@ app.post("/api/admin/feedback/:id/status", requireAdmin, async (req, res, next) 
   }
 });
 
+// ===== FEEDBACK =====
 app.post("/api/feedback", requireUser, async (req, res, next) => {
   try {
     const message = String(req.body?.message || "").trim();
@@ -1429,6 +1480,7 @@ app.post("/api/feedback", requireUser, async (req, res, next) => {
   }
 });
 
+// ===== INSPECT & DEPLOY =====
 app.post("/api/inspect", requireUser, uploadProjectArchive, async (req, res, next) => {
   const uploadedFile = req.file;
   if (!uploadedFile) {
@@ -1460,6 +1512,7 @@ app.post("/api/inspect", requireUser, uploadProjectArchive, async (req, res, nex
   }
 });
 
+// ===== ADMIN CONTENT REVIEWS =====
 app.get("/api/admin/content-reviews", requireAdmin, async (req, res, next) => {
   try {
     const reviews = await readJson(contentReviewsFile, []);
@@ -1708,6 +1761,7 @@ app.post("/api/admin/demos/:id/runtime/stop", requireAdmin, async (req, res, nex
   }
 });
 
+// ===== DEMO LIFECYCLE (offline/delete/slug/restore) =====
 app.post("/api/demos/:id/offline", requireUser, async (req, res, next) => {
   try {
     const demos = await readJson(demosFile, []);
@@ -1891,6 +1945,7 @@ app.post("/api/demos/:id/slug", requireUser, async (req, res, next) => {
   }
 });
 
+// ===== SUBDOMAIN REQUESTS =====
 app.get("/api/subdomain-requests", requireUser, async (req, res, next) => {
   try {
     const requests = await readJson(subdomainRequestsFile, []);
@@ -2080,6 +2135,7 @@ app.post("/api/demos/:id/restore", requireUser, async (req, res, next) => {
   }
 });
 
+// ===== DEMO UPDATE =====
 app.post("/api/demos/:id/update", requireUser, uploadProjectArchive, async (req, res, next) => {
   const uploadedFile = req.file;
   const user = req.user;
@@ -2102,6 +2158,7 @@ app.post("/api/demos/:id/update", requireUser, uploadProjectArchive, async (req,
   }
 });
 
+// ===== DEPLOYMENT JOBS (async) =====
 app.post("/api/deployment-jobs", requireUser, uploadProjectArchive, async (req, res, next) => {
   const uploadedFile = req.file;
   if (!uploadedFile) {
@@ -2133,13 +2190,14 @@ app.post("/api/deployment-jobs", requireUser, uploadProjectArchive, async (req, 
     });
     res.status(202).json({ job: publicDeploymentJob(job) });
     runDeploymentJob(job.id).catch((error) => {
-      console.error("Deployment job failed", error);
+      logger.error({ err: error }, "Deployment job failed");
     });
   } catch (error) {
     next(error);
   }
 });
 
+// ===== RUNTIME MANAGEMENT =====
 app.post("/api/demos/:id/runtime/restart", requireUser, async (req, res, next) => {
   try {
     const demos = await readJson(demosFile, []);
@@ -2183,6 +2241,7 @@ app.post("/api/demos/:id/runtime/restart", requireUser, async (req, res, next) =
   }
 });
 
+// ===== RUNTIME ENV CONFIG =====
 app.post("/api/demos/:id/runtime-env", requireUser, async (req, res, next) => {
   try {
     const demos = await readJson(demosFile, []);
@@ -2320,14 +2379,14 @@ app.post("/api/demos/:id/deployment-jobs", requireUser, uploadProjectArchive, as
     });
     res.status(202).json({ job: publicDeploymentJob(job) });
     runDeploymentJob(job.id).catch((error) => {
-      console.error("Deployment job failed", error);
+      logger.error({ err: error }, "Deployment job failed");
     });
   } catch (error) {
     next(error);
   }
 });
 
-app.post("/api/agent/deploy", requireAgentToken, uploadProjectArchive, async (req, res, next) => {
+app.post("/api/agent/demos", requireAgentToken, uploadProjectArchive, async (req, res, next) => {
   return handleCreateDeployment(req, res, next, { actor: "agent" });
 });
 
@@ -2339,6 +2398,7 @@ app.post("/api/agent/update", requireAgentToken, uploadProjectArchive, async (re
   return handleUpdateDeployment(req, res, next, { actor: "agent" });
 });
 
+// ===== USER DEPLOY =====
 app.post("/api/deploy", requireUser, uploadProjectArchive, async (req, res, next) => {
   return handleCreateDeployment(req, res, next, { actor: "user" });
 });
@@ -3190,7 +3250,7 @@ async function performUpdateDeployment({ demoId, uploadedFile, user, clientIp = 
     result.inspection = updatedDemo.inspection;
     if (previousDatabase?.enabled && previousDatabase.databaseName !== nextDatabase?.databaseName) {
       await deleteDemoDatabase(previousDatabase, hostingConfig()).catch((cleanupError) => {
-        console.error("Failed to cleanup old demo database", cleanupError);
+        logger.error({ err: cleanupError }, "Failed to cleanup old demo database");
       });
     }
     demos[demoIndex] = updatedDemo;
@@ -3934,42 +3994,8 @@ async function getUserFromAgentToken(value) {
   return users.find((user) => verifyAgentToken(user, token)) || null;
 }
 
-async function createSession(userId) {
-  const sessions = await readJson(sessionsFile, []);
-  const session = {
-    token: crypto.randomBytes(32).toString("hex"),
-    userId,
-    createdAt: new Date().toISOString(),
-    expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
-  };
-  sessions.push(session);
-  await writeJson(sessionsFile, sessions);
-  return session;
-}
 
-function createAgentTokenRecord() {
-  const id = crypto.randomBytes(6).toString("hex");
-  const secret = crypto.randomBytes(24).toString("base64url");
-  const plainToken = `dmg_${id}_${secret}`;
-  return {
-    plainToken,
-    token: {
-      id,
-      prefix: `dmg_${id}`,
-      secretHash: hashAgentTokenSecret(secret),
-      createdAt: new Date().toISOString()
-    }
-  };
-}
 
-function publicAgentToken(user) {
-  const token = user?.agentToken;
-  return {
-    enabled: Boolean(token?.secretHash),
-    prefix: token?.prefix || "",
-    createdAt: token?.createdAt || null
-  };
-}
 
 function detectDeploySource(req, actor = "user") {
   if (actor !== "agent") return "web";
@@ -4025,69 +4051,11 @@ function extractDemoSlug(value) {
   }
 }
 
-function parseAgentToken(value) {
-  const match = String(value || "").trim().match(/^dmg_([a-f0-9]{12})_([A-Za-z0-9_-]{20,})$/);
-  if (!match) return null;
-  return { id: match[1], secret: match[2] };
-}
 
-function verifyAgentToken(user, token) {
-  const record = user?.agentToken;
-  if (!record?.secretHash || record.id !== token.id) return false;
-  const expected = Buffer.from(record.secretHash, "hex");
-  const actual = Buffer.from(hashAgentTokenSecret(token.secret), "hex");
-  return expected.length === actual.length && crypto.timingSafeEqual(expected, actual);
-}
 
-function hashAgentTokenSecret(secret) {
-  return crypto.createHash("sha256").update(String(secret)).digest("hex");
-}
 
-function setSessionCookie(res, token) {
-  res.cookie("demogo_session", token, {
-    httpOnly: true,
-    sameSite: "lax",
-    maxAge: 30 * 24 * 60 * 60 * 1000
-  });
-}
 
-function normalizeEmail(value) {
-  return String(value || "").trim().toLowerCase();
-}
 
-function loginFailureKey(email, ip) {
-  return `${email || "unknown"}|${ip || "unknown"}`;
-}
-
-function checkLoginFailureRate(email, ip) {
-  const key = loginFailureKey(email, ip);
-  const now = Date.now();
-  const current = loginFailureBuckets.get(key);
-  if (!current || current.resetAt <= now) {
-    loginFailureBuckets.delete(key);
-    return { allowed: true, used: 0, limit: loginFailureLimit };
-  }
-  return {
-    allowed: current.count < loginFailureLimit,
-    used: current.count,
-    limit: loginFailureLimit
-  };
-}
-
-function recordLoginFailure(email, ip) {
-  const key = loginFailureKey(email, ip);
-  const now = Date.now();
-  const current = loginFailureBuckets.get(key);
-  if (!current || current.resetAt <= now) {
-    loginFailureBuckets.set(key, { count: 1, resetAt: now + loginFailureWindowMs });
-    return;
-  }
-  loginFailureBuckets.set(key, { ...current, count: current.count + 1 });
-}
-
-function clearLoginFailures(email, ip) {
-  loginFailureBuckets.delete(loginFailureKey(email, ip));
-}
 
 function filterAdminDemos(demos, filters) {
   const search = String(filters.search || "").toLowerCase();
@@ -4801,20 +4769,6 @@ function getArchivedDemoDir(slug) {
   return path.join(dataDir, "offline-demos", slug);
 }
 
-async function checkDeployRateLimit(user, ip) {
-  const logs = await readJson(auditLogsFile, []);
-  const cutoff = Date.now() - deployRateWindowMs;
-  const recent = logs.filter((log) => {
-    if (!["deploy_demo", "update_demo", "agent_deploy_demo", "agent_update_demo"].includes(log.action)) return false;
-    if (new Date(log.createdAt).getTime() < cutoff) return false;
-    return log.actorId === user.id || log.ip === ip;
-  });
-  return {
-    allowed: recent.length < deployRateLimit,
-    used: recent.length,
-    limit: deployRateLimit
-  };
-}
 
 async function writeAuditLog(log) {
   const logs = await readJson(auditLogsFile, []);
@@ -4915,203 +4869,11 @@ function getClientIp(req) {
     .trim();
 }
 
-async function hashPassword(password) {
-  const salt = crypto.randomBytes(16).toString("hex");
-  const hash = await scrypt(password, salt);
-  return `${salt}:${hash}`;
-}
 
-async function verifyPassword(password, storedHash) {
-  const [salt, expectedHash] = String(storedHash || "").split(":");
-  if (!salt || !expectedHash) return false;
-  const actualHash = await scrypt(password, salt);
-  return crypto.timingSafeEqual(Buffer.from(actualHash, "hex"), Buffer.from(expectedHash, "hex"));
-}
 
-function scrypt(password, salt) {
-  return new Promise((resolve, reject) => {
-    crypto.scrypt(password, salt, 64, (error, key) => {
-      if (error) reject(error);
-      else resolve(key.toString("hex"));
-    });
-  });
-}
 
-function isEmailConfigured() {
-  return Boolean(smtpHost && smtpPort && smtpUser && smtpPass && smtpFrom);
-}
 
-async function hashVerificationCode(code, salt) {
-  return scrypt(`${String(code || "").trim()}:${salt}`, salt);
-}
 
-async function verifyEmailCode(email, code, purpose = "register") {
-  const normalizedCode = String(code || "").trim();
-  if (!/^\d{6}$/.test(normalizedCode)) return { ok: false, error: "请输入邮件里的 6 位验证码。" };
-  const records = await readJson(emailVerificationsFile, []);
-  const index = records.findIndex((item) => item.email === email && item.purpose === purpose && !item.usedAt);
-  const record = index === -1 ? null : records[index];
-  if (!record) return { ok: false, error: "请先获取邮箱验证码。" };
-  if (new Date(record.expiresAt).getTime() <= Date.now()) return { ok: false, error: "验证码已过期，请重新获取。" };
-  if (Number(record.attempts || 0) >= verificationMaxAttempts) return { ok: false, error: "验证码错误次数过多，请重新获取。" };
-
-  const expectedHash = await hashVerificationCode(normalizedCode, record.salt);
-  if (expectedHash !== record.codeHash) {
-    records[index] = { ...record, attempts: Number(record.attempts || 0) + 1, lastAttemptAt: new Date().toISOString() };
-    await writeJson(emailVerificationsFile, records);
-    return { ok: false, error: "验证码不正确，请检查邮件后重新输入。" };
-  }
-  return { ok: true, record };
-}
-
-async function markEmailCodeUsed(email, code, purpose = "register") {
-  const normalizedCode = String(code || "").trim();
-  const records = await readJson(emailVerificationsFile, []);
-  const next = [];
-  for (const item of records) {
-    if (item.email === email && item.purpose === purpose && !item.usedAt) {
-      const hash = await hashVerificationCode(normalizedCode, item.salt);
-      next.push(hash === item.codeHash ? { ...item, usedAt: new Date().toISOString() } : item);
-      continue;
-    }
-    next.push(item);
-  }
-  await writeJson(emailVerificationsFile, next.slice(0, 1000));
-}
-
-async function sendVerificationEmail(to, code) {
-  const subject = "DemoGo 注册验证码";
-  const text = [
-    `你的 DemoGo 注册验证码是：${code}`,
-    "",
-    "验证码 10 分钟内有效。若不是你本人操作，请忽略这封邮件。"
-  ].join("\n");
-  await sendSmtpMail({
-    to,
-    subject,
-    text,
-    html: `<p>你的 DemoGo 注册验证码是：</p><p style="font-size:24px;font-weight:700;letter-spacing:4px;">${code}</p><p>验证码 10 分钟内有效。若不是你本人操作，请忽略这封邮件。</p>`
-  });
-}
-
-async function sendSmtpMail({ to, subject, text, html }) {
-  const tls = await import("node:tls");
-  const net = await import("node:net");
-  let socket = smtpSecure
-    ? tls.connect({ host: smtpHost, port: smtpPort, servername: smtpHost })
-    : net.connect({ host: smtpHost, port: smtpPort });
-  socket.setEncoding("utf8");
-
-  let buffer = "";
-
-  function attachReader(nextSocket) {
-    nextSocket.setEncoding("utf8");
-    nextSocket.on("data", (chunk) => {
-      buffer += chunk;
-    });
-    socket = nextSocket;
-  }
-
-  attachReader(socket);
-
-  function cleanup() {
-    socket.end();
-    socket.destroy();
-  }
-
-  async function readResponse(expected) {
-    const deadline = Date.now() + 15000;
-    while (Date.now() < deadline) {
-      const lines = buffer.split(/\r?\n/).filter(Boolean);
-      const last = lines[lines.length - 1] || "";
-      if (/^\d{3} /.test(last)) {
-        const response = buffer;
-        buffer = "";
-        const code = Number(last.slice(0, 3));
-        if (!expected.includes(code)) throw new Error(`邮件服务器返回异常：${last}`);
-        return response;
-      }
-      await new Promise((resolve) => setTimeout(resolve, 50));
-    }
-    throw new Error("邮件服务器响应超时。");
-  }
-
-  function writeLine(line) {
-    socket.write(`${line}\r\n`);
-  }
-
-  try {
-    await new Promise((resolve, reject) => {
-      socket.once(smtpSecure ? "secureConnect" : "connect", resolve);
-      socket.once("error", reject);
-      socket.setTimeout(20000, () => reject(new Error("连接邮件服务器超时。")));
-    });
-    await readResponse([220]);
-    writeLine(`EHLO ${publicBaseUrl.replace(/^https?:\/\//, "").split("/")[0] || "demogo.cn"}`);
-    await readResponse([250]);
-    if (!smtpSecure) {
-      writeLine("STARTTLS");
-      await readResponse([220]);
-      await new Promise((resolve, reject) => {
-        socket.removeAllListeners("data");
-        const secureSocket = tls.connect({ socket, servername: smtpHost }, resolve);
-        secureSocket.once("error", reject);
-        attachReader(secureSocket);
-      });
-      writeLine(`EHLO ${publicBaseUrl.replace(/^https?:\/\//, "").split("/")[0] || "demogo.cn"}`);
-      await readResponse([250]);
-    }
-    writeLine("AUTH LOGIN");
-    await readResponse([334]);
-    writeLine(Buffer.from(smtpUser).toString("base64"));
-    await readResponse([334]);
-    writeLine(Buffer.from(smtpPass).toString("base64"));
-    await readResponse([235]);
-    writeLine(`MAIL FROM:<${extractEmailAddress(smtpFrom)}>`);
-    await readResponse([250]);
-    writeLine(`RCPT TO:<${to}>`);
-    await readResponse([250, 251]);
-    writeLine("DATA");
-    await readResponse([354]);
-    const message = createSmtpMessage({ to, subject, text, html });
-    socket.write(`${message}\r\n.\r\n`);
-    await readResponse([250]);
-    writeLine("QUIT");
-    await readResponse([221]).catch(() => {});
-  } catch (error) {
-    throw createHttpError(error instanceof Error ? `验证码邮件发送失败：${error.message}` : "验证码邮件发送失败。", 502);
-  } finally {
-    cleanup();
-  }
-}
-
-function createSmtpMessage({ to, subject, text, html }) {
-  const boundary = `demogo-${crypto.randomBytes(8).toString("hex")}`;
-  return [
-    `From: ${formatMailAddress(smtpFrom)}`,
-    `To: <${to}>`,
-    `Subject: =?UTF-8?B?${Buffer.from(subject, "utf8").toString("base64")}?=`,
-    "MIME-Version: 1.0",
-    `Content-Type: multipart/alternative; boundary="${boundary}"`,
-    "",
-    `--${boundary}`,
-    "Content-Type: text/plain; charset=UTF-8",
-    "Content-Transfer-Encoding: base64",
-    "",
-    Buffer.from(text, "utf8").toString("base64"),
-    `--${boundary}`,
-    "Content-Type: text/html; charset=UTF-8",
-    "Content-Transfer-Encoding: base64",
-    "",
-    Buffer.from(html, "utf8").toString("base64"),
-    `--${boundary}--`
-  ].join("\r\n");
-}
-
-function formatMailAddress(value) {
-  const email = extractEmailAddress(value);
-  return value.includes("<") ? value : `<${email}>`;
-}
 
 function extractEmailAddress(value) {
   const match = String(value || "").match(/<([^>]+)>/);

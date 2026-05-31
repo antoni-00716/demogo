@@ -5,39 +5,23 @@
 ```bash
 curl https://demogo.cn/api/health
 curl https://demogo.cn/api/hosting/capabilities
+curl https://demogo.cn/api/auth/register-options
 systemctl status demogo-server --no-pager
 journalctl -u demogo-server -n 100 --no-pager
 ```
 
 ## 数据目录
 
-```text
-/var/lib/demogo/data
-/var/lib/demogo/uploads
-/var/lib/demogo/backups
-/var/www/demogo-preview/d
 ```
-
-## 清理测试数据
-
-使用服务器脚本：
-
-```bash
-cd /tmp
-./server-clean-demogo-data.sh
+/var/lib/demogo/data      平台数据
+/var/lib/demogo/uploads    上传临时文件
+/var/lib/demogo/backups    部署备份
+/var/www/demogo-preview/d  用户试用页面
 ```
-
-清理动作会影响线上数据，执行前必须确认。
 
 ## 回滚
 
-部署脚本会创建备份目录：
-
-```text
-/var/lib/demogo/backups/pre-v<version>-YYYYmmddHHMMSS
-```
-
-回滚：
+备份路径：/var/lib/demogo/backups/pre-v<version>-YYYYmmddHHMMSS
 
 ```bash
 cd /tmp
@@ -46,28 +30,28 @@ cd /tmp
 
 ## 运行环境
 
-Node.js 运行环境依赖 Docker。
-
-上线检查：
-
+Node.js 运行环境依赖 Docker：
 ```bash
 docker --version
 systemctl is-active docker
-curl https://demogo.cn/api/hosting/capabilities
 ```
 
 ## 邮件验证码
 
-SMTP 通过 systemd drop-in 配置，典型文件：
+SMTP 配置：/etc/systemd/system/demogo-server.service.d/email.conf
 
-```text
-/etc/systemd/system/demogo-server.service.d/email.conf
-```
+注意：SMTP_PASS 是 163 授权码，不是邮箱登录密码。
 
 变更后：
-
 ```bash
 systemctl daemon-reload
 systemctl restart demogo-server
-curl https://demogo.cn/api/auth/register-options
+curl https://demogo.cn/api/auth/register-options   # emailVerificationEnabled: true
+```
+
+## 清理测试数据
+
+```bash
+cd /tmp
+./server-clean-demogo-data.sh
 ```

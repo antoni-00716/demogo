@@ -1,4 +1,4 @@
-// DemoGo - Data access helpers (wrappers around mysql-store with JSON fallback)
+﻿// DemoGo - Data access helpers (wrappers around mysql-store with JSON fallback)
 import { readFile, mkdir, writeFile, rename } from "node:fs/promises";
 import { dirname } from "node:path";
 import crypto from "node:crypto";
@@ -21,6 +21,13 @@ export async function writeJson(filePath, value) {
   if (isMysqlConfigured()) {
     const handled = await writeDataFile(filePath, value);
     if (handled) return;
+  }
+  // Backup previous file before overwriting
+  try {
+    const bakFile = filePath + ".bak";
+    await rename(filePath, bakFile);
+  } catch {
+    // No previous file, skip backup
   }
   const tempFile = filePath + "." + crypto.randomBytes(4).toString("hex") + ".tmp";
   await mkdir(dirname(filePath), { recursive: true });
