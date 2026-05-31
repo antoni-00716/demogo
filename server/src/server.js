@@ -295,6 +295,29 @@ const verifyEmailCode = verifyEmailCodeModule.verifyEmailCode;
 const markEmailCodeUsed = verifyEmailCodeModule.markEmailCodeUsed;
 const mailer = createSmtpMailer({ smtpHost, smtpPort, smtpUser, smtpPass, smtpFrom, smtpSecure, publicBaseUrl });
 const sendSmtpMail = mailer.sendSmtpMail;
+const authMiddleware = createAuthMiddleware({
+  getUserFromRequest,
+  getUserFromAgentToken,
+  adminUser,
+  adminPassword,
+  readJson,
+  usersFile,
+  readBearerToken
+});
+const requireUser = authMiddleware.requireUser;
+const requireAgentToken = authMiddleware.requireAgentToken;
+const requireAdmin = authMiddleware.requireAdmin;
+
+// --- Agent route module ---
+registerAgentRoutes(app, {
+  requireAgentToken,
+  readJson, writeJson, demosFile,
+  readDeploymentEventsForDemo, publicUserDemo,
+  uploadProjectArchive,
+  handleCreateDeployment,
+  handleUpdateDeployment,
+  getClientIp
+});
 
 app.use(requestIdMiddleware);
 app.use(express.json({ limit: "1mb" }));
@@ -2386,18 +2409,6 @@ app.post("/api/demos/:id/deployment-jobs", requireUser, uploadProjectArchive, as
   }
 });
 
-app.post("/api/agent/demos", requireAgentToken, uploadProjectArchive, async (req, res, next) => {
-  return handleCreateDeployment(req, res, next, { actor: "agent" });
-});
-
-app.post("/api/agent/demos/:id/update", requireAgentToken, uploadProjectArchive, async (req, res, next) => {
-  return handleUpdateDeployment(req, res, next, { actor: "agent", demoRef: req.params.id });
-});
-
-app.post("/api/agent/update", requireAgentToken, uploadProjectArchive, async (req, res, next) => {
-  return handleUpdateDeployment(req, res, next, { actor: "agent" });
-});
-
 // ===== USER DEPLOY =====
 app.post("/api/deploy", requireUser, uploadProjectArchive, async (req, res, next) => {
   return handleCreateDeployment(req, res, next, { actor: "user" });
@@ -3903,69 +3914,8 @@ async function exists(filePath) {
   }
 }
 
-async function requireUser(req, res, next) {
-  try {
-    const user = await getUserFromRequest(req);
-    if (!user) {
-      res.status(401).json({ error: "请先登录后再生成试用链接" });
-      return;
-    }
-    req.user = user;
-    next();
-  } catch (error) {
-    next(error);
-  }
-}
 
-async function requireAgentToken(req, res, next) {
-  try {
-    const value = readBearerToken(req) || String(req.body?.agentToken || req.body?.publishToken || "").trim();
-    if (!value) {
-      res.status(401).json({ error: "缺少 DemoGo AI 发布口令。" });
-      return;
-    }
 
-    const user = await getUserFromAgentToken(value);
-    if (!user) {
-      res.status(401).json({ error: "AI 发布口令无效或已被重置。" });
-      return;
-    }
-
-    req.user = user;
-    next();
-  } catch (error) {
-    next(error);
-  }
-}
-
-function requireAdmin(req, res, next) {
-  if (!adminUser || !adminPassword) {
-    res.status(403).json({ error: "管理 API 未配置" });
-    return;
-  }
-
-  const authorization = String(req.get("authorization") || "");
-  const [scheme, encoded] = authorization.split(" ");
-
-  if (scheme !== "Basic" || !encoded) {
-    res.set("WWW-Authenticate", 'Basic realm="DemoGo Admin API"');
-    res.status(401).json({ error: "需要管理员认证" });
-    return;
-  }
-
-  const decoded = Buffer.from(encoded, "base64").toString("utf8");
-  const separatorIndex = decoded.indexOf(":");
-  const user = decoded.slice(0, separatorIndex);
-  const password = decoded.slice(separatorIndex + 1);
-
-  if (user !== adminUser || password !== adminPassword) {
-    res.set("WWW-Authenticate", 'Basic realm="DemoGo Admin API"');
-    res.status(401).json({ error: "管理员账号或密码不正确" });
-    return;
-  }
-
-  next();
-}
 
 function readBearerToken(req) {
   const authorization = String(req.get("authorization") || "");
