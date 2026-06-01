@@ -279,6 +279,15 @@ import {
   createUserFacingInspection,
 } from "./services/failure-diagnosis-service.js";
 
+async function exists(filePath) {
+  try {
+    await fs.access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 const app = express();
 
 const blockedExactNames = new Set([
