@@ -1,36 +1,43 @@
 // DemoGo v0.9.8 - admin routes (refactored: direct imports + deps for middleware only)
 import crypto from "node:crypto";
 import { join as pathJoin } from "node:path";
-import { dataDir } from "../config.js";
+import { dataDir, plans, adminUser, publicBaseUrl } from "../config.js";
 import logger from "../lib/logger.js";
 import { readJson, writeJson } from "../lib/data-access.js";
 import { calculateQuota } from "../services/quota-service.js";
 import { writeAuditLog } from "../lib/audit-log.js";
 import { getClientIp } from "../lib/request-utils.js";
 // writeTrialEvent - passed via deps (server-local wrapper)
-import { filterAdminDemos, adminDemoSummary, publicUserDemo, mergeRuntimeEnv, summarizeRuntimeOps } from "../lib/admin-helpers.js";
+import { filterAdminDemos, adminDemoSummary, publicUserDemo, mergeRuntimeEnv, summarizeRuntimeOps, adminRuntimeDemoSummary } from "../lib/admin-helpers.js";
 import { adminUserSummary, filterAdminUsers, publicUser } from "../services/user-service.js";
-import { contentReviewStatusLabel } from "../services/content-review-service.js";
+import { contentReviewStatusLabel, contentReviewResolutionStatus, normalizeContentReviewResolutionStatus, publicAdminContentReview } from "../services/content-review-service.js";
 import { filterPlanRequests, normalizePlanRequestStatus, publicPlanRequest } from "../services/plan-request-service.js";
-import { filterFeedback, normalizeFeedbackStatus } from "../services/feedback-service.js";
-import { filterAdminForms } from "../services/form-service.js";
-import { filterSubdomainRequests } from "../services/trial-analytics-service.js";
+import { filterFeedback, normalizeFeedbackStatus, publicFeedback } from "../services/feedback-service.js";
+import { filterAdminForms, publicForm, publicFormSubmission } from "../services/form-service.js";
+import { filterSubdomainRequests, summarizeFailureReasons, summarizeTrialFunnel, summarizeDeploySources, normalizeSubdomainRequestStatus, subdomainRequestStatusLabel } from "../services/trial-analytics-service.js";
 import { getDeployEvents } from "../services/quota-service.js";
 import { listRuntimeRecords, stopRuntime } from "../services/runtime-service.js";
+import { createApplicationReadiness } from "../services/application-readiness-service.js";
 
 const demosFile = pathJoin(dataDir, "demos.json");
 const usersFile = pathJoin(dataDir, "users.json");
-const feedbacksFile = pathJoin(dataDir, "feedback.json");
+const feedbackFile = pathJoin(dataDir, "feedback.json");
 const planRequestsFile = pathJoin(dataDir, "plan-requests.json");
 const subdomainRequestsFile = pathJoin(dataDir, "subdomain-requests.json");
 const formsFile = pathJoin(dataDir, "forms.json");
 const formSubmissionsFile = pathJoin(dataDir, "form-submissions.json");
 const contentReviewsFile = pathJoin(dataDir, "content-reviews.json");
+const auditLogsFile = pathJoin(dataDir, "audit-logs.json");
+const deploymentEventsFile = pathJoin(dataDir, "deployment-events.json");
+const trialEventsFile = pathJoin(dataDir, "trial-events.json");
 
 export function registerAdminRoutes(app, {
   requireAdmin,
   flushUsageStats,
-  readDeploymentEventsForDemo,
+  svcReadDeploymentEventsForDemo,
+  removeDemoFiles,
+  deleteDemoFiles,
+  hostingConfig,
 }) {
 app.get("/api/admin/overview", requireAdmin, async (req, res, next) => {
     try {

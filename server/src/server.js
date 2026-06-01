@@ -160,6 +160,7 @@ import { createContentReviewProvider } from "./services/content-review-provider.
 import { csrfMiddleware } from "./middleware/csrf.js";
 import { apiVersionMiddleware } from "./middleware/api-version.js";
 import { startCleanupService } from "./services/cleanup-service.js";
+import { createErrorHandler } from "./middleware/error-handler.js";
 import { createDeploymentJobService } from "./services/deployment-job-service.js";
 import { createBuildService } from "./services/build-service.js";
 
@@ -447,6 +448,9 @@ const { findDeploymentJob, createDeploymentJob, runDeploymentJob, publicDeployme
   readDeploymentEventsForDemo: svcReadDeploymentEventsForDemo,
 } = deploymentJobService;
 
+// Wire up deployment job handlers
+deploymentJobService.setHandlers({ processCreateJob: performCreateDeployment, processUpdateJob: performUpdateDeployment });
+
 // --- Build service (canonical) ---
 const buildService = createBuildService({
   exists, createProjectError, inspectionTypeLabel, createUserFacingInspection,
@@ -572,14 +576,25 @@ registerDemosRoutes(app, {
   createDeploymentJob,
   runDeploymentJob,
   publicDeploymentJob,
-  writeTrialEvent: writeTrialEvent,
-});
+  removeDemoFiles,
+    deleteDemoFiles,
+    performUpdateDeployment,
+    demoRoot,
+    getArchivedDemoDir,
+    hostingConfig,
+    expireDemoFiles,
+    restartDemoRuntime,
+    writeTrialEvent: writeTrialEvent,
+  });
 
 // --- Admin route module ---
 registerAdminRoutes(app, {
   requireAdmin,
   flushUsageStats,
   svcReadDeploymentEventsForDemo,
+  removeDemoFiles,
+  deleteDemoFiles,
+  hostingConfig,
   writeTrialEvent: writeTrialEvent,
 });
 
@@ -1592,6 +1607,12 @@ async function runExpirationCheck() {
     console.error("[到期提醒] 执行失败:", err.message);
   }
 }
+
+
+
+// --- Error handler middleware ---
+const { errorMiddleware } = createErrorHandler({ maxZipSizeMb, attachErrorDiagnosis, publicContentReview });
+app.use(errorMiddleware);
 
 app.listen(port, () => {
   console.log(`DemoGo server listening on ${port}`);

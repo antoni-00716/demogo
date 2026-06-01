@@ -568,7 +568,7 @@ export function summarizeMergedContentReview(status, findings) {
 export async function persistContentReview(record) {
   const reviews = await readJson(path.join(dataDir, "content-reviews.json"), []);
   reviews.unshift(record);
-  await writeJson(contentReviewsFile, reviews.slice(0, 5000));
+  await writeJson(path.join(dataDir, "content-reviews.json"), reviews.slice(0, 5000));
   if (record.status !== "passed") {
     await writeAuditLog({
       action: "content_review_blocked",

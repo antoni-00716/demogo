@@ -8,6 +8,7 @@ import { demoDatabaseEnv, publicDemoDatabase } from "../services/demo-database-s
 import { createApplicationReadiness, publicApplicationReadiness } from "../services/application-readiness-service.js";
 import { contentReviewStatusLabel } from "../services/content-review-service.js";
 import { deploySourceLabel } from "./deploy-helpers.js";
+import { filterAutoHostableFormFields } from "./form-field-utils.js";
 const demosFile = pathJoin(dataDir, "demos.json");
 const usersFile = pathJoin(dataDir, "users.json");
 

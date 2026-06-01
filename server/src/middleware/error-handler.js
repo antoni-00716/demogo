@@ -1,4 +1,4 @@
-﻿import multer from "multer";
+import multer from "multer";
 
 export function createErrorHandler(deps) {
   const { maxZipSizeMb, attachErrorDiagnosis, publicContentReview } = deps;

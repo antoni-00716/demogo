@@ -1,29 +1,47 @@
 // DemoGo v0.9.8 - demos routes (refactored: direct imports + deps for middleware only)
 import crypto from "node:crypto";
+import fs from "node:fs/promises";
+import path from "node:path";
 import { join as pathJoin } from "node:path";
-import { dataDir } from "../config.js";
+import { dataDir, publicBaseUrl } from "../config.js";
 import { readJson, writeJson } from "../lib/data-access.js";
 import { calculateQuota } from "../services/quota-service.js";
 import { writeAuditLog } from "../lib/audit-log.js";
 import { getClientIp } from "../lib/request-utils.js";
 import { writeTrialEvent } from "../lib/trial-log.js";
 import { publicUserDemo, mergeRuntimeEnv, createRuntimeConfigStatus, publicRuntimeEnv, runtimeEnvForDemo } from "../lib/admin-helpers.js";
-import { normalizeCustomSlug, canCustomizeSlug, isReservedSlug, isSlugClaimedByDemo } from "../lib/slug-utils.js";
-import { publicDemoDatabase } from "../services/demo-database-service.js";
+import { createApplicationReadiness } from "../services/application-readiness-service.js";
+import { normalizeCustomSlug, canCustomizeSlug, isReservedSlug, isSlugClaimedByDemo, platformHost, isExpired } from "../lib/slug-utils.js";
+import { publicDemoDatabase, resetDemoDatabase } from "../services/demo-database-service.js";
 import { formatBytes } from "../services/build-service.js";
+import { hasSupabaseProject, createExternalBackendConfigWithConnection, publicExternalBackend } from "../services/external-backend-service.js";
+import { stopRuntime, startNodeRuntime } from "../services/runtime-service.js";
 
 const demosFile = pathJoin(dataDir, "demos.json");
 const usersFile = pathJoin(dataDir, "users.json");
+const subdomainRequestsFile = pathJoin(dataDir, "subdomain-requests.json");
+
+async function exists(filePath) {
+  try { await fs.access(filePath); return true; } catch { return false; }
+}
 
 export function registerDemosRoutes(app, {
   requireUser,
   uploadProjectArchive,
   flushUsageStats,
   getUserFromRequest,
-  readDeploymentEventsForDemo,
+  svcReadDeploymentEventsForDemo,
   createDeploymentJob,
   runDeploymentJob,
   publicDeploymentJob,
+  removeDemoFiles,
+  deleteDemoFiles,
+  performUpdateDeployment,
+  demoRoot,
+  getArchivedDemoDir,
+  hostingConfig,
+  expireDemoFiles,
+  restartDemoRuntime,
 }) {
 app.get("/api/demos", async (req, res, next) => {
   try {
@@ -51,7 +69,7 @@ app.get("/api/demos", async (req, res, next) => {
       res.status(404).json({ error: "未找到该 Demo" });
       return;
     }
-    const events = await readDeploymentEventsForDemo(demo.id);
+    const events = await svcReadDeploymentEventsForDemo(demo.id);
     res.json({
       demo: publicUserDemo(demo),
       events,
@@ -69,7 +87,7 @@ app.get("/api/demos", async (req, res, next) => {
       res.status(404).json({ error: "未找到该 Demo" });
       return;
     }
-    res.json({ events: await readDeploymentEventsForDemo(demo.id) });
+    res.json({ events: await svcReadDeploymentEventsForDemo(demo.id) });
   } catch (error) {
     next(error);
   }
