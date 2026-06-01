@@ -155,6 +155,7 @@ import { requestIdMiddleware } from "./middleware/request-id.js";
 import { securityHeadersMiddleware } from "./middleware/security.js";
 import { createRateLimiter, createStrictRateLimiter } from "./middleware/rate-limiter.js";
 import { isEmailConfigured, sendVerificationEmail, createSmtpMailer, sendExpirationReminderEmail } from "./email/mailer.js";
+import { checkAndRemindExpiringDemos } from "./services/demo-expiration-service.js";
 import { createAuthMiddleware } from "./middleware/auth.js";
 import { createContentReviewProvider } from "./services/content-review-provider.js";
 import { csrfMiddleware } from "./middleware/csrf.js";

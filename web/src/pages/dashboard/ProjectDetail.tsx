@@ -32,12 +32,12 @@ export function ProjectDetail(props: any) {
         <div><dt>???</dt><dd>{demo.usage?.visits || 0} ?</dd></div>
         <div><dt>??</dt><dd>V{demo.version || 1}</dd></div>
         <div><dt>????</dt><dd>{demo.deploySourceLabel || "????"}</dd></div>
-        <div><dt>????</dt><dd>{demo.hostingModeLabel || demo.hosting?.modeLabel || "??????"}</dd></div>
+        <div><dt>????</dt><dd>{demo.hostingModeLabel || demo.hosting?.modeLabel || "????"}</dd></div>
         <div><dt>????</dt><dd>{projectTypeText}</dd></div>
-        <div><dt>????</dt><dd>{demo.runtime?.statusLabel || demo.hosting?.runtime?.statusLabel || "??????"}</dd></div>
+        <div><dt>????</dt><dd>{demo.runtime?.statusLabel || demo.hosting?.runtime?.statusLabel || "????"}</dd></div>
         <div><dt>????</dt><dd>{demo.fileCount || 0} ??? / {formatBytes(demo.extractedBytes)}</dd></div>
         <div><dt>????</dt><dd>{formatDate(demo.updatedAt || demo.createdAt)}</dd></div>
-        <div><dt>???</dt><dd>{formatDate(demo.expiresAt)}</dd></div>
+        <div><dt>????</dt><dd>{formatDate(demo.expiresAt)}</dd></div>
       </dl>
       {inspection?.failureDiagnosis ? <FailureDiagnosisPanel diagnosis={inspection.failureDiagnosis} /> : null}
       <div className="row-actions">
