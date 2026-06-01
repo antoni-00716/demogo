@@ -1,4 +1,4 @@
-﻿﻿// DemoGo v0.9.3 - 归档分析器（从 server.js 提取）
+﻿// DemoGo v0.9.3 - 归档分析器（从 server.js 提取）
 // 负责：ZIP/TAR 解包、路径安全分类、条目检测、表单字段提取
 
 import crypto from "node:crypto";
@@ -746,7 +746,7 @@ export function createInvalidArchiveInspection(archiveType, technicalReason = ""
     status: "blocked",
     canPublish: false,
     detectedType: "unknown",
-    label: "????",
+    label: "无法识别",
     summary: "压缩包不完整或格式异常，DemoGo 无法读取项目文件。",
     issues: [
       `压缩包缺少完整的 ${archiveType} 目录信息，可能是生成、下载或上传过程中被截断。`
@@ -771,7 +771,7 @@ export function createInvalidArchiveInspection(archiveType, technicalReason = ""
     formFields: [],
     apiCalls: [],
     ruleReport: {
-      projectCategory: "????",
+      projectCategory: "未知项目",
       publishability: "暂时无法发布",
       risks: technicalReason ? [`${archiveType} 读取失败：${technicalReason}`] : [],
       recommendations: [

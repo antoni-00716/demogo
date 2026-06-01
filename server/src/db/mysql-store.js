@@ -4,6 +4,27 @@ import { isMysqlConfigured, query, transaction } from "./mysql.js";
 
 export { isMysqlConfigured };
 
+// === Write-lock mechanism to prevent concurrent full-replace race conditions ===
+// Each replace* function does DELETE ALL + INSERT ALL inside a transaction.
+// Two concurrent writes to the same collection could interleave and lose data.
+// The in-process lock serializes writes per collection.
+const writeLocks = new Map();
+
+async function withWriteLock(collection, fn) {
+  while (writeLocks.has(collection)) {
+    await writeLocks.get(collection);
+  }
+  let resolveLock;
+  const lockPromise = new Promise((r) => { resolveLock = r; });
+  writeLocks.set(collection, lockPromise);
+  try {
+    return await fn();
+  } finally {
+    writeLocks.delete(collection);
+    resolveLock();
+  }
+}
+
 const metadataActions = new Set([
   "deployment_job",
   "email_verification",
@@ -137,28 +158,30 @@ async function readUsers() {
 }
 
 async function replaceUsers(users) {
-  await transaction(async (connection) => {
-    await connection.execute("DELETE FROM users");
-    for (const user of Array.isArray(users) ? users : []) {
-      await connection.execute(`
-        INSERT INTO users (
-          id, email, phone, password_hash, role, status, plan_code,
-          created_at, updated_at, last_login_at, metadata_json
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `, [
-        user.id,
-        user.email,
-        user.phone || null,
-        user.passwordHash || user.password_hash || "",
-        user.role || "user",
-        user.status || "active",
-        user.plan || user.planCode || "free",
-        dateOrNull(user.createdAt) || new Date(),
-        dateOrNull(user.updatedAt) || dateOrNull(user.createdAt) || new Date(),
-        dateOrNull(user.lastLoginAt),
-        stringifyJson(sanitizeUserMetadata(user))
-      ]);
-    }
+  return withWriteLock("users", async () => {
+    await transaction(async (connection) => {
+      await connection.execute("DELETE FROM users");
+      for (const user of Array.isArray(users) ? users : []) {
+        await connection.execute(`
+          INSERT INTO users (
+            id, email, phone, password_hash, role, status, plan_code,
+            created_at, updated_at, last_login_at, metadata_json
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [
+          user.id,
+          user.email,
+          user.phone || null,
+          user.passwordHash || user.password_hash || "",
+          user.role || "user",
+          user.status || "active",
+          user.plan || user.planCode || "free",
+          dateOrNull(user.createdAt) || new Date(),
+          dateOrNull(user.updatedAt) || dateOrNull(user.createdAt) || new Date(),
+          dateOrNull(user.lastLoginAt),
+          stringifyJson(sanitizeUserMetadata(user))
+        ]);
+      }
+    });
   });
 }
 
@@ -175,21 +198,23 @@ async function readSessions() {
 }
 
 async function replaceSessions(sessions) {
-  await transaction(async (connection) => {
-    await connection.execute("DELETE FROM sessions");
-    for (const session of Array.isArray(sessions) ? sessions : []) {
-      await connection.execute(`
-        INSERT INTO sessions (token, user_id, created_at, expires_at, ip, user_agent)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `, [
-        session.token,
-        session.userId || session.user_id,
-        dateOrNull(session.createdAt) || new Date(),
-        dateOrNull(session.expiresAt),
-        session.ip || null,
-        session.userAgent || session.user_agent || null
-      ]);
-    }
+  return withWriteLock("sessions", async () => {
+    await transaction(async (connection) => {
+      await connection.execute("DELETE FROM sessions");
+      for (const session of Array.isArray(sessions) ? sessions : []) {
+        await connection.execute(`
+          INSERT INTO sessions (token, user_id, created_at, expires_at, ip, user_agent)
+          VALUES (?, ?, ?, ?, ?, ?)
+        `, [
+          session.token,
+          session.userId || session.user_id,
+          dateOrNull(session.createdAt) || new Date(),
+          dateOrNull(session.expiresAt),
+          session.ip || null,
+          session.userAgent || session.user_agent || null
+        ]);
+      }
+    });
   });
 }
 
@@ -247,53 +272,55 @@ async function readDemos() {
 }
 
 async function replaceDemos(demos) {
-  await transaction(async (connection) => {
-    await connection.execute("DELETE FROM project_inspections");
-    await connection.execute("DELETE FROM demo_versions");
-    await connection.execute("DELETE FROM demos");
+  return withWriteLock("demos", async () => {
+    await transaction(async (connection) => {
+      await connection.execute("DELETE FROM project_inspections");
+      await connection.execute("DELETE FROM demo_versions");
+      await connection.execute("DELETE FROM demos");
 
-    for (const demo of Array.isArray(demos) ? demos : []) {
-      await connection.execute(`
-        INSERT INTO demos (
-          id, user_id, user_email, slug, name, status, public_url,
-          current_version, project_type, detected_type, entry_file, file_count,
-          total_bytes, source_zip_path, output_path, expires_at, created_at,
-          updated_at, offline_at, deleted_at, visits, estimated_bytes,
-          unique_visitors_estimate, last_visited_at, metadata_json
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `, [
-        demo.id,
-        demo.userId || demo.user_id,
-        demo.userEmail || null,
-        demo.slug,
-        demo.name || demo.slug,
-        demo.status || "published",
-        demo.publicUrl || null,
-        Number(demo.version || demo.currentVersion || 1),
-        demo.projectType || null,
-        demo.detectedType || null,
-        demo.entryFile || demo.inspection?.entryFile || null,
-        Number(demo.fileCount || 0),
-        Number(demo.extractedBytes || demo.totalBytes || 0),
-        demo.sourceZipPath || null,
-        demo.outputPath || `/var/www/demogo-preview/d/${demo.slug}`,
-        dateOrNull(demo.expiresAt),
-        dateOrNull(demo.createdAt) || new Date(),
-        dateOrNull(demo.updatedAt) || dateOrNull(demo.createdAt) || new Date(),
-        dateOrNull(demo.offlineAt),
-        dateOrNull(demo.deletedAt),
-        Number(demo.usage?.visits || 0),
-        Number(demo.usage?.estimatedBytes || 0),
-        Number(demo.usage?.uniqueVisitorsEstimate || 0),
-        dateOrNull(demo.usage?.lastVisitedAt),
-        stringifyJson(demo)
-      ]);
+      for (const demo of Array.isArray(demos) ? demos : []) {
+        await connection.execute(`
+          INSERT INTO demos (
+            id, user_id, user_email, slug, name, status, public_url,
+            current_version, project_type, detected_type, entry_file, file_count,
+            total_bytes, source_zip_path, output_path, expires_at, created_at,
+            updated_at, offline_at, deleted_at, visits, estimated_bytes,
+            unique_visitors_estimate, last_visited_at, metadata_json
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [
+          demo.id,
+          demo.userId || demo.user_id,
+          demo.userEmail || null,
+          demo.slug,
+          demo.name || demo.slug,
+          demo.status || "published",
+          demo.publicUrl || null,
+          Number(demo.version || demo.currentVersion || 1),
+          demo.projectType || null,
+          demo.detectedType || null,
+          demo.entryFile || demo.inspection?.entryFile || null,
+          Number(demo.fileCount || 0),
+          Number(demo.extractedBytes || demo.totalBytes || 0),
+          demo.sourceZipPath || null,
+          demo.outputPath || `/var/www/demogo-preview/d/${demo.slug}`,
+          dateOrNull(demo.expiresAt),
+          dateOrNull(demo.createdAt) || new Date(),
+          dateOrNull(demo.updatedAt) || dateOrNull(demo.createdAt) || new Date(),
+          dateOrNull(demo.offlineAt),
+          dateOrNull(demo.deletedAt),
+          Number(demo.usage?.visits || 0),
+          Number(demo.usage?.estimatedBytes || 0),
+          Number(demo.usage?.uniqueVisitorsEstimate || 0),
+          dateOrNull(demo.usage?.lastVisitedAt),
+          stringifyJson(demo)
+        ]);
 
-      await insertDemoVersions(connection, demo);
-      if (demo.inspection) {
-        await insertProjectInspection(connection, demo);
+        await insertDemoVersions(connection, demo);
+        if (demo.inspection) {
+          await insertProjectInspection(connection, demo);
+        }
       }
-    }
+    });
   });
 }
 
@@ -378,26 +405,28 @@ async function readDeploymentEvents() {
 }
 
 async function replaceDeploymentEvents(events) {
-  await transaction(async (connection) => {
-    await connection.execute("DELETE FROM deployment_events");
-    for (const event of Array.isArray(events) ? events : []) {
-      await connection.execute(`
-        INSERT INTO deployment_events (
-          id, demo_id, user_id, deployment_id, event_type, status,
-          message, detail_json, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `, [
-        event.id || crypto.randomUUID(),
-        event.demoId || event.demo_id || null,
-        event.userId || event.user_id || null,
-        event.deploymentId || event.deployment_id || null,
-        event.eventType || event.event_type || "unknown",
-        event.status || "success",
-        event.message || "",
-        stringifyJson(event.detail || event.detail_json || {}),
-        dateOrNull(event.createdAt || event.created_at) || new Date()
-      ]);
-    }
+  return withWriteLock("deployment_events", async () => {
+    await transaction(async (connection) => {
+      await connection.execute("DELETE FROM deployment_events");
+      for (const event of Array.isArray(events) ? events : []) {
+        await connection.execute(`
+          INSERT INTO deployment_events (
+            id, demo_id, user_id, deployment_id, event_type, status,
+            message, detail_json, created_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [
+          event.id || crypto.randomUUID(),
+          event.demoId || event.demo_id || null,
+          event.userId || event.user_id || null,
+          event.deploymentId || event.deployment_id || null,
+          event.eventType || event.event_type || "unknown",
+          event.status || "success",
+          event.message || "",
+          stringifyJson(event.detail || event.detail_json || {}),
+          dateOrNull(event.createdAt || event.created_at) || new Date()
+        ]);
+      }
+    });
   });
 }
 
@@ -412,26 +441,28 @@ async function readDeploymentJobs() {
 }
 
 async function replaceDeploymentJobs(jobs) {
-  await transaction(async (connection) => {
-    await connection.execute("DELETE FROM audit_logs WHERE action = 'deployment_job'");
-    for (const job of Array.isArray(jobs) ? jobs : []) {
-      await connection.execute(`
-        INSERT INTO audit_logs (
-          id, action, actor_type, actor_id, target_type, target_id,
-          ip, metadata_json, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `, [
-        `job-${job.id || crypto.randomUUID()}`,
-        "deployment_job",
-        job.actor || "user",
-        job.userId || null,
-        "deployment_job",
-        job.id || null,
-        job.ip || null,
-        stringifyJson(job),
-        dateOrNull(job.updatedAt || job.createdAt) || new Date()
-      ]);
-    }
+  return withWriteLock("deployment_jobs", async () => {
+    await transaction(async (connection) => {
+      await connection.execute("DELETE FROM audit_logs WHERE action = 'deployment_job'");
+      for (const job of Array.isArray(jobs) ? jobs : []) {
+        await connection.execute(`
+          INSERT INTO audit_logs (
+            id, action, actor_type, actor_id, target_type, target_id,
+            ip, metadata_json, created_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [
+          `job-${job.id || crypto.randomUUID()}`,
+          "deployment_job",
+          job.actor || "user",
+          job.userId || null,
+          "deployment_job",
+          job.id || null,
+          job.ip || null,
+          stringifyJson(job),
+          dateOrNull(job.updatedAt || job.createdAt) || new Date()
+        ]);
+      }
+    });
   });
 }
 
@@ -456,30 +487,32 @@ async function readAuditLogs() {
 }
 
 async function replaceAuditLogs(logs) {
-  await transaction(async (connection) => {
-    await connection.execute(`
-      DELETE FROM audit_logs
-      WHERE action NOT IN ('deployment_job', 'email_verification', 'subdomain_request', 'trial_event')
-    `);
-    for (const log of Array.isArray(logs) ? logs : []) {
-      if (metadataActions.has(log.action)) continue;
+  return withWriteLock("audit_logs", async () => {
+    await transaction(async (connection) => {
       await connection.execute(`
-        INSERT INTO audit_logs (
-          id, action, actor_type, actor_id, target_type, target_id,
-          ip, metadata_json, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `, [
-        log.id || crypto.randomUUID(),
-        log.action || "unknown",
-        log.actorType || log.actor_type || "system",
-        log.actorId || log.actor_id || null,
-        log.targetType || log.target_type || "unknown",
-        log.targetId || log.target_id || null,
-        log.ip || null,
-        stringifyJson(log.metadata || {}),
-        dateOrNull(log.createdAt) || new Date()
-      ]);
-    }
+        DELETE FROM audit_logs
+        WHERE action NOT IN ('deployment_job', 'email_verification', 'subdomain_request', 'trial_event')
+      `);
+      for (const log of Array.isArray(logs) ? logs : []) {
+        if (metadataActions.has(log.action)) continue;
+        await connection.execute(`
+          INSERT INTO audit_logs (
+            id, action, actor_type, actor_id, target_type, target_id,
+            ip, metadata_json, created_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [
+          log.id || crypto.randomUUID(),
+          log.action || "unknown",
+          log.actorType || log.actor_type || "system",
+          log.actorId || log.actor_id || null,
+          log.targetType || log.target_type || "unknown",
+          log.targetId || log.target_id || null,
+          log.ip || null,
+          stringifyJson(log.metadata || {}),
+          dateOrNull(log.createdAt) || new Date()
+        ]);
+      }
+    });
   });
 }
 
@@ -540,30 +573,32 @@ async function readFeedback() {
 }
 
 async function replaceFeedback(items) {
-  await transaction(async (connection) => {
-    await connection.execute("DELETE FROM feedback");
-    for (const item of Array.isArray(items) ? items : []) {
-      await connection.execute(`
-        INSERT INTO feedback (
-          id, user_id, user_email, demo_id, demo_slug, type, message,
-          contact, status, ip, created_at, updated_at, metadata_json
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `, [
-        item.id || crypto.randomUUID(),
-        item.userId || item.user_id,
-        item.userEmail || item.user_email || null,
-        item.demoId || item.demo_id || null,
-        item.demoSlug || item.demo_slug || null,
-        item.type || "other",
-        item.message || "",
-        item.contact || null,
-        item.status || "open",
-        item.ip || null,
-        dateOrNull(item.createdAt) || new Date(),
-        dateOrNull(item.updatedAt) || dateOrNull(item.createdAt) || new Date(),
-        stringifyJson(item)
-      ]);
-    }
+  return withWriteLock("feedback", async () => {
+    await transaction(async (connection) => {
+      await connection.execute("DELETE FROM feedback");
+      for (const item of Array.isArray(items) ? items : []) {
+        await connection.execute(`
+          INSERT INTO feedback (
+            id, user_id, user_email, demo_id, demo_slug, type, message,
+            contact, status, ip, created_at, updated_at, metadata_json
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [
+          item.id || crypto.randomUUID(),
+          item.userId || item.user_id,
+          item.userEmail || item.user_email || null,
+          item.demoId || item.demo_id || null,
+          item.demoSlug || item.demo_slug || null,
+          item.type || "other",
+          item.message || "",
+          item.contact || null,
+          item.status || "open",
+          item.ip || null,
+          dateOrNull(item.createdAt) || new Date(),
+          dateOrNull(item.updatedAt) || dateOrNull(item.createdAt) || new Date(),
+          stringifyJson(item)
+        ]);
+      }
+    });
   });
 }
 
@@ -591,32 +626,34 @@ async function readForms() {
 }
 
 async function replaceForms(items) {
-  await transaction(async (connection) => {
-    await connection.execute("DELETE FROM forms");
-    for (const item of Array.isArray(items) ? items : []) {
-      await connection.execute(`
-        INSERT INTO forms (
-          id, user_id, user_email, demo_id, demo_slug, demo_name,
-          public_token, name, status, fields_json, submission_count,
-          created_at, updated_at, metadata_json
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `, [
-        item.id || crypto.randomUUID(),
-        item.userId || item.user_id,
-        item.userEmail || item.user_email || null,
-        item.demoId || item.demo_id || null,
-        item.demoSlug || item.demo_slug || null,
-        item.demoName || item.demo_name || null,
-        item.publicToken || item.public_token || crypto.randomBytes(24).toString("hex"),
-        item.name || "DemoGo 琛ㄥ崟",
-        item.status || "active",
-        stringifyJson(item.fields || []),
-        Number(item.submissionCount || item.submission_count || 0),
-        dateOrNull(item.createdAt) || new Date(),
-        dateOrNull(item.updatedAt) || dateOrNull(item.createdAt) || new Date(),
-        stringifyJson(item)
-      ]);
-    }
+  return withWriteLock("forms", async () => {
+    await transaction(async (connection) => {
+      await connection.execute("DELETE FROM forms");
+      for (const item of Array.isArray(items) ? items : []) {
+        await connection.execute(`
+          INSERT INTO forms (
+            id, user_id, user_email, demo_id, demo_slug, demo_name,
+            public_token, name, status, fields_json, submission_count,
+            created_at, updated_at, metadata_json
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [
+          item.id || crypto.randomUUID(),
+          item.userId || item.user_id,
+          item.userEmail || item.user_email || null,
+          item.demoId || item.demo_id || null,
+          item.demoSlug || item.demo_slug || null,
+          item.demoName || item.demo_name || null,
+          item.publicToken || item.public_token || crypto.randomBytes(24).toString("hex"),
+          item.name || "DemoGo 琛ㄥ崟",
+          item.status || "active",
+          stringifyJson(item.fields || []),
+          Number(item.submissionCount || item.submission_count || 0),
+          dateOrNull(item.createdAt) || new Date(),
+          dateOrNull(item.updatedAt) || dateOrNull(item.createdAt) || new Date(),
+          stringifyJson(item)
+        ]);
+      }
+    });
   });
 }
 
@@ -641,28 +678,30 @@ async function readFormSubmissions() {
 }
 
 async function replaceFormSubmissions(items) {
-  await transaction(async (connection) => {
-    await connection.execute("DELETE FROM form_submissions");
-    for (const item of Array.isArray(items) ? items : []) {
-      await connection.execute(`
-        INSERT INTO form_submissions (
-          id, form_id, user_id, user_email, demo_id, demo_slug,
-          payload_json, ip, user_agent, created_at, metadata_json
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `, [
-        item.id || crypto.randomUUID(),
-        item.formId || item.form_id,
-        item.userId || item.user_id,
-        item.userEmail || item.user_email || null,
-        item.demoId || item.demo_id || null,
-        item.demoSlug || item.demo_slug || null,
-        stringifyJson(item.payload || {}),
-        item.ip || null,
-        item.userAgent || item.user_agent || null,
-        dateOrNull(item.createdAt) || new Date(),
-        stringifyJson(item)
-      ]);
-    }
+  return withWriteLock("form_submissions", async () => {
+    await transaction(async (connection) => {
+      await connection.execute("DELETE FROM form_submissions");
+      for (const item of Array.isArray(items) ? items : []) {
+        await connection.execute(`
+          INSERT INTO form_submissions (
+            id, form_id, user_id, user_email, demo_id, demo_slug,
+            payload_json, ip, user_agent, created_at, metadata_json
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [
+          item.id || crypto.randomUUID(),
+          item.formId || item.form_id,
+          item.userId || item.user_id,
+          item.userEmail || item.user_email || null,
+          item.demoId || item.demo_id || null,
+          item.demoSlug || item.demo_slug || null,
+          stringifyJson(item.payload || {}),
+          item.ip || null,
+          item.userAgent || item.user_agent || null,
+          dateOrNull(item.createdAt) || new Date(),
+          stringifyJson(item)
+        ]);
+      }
+    });
   });
 }
 
@@ -690,32 +729,34 @@ async function readPlanUpgradeRequests() {
 }
 
 async function replacePlanUpgradeRequests(items) {
-  await transaction(async (connection) => {
-    await connection.execute("DELETE FROM plan_upgrade_requests");
-    for (const item of Array.isArray(items) ? items : []) {
-      await connection.execute(`
-        INSERT INTO plan_upgrade_requests (
-          id, user_id, user_email, current_plan, requested_plan, status,
-          contact, message, admin_note, handled_by, handled_at,
-          created_at, updated_at, metadata_json
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `, [
-        item.id || crypto.randomUUID(),
-        item.userId || item.user_id,
-        item.userEmail || item.user_email || null,
-        item.currentPlan || item.current_plan || "free",
-        item.requestedPlan || item.requested_plan,
-        item.status || "open",
-        item.contact || null,
-        item.message || null,
-        item.adminNote || item.admin_note || null,
-        item.handledBy || item.handled_by || null,
-        dateOrNull(item.handledAt || item.handled_at),
-        dateOrNull(item.createdAt) || new Date(),
-        dateOrNull(item.updatedAt) || dateOrNull(item.createdAt) || new Date(),
-        stringifyJson(item)
-      ]);
-    }
+  return withWriteLock("plan_upgrade_requests", async () => {
+    await transaction(async (connection) => {
+      await connection.execute("DELETE FROM plan_upgrade_requests");
+      for (const item of Array.isArray(items) ? items : []) {
+        await connection.execute(`
+          INSERT INTO plan_upgrade_requests (
+            id, user_id, user_email, current_plan, requested_plan, status,
+            contact, message, admin_note, handled_by, handled_at,
+            created_at, updated_at, metadata_json
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [
+          item.id || crypto.randomUUID(),
+          item.userId || item.user_id,
+          item.userEmail || item.user_email || null,
+          item.currentPlan || item.current_plan || "free",
+          item.requestedPlan || item.requested_plan,
+          item.status || "open",
+          item.contact || null,
+          item.message || null,
+          item.adminNote || item.admin_note || null,
+          item.handledBy || item.handled_by || null,
+          dateOrNull(item.handledAt || item.handled_at),
+          dateOrNull(item.createdAt) || new Date(),
+          dateOrNull(item.updatedAt) || dateOrNull(item.createdAt) || new Date(),
+          stringifyJson(item)
+        ]);
+      }
+    });
   });
 }
 
@@ -753,44 +794,46 @@ async function readContentReviews() {
 }
 
 async function replaceContentReviews(items) {
-  await transaction(async (connection) => {
-    await connection.execute("DELETE FROM content_reviews");
-    for (const item of Array.isArray(items) ? items : []) {
-      await connection.execute(`
-        INSERT INTO content_reviews (
-          id, user_id, user_email, demo_id, demo_slug, deployment_id,
-          action, actor_type, status, provider, engine, summary,
-          reviewed_file_count, findings_json, reviewed_files_json,
-          project_name, file_name, detected_type, resolution_status,
-          admin_note, handled_by, handled_at, created_at, metadata_json
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `, [
-        item.id || crypto.randomUUID(),
-        item.userId || item.user_id || null,
-        item.userEmail || item.user_email || null,
-        item.demoId || item.demo_id || null,
-        item.demoSlug || item.demo_slug || null,
-        item.deploymentId || item.deployment_id || null,
-        item.action || "create",
-        item.actorType || item.actor_type || "user",
-        item.status || "passed",
-        item.provider || "local_rules",
-        item.engine || "local_rules",
-        item.summary || "",
-        Number(item.reviewedFileCount || item.reviewed_file_count || 0),
-        stringifyJson(item.findings || []),
-        stringifyJson(item.reviewedFiles || []),
-        item.projectName || item.project_name || null,
-        item.fileName || item.file_name || null,
-        item.detectedType || item.detected_type || null,
-        item.resolutionStatus || item.resolution_status || defaultContentReviewResolution(item.status),
-        item.adminNote || item.admin_note || null,
-        item.handledBy || item.handled_by || null,
-        dateOrNull(item.handledAt || item.handled_at),
-        dateOrNull(item.createdAt || item.created_at) || new Date(),
-        stringifyJson(item)
-      ]);
-    }
+  return withWriteLock("content_reviews", async () => {
+    await transaction(async (connection) => {
+      await connection.execute("DELETE FROM content_reviews");
+      for (const item of Array.isArray(items) ? items : []) {
+        await connection.execute(`
+          INSERT INTO content_reviews (
+            id, user_id, user_email, demo_id, demo_slug, deployment_id,
+            action, actor_type, status, provider, engine, summary,
+            reviewed_file_count, findings_json, reviewed_files_json,
+            project_name, file_name, detected_type, resolution_status,
+            admin_note, handled_by, handled_at, created_at, metadata_json
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [
+          item.id || crypto.randomUUID(),
+          item.userId || item.user_id || null,
+          item.userEmail || item.user_email || null,
+          item.demoId || item.demo_id || null,
+          item.demoSlug || item.demo_slug || null,
+          item.deploymentId || item.deployment_id || null,
+          item.action || "create",
+          item.actorType || item.actor_type || "user",
+          item.status || "passed",
+          item.provider || "local_rules",
+          item.engine || "local_rules",
+          item.summary || "",
+          Number(item.reviewedFileCount || item.reviewed_file_count || 0),
+          stringifyJson(item.findings || []),
+          stringifyJson(item.reviewedFiles || []),
+          item.projectName || item.project_name || null,
+          item.fileName || item.file_name || null,
+          item.detectedType || item.detected_type || null,
+          item.resolutionStatus || item.resolution_status || defaultContentReviewResolution(item.status),
+          item.adminNote || item.admin_note || null,
+          item.handledBy || item.handled_by || null,
+          dateOrNull(item.handledAt || item.handled_at),
+          dateOrNull(item.createdAt || item.created_at) || new Date(),
+          stringifyJson(item)
+        ]);
+      }
+    });
   });
 }
 

@@ -1,0 +1,6 @@
+{
+  "name": "静态 HTML 测试",
+  "description": "简单的静态 HTML 页面测试",
+  "tags": ["HTML", "静态", "测试"],
+  "demoType": "static_site"
+}

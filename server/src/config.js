@@ -1,21 +1,25 @@
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import process from "node:process";
 
 function readVersion() {
+  // Use import.meta.url to reliably locate VERSION relative to this config file
+  // regardless of the current working directory.
   const candidates = [
-    path.resolve(process.cwd(), "VERSION"),
-    path.resolve(process.cwd(), "..", "VERSION"),
-    path.resolve(process.cwd(), "..", "..", "VERSION")
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "VERSION"),
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "VERSION"),
   ];
   for (const filePath of candidates) {
     try {
       return fs.readFileSync(filePath, "utf8").trim();
     } catch {
-      // Try the next packaged or repository-level VERSION file.
+      // Try the next candidate path.
     }
   }
-  return "0.5.0";
+  // Fallback: must not silently use a wrong version; use a sentinel that is obvious.
+  console.error("FATAL: Cannot locate VERSION file from " + path.dirname(fileURLToPath(import.meta.url)));
+  return "UNKNOWN";
 }
 
 export const serviceVersion = readVersion();

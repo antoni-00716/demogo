@@ -57,6 +57,8 @@ export type Demo = {
   usage?: {
     visits?: number;
     estimatedBytes?: number;
+    uniqueVisitorsEstimate?: number;
+    lastVisitedAt?: string;
   };
 };
 

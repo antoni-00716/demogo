@@ -1,0 +1,6 @@
+{
+  "name": "多页静态网站",
+  "description": "包含多个 HTML 页面的静态网站示例",
+  "tags": ["静态网站", "MPA", "CSS"],
+  "demoType": "mpa"
+}

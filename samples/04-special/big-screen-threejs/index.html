@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>数字大屏 - DemoGo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Microsoft YaHei', sans-serif;
+            background: #0a0e27;
+            color: #fff;
+            overflow: hidden;
+        }
+        #canvas-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 10;
+            pointer-events: none;
+        }
+        .header {
+            padding: 20px 40px;
+            background: linear-gradient(90deg, transparent, rgba(30, 60, 114, 0.6), transparent);
+            text-align: center;
+        }
+        .header h1 {
+            font-size: 2.5rem;
+            background: linear-gradient(90deg, #00d4ff, #7b2ff7);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: 8px;
+        }
+        .stats-grid {
+            position: absolute;
+            top: 120px;
+            left: 40px;
+            display: grid;
+            gap: 20px;
+        }
+        .stat-card {
+            background: rgba(30, 60, 114, 0.4);
+            border: 1px solid #00d4ff;
+            border-radius: 8px;
+            padding: 20px;
+            min-width: 200px;
+        }
+        .stat-label {
+            color: #6bb3f0;
+            font-size: 0.9rem;
+        }
+        .stat-value {
+            color: #00d4ff;
+            font-size: 2rem;
+            font-weight: bold;
+        }
+        .footer {
+            position: absolute;
+            bottom: 20px;
+            width: 100%;
+            text-align: center;
+            color: rgba(255,255,255,0.5);
+            font-size: 0.8rem;
+        }
+        .tag {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(123, 47, 247, 0.8);
+            padding: 8px 20px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <div id="canvas-container"></div>
+    
+    <div class="overlay">
+        <div class="header">
+            <h1>🎮 数字孪生指挥中心</h1>
+        </div>
+        
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-label">在线设备</div>
+                <div class="stat-value" id="devices">1,234</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">数据吞吐量</div>
+                <div class="stat-value" id="throughput">847 TB</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">实时用户</div>
+                <div class="stat-value" id="users">45,289</div>
+            </div>
+        </div>
+
+        <div class="tag">数字大屏 · Three.js</div>
+
+        <div class="footer">
+            由 DemoGo 部署 · Three.js 渲染
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // 简单的 Three.js 场景
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+        // 创建立方体
+        const geometry = new THREE.TorusKnotGeometry(2, 0.6, 100, 16);
+        const material = new THREE.MeshBasicMaterial({
+            color: 0x00d4ff,
+            wireframe: true
+        });
+        const torusKnot = new THREE.Mesh(geometry, material);
+        scene.add(torusKnot);
+
+        // 创建粒子
+        const particlesGeometry = new THREE.BufferGeometry();
+        const particleCount = 2000;
+        const posArray = new Float32Array(particleCount * 3);
+        for (let i = 0; i < particleCount * 3; i++) {
+            posArray[i] = (Math.random() - 0.5) * 20;
+        }
+        particlesGeometry.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+        const particlesMaterial = new THREE.PointsMaterial({
+            size: 0.02,
+            color: 0x7b2ff7
+        });
+        const particlesMesh = new THREE.Points(particlesGeometry, particlesMaterial);
+        scene.add(particlesMesh);
+
+        camera.position.z = 8;
+
+        function animate() {
+            requestAnimationFrame(animate);
+            torusKnot.rotation.x += 0.005;
+            torusKnot.rotation.y += 0.005;
+            particlesMesh.rotation.y += 0.001;
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // 简单的数字动画
+        setInterval(() => {
+            document.getElementById('devices').textContent = Math.floor(Math.random() * 1000 + 1000).toLocaleString();
+            document.getElementById('users').textContent = Math.floor(Math.random() * 50000 + 40000).toLocaleString();
+        }, 3000);
+    </script>
+</body>
+</html>

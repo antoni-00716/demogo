@@ -1,0 +1,6 @@
+{
+  "name": "Hono 服务测试",
+  "description": "Hono Node.js 后端服务测试",
+  "tags": ["Hono", "Node.js", "后端"],
+  "demoType": "node_service"
+}

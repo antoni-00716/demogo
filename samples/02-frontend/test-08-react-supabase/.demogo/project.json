@@ -1,0 +1,6 @@
+{
+  "name": "React + Supabase",
+  "description": "React 前端项目，连接 Supabase 后端",
+  "tags": ["React", "Vite", "Supabase"],
+  "demoType": "frontend_build"
+}

@@ -1,0 +1,6 @@
+{
+  "name": "Vue + Vite 测试",
+  "description": "Vue + Vite 前端构建项目测试",
+  "tags": ["Vue", "Vite", "前端"],
+  "demoType": "frontend_build"
+}

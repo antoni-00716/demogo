@@ -1,0 +1,6 @@
+{
+  "name": "移动 H5 页面",
+  "description": "移动端 H5 页面示例，适配手机端",
+  "tags": ["H5", "移动端", "手机"],
+  "demoType": "h5_page"
+}

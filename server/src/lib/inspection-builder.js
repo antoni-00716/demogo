@@ -242,7 +242,7 @@ function detectRuntime(profile, flags) {
   return {
     engine: profile.backendFrameworks?.[0]?.code || "node",
     status: "planned",
-    statusLabel: "????",
+    statusLabel: "已规划",
     hasStartScript: Boolean(profile.assessment?.signals?.hasStartScript),
     requiresDatabase: Boolean(profile.databases?.length),
     requiresMysql: Boolean(profile.databases?.some((d) => d.code === "mysql")),

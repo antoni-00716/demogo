@@ -1,0 +1,6 @@
+{
+  "name": "Nuxt 3 静态导出",
+  "description": "Nuxt 3 静态导出示例项目",
+  "tags": ["Nuxt", "Vue", "静态导出", "前端"],
+  "demoType": "frontend_build"
+}

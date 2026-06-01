@@ -1,0 +1,6 @@
+{
+  "name": "Fastify 服务测试",
+  "description": "Fastify Node.js 后端服务测试",
+  "tags": ["Fastify", "Node.js", "后端"],
+  "demoType": "node_service"
+}

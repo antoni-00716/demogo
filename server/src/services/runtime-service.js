@@ -7,6 +7,184 @@ import path from "node:path";
 const runtimeProcesses = new Map();
 let nextHostPort = 43100;
 
+import { join as pathJoin } from "node:path";
+import { dataDir } from "../config.js";
+
+const RUNTIME_STATE_FILE = pathJoin(dataDir, "runtime-state.json");
+
+// Persistence helpers
+async function loadRuntimeState() {
+  try {
+    const raw = await fs.readFile(RUNTIME_STATE_FILE, "utf8");
+    const entries = JSON.parse(raw);
+    for (const [slug, record] of Object.entries(entries)) {
+      if (record.driver === "docker" && record.containerId) {
+        record.status = "unknown"; // Will be verified on health check
+      } else {
+        record.status = "stopped"; // Host processes don't survive restart
+      }
+      record.process = null; // Can't serialize child processes
+      record.restoredFromDisk = true;
+      runtimeProcesses.set(slug, record); saveRuntimeState().catch(() => {});
+    }
+    return Object.keys(entries).length;
+  } catch {
+    return 0;
+  }
+}
+
+async function saveRuntimeState() {
+  const state = {};
+  for (const [slug, record] of runtimeProcesses.entries()) {
+    state[slug] = {
+      slug: record.slug,
+      status: record.status,
+      driver: record.driver,
+      port: record.port,
+      containerId: record.containerId || null,
+      expiresAt: record.expiresAt,
+      createdAt: record.createdAt,
+      projectDir: record.projectDir,
+    };
+  }
+  await fs.mkdir(pathJoin(dataDir), { recursive: true });
+  await fs.writeFile(RUNTIME_STATE_FILE, JSON.stringify(state, null, 2), "utf8");
+}
+
+// Load persisted state on startup
+const restoredCount = await loadRuntimeState();
+if (restoredCount > 0) {
+  // Log restored records - using dynamic import to avoid circular deps
+  import("./logger.js").then(m => {
+    m.default?.info?.({ restoredCount }, "Restored runtime state from disk");
+  }).catch(() => {});
+}
+
+
+
+// ===== Runtime Detection Functions (migrated from server.js) =====
+
+export function detectRuntimeWarnings({ dependencies = [], scripts = {}, paths = [] }) {
+  const text = [
+    dependencies.join(" "),
+    Object.values(scripts).join(" "),
+    paths.join(" ")
+  ].join(" ").toLowerCase();
+  const mysqlPatterns = ["mysql","mysql2","sequelize","typeorm","drizzle-orm"];
+  const postgresPatterns = ["pg","postgres","postgresql"];
+  const mongoPatterns = ["mongodb","mongoose"];
+  const redisPatterns = ["redis","ioredis"];
+  const otherDatabasePatterns = ["prisma"];
+  const usesSupabase = text.includes("supabase");
+  const requiresMysql = mysqlPatterns.some((item) => text.includes(item));
+  const requiresPostgres = postgresPatterns.some((item) => text.includes(item)) && !usesSupabase;
+  const requiresMongo = mongoPatterns.some((item) => text.includes(item));
+  const requiresRedis = redisPatterns.some((item) => text.includes(item));
+  const requiresOtherDatabase = otherDatabasePatterns.some((item) => text.includes(item));
+  const requiresDatabase = requiresMysql || requiresPostgres || requiresMongo || requiresRedis || requiresOtherDatabase;
+  const requiresWebSocket = /\b(ws|socket\.io|websocket)\b/.test(text);
+  const warnings = [];
+  const unsupportedReasons = [];
+  if (requiresMysql) { warnings.push("检测到 MySQL 依赖，发布时会分配空的试用数据库"); }
+  if (usesSupabase) { warnings.push("检测到 Supabase 外部后端，需在项目详情页填写 Supabase URL 和 anon key"); }
+  if (requiresRedis) { warnings.push("检测到 Redis 依赖"); unsupportedReasons.push("当前暂不支持 Redis 试用环境"); }
+  if (requiresMongo) { warnings.push("检测到 MongoDB 依赖"); unsupportedReasons.push("当前暂不支持 MongoDB 试用环境"); }
+  if (requiresPostgres) { warnings.push("检测到 PostgreSQL 依赖"); unsupportedReasons.push("当前暂不支持 PostgreSQL 试用环境"); }
+  if (requiresOtherDatabase && !requiresMysql) { warnings.push("检测到数据库 ORM 或迁移工具"); unsupportedReasons.push("当前只支持 MySQL 空试用数据库，不自动执行 ORM 迁移"); }
+  if (requiresWebSocket) { warnings.push("检测到 WebSocket 依赖"); unsupportedReasons.push("当前不支持 WebSocket 试用链路"); }
+  return { requiresDatabase, requiresMysql, requiresPostgres, requiresMongo, requiresRedis, requiresOtherDatabase, databaseEngine: requiresMysql ? "mysql" : "", requiresWebSocket, warnings, unsupportedReasons };
+}
+
+export function shouldBuildBeforeNodeStart(scripts = {}) {
+  const start = String(scripts.start || "").toLowerCase();
+  if (!scripts.build) return false;
+  if (scripts["start:prod"]) return false;
+  if (/\bnext start\b|\bnuxt\b|\bvinxi start\b|\btanstack\b/.test(start)) return true;
+  if (/dist\/|build\/|node dist|node build|node \.output/.test(start)) return true;
+  if (/ts-node|tsx|nodemon/.test(start)) return true;
+  return false;
+}
+
+export function inferRuntimeEngine(paths = [], dependencies = {}, flags = {}) {
+  const normalized = paths.map((entryPath) => String(entryPath || "").replace(/\\/g, "/").toLowerCase());
+  if (normalized.some((entryPath) => ["requirements.txt","main.py","app.py","manage.py"].includes(entryPath))) return "python";
+  if (normalized.some((entryPath) => ["pom.xml","build.gradle","build.gradle.kts"].includes(entryPath))) return "java";
+  if (normalized.some((entryPath) => ["go.mod","main.go"].includes(entryPath))) return "go";
+  if (flags.hasBackend || Object.keys(dependencies || {}).length) return "node";
+  return "";
+}
+
+export function inferNodeFramework(dependencies = {}, paths = []) {
+  const names = Object.keys(dependencies || {}).map((name) => name.toLowerCase());
+  if (names.includes("next")) return "next";
+  if (names.includes("nuxt")) return "nuxt";
+  if (names.includes("@tanstack/react-start") || names.includes("@tanstack/start")) return "tanstack_start";
+  if (names.includes("express")) return "express";
+  if (names.includes("koa")) return "koa";
+  if (names.includes("fastify")) return "fastify";
+  if (names.includes("@nestjs/core")) return "nestjs";
+  if (names.includes("hono")) return "hono";
+  if ((paths || []).some((item) => String(item || "").toLowerCase().includes("server.js"))) return "node";
+  return "";
+}
+
+export function formatRuntimeFramework(value) {
+  const labels = { express: "Express", koa: "Koa", fastify: "Fastify", nestjs: "NestJS", hono: "Hono", next: "Next.js", nuxt: "Nuxt", tanstack_start: "TanStack Start", node: "Node.js" };
+  return labels[value] || "Node.js";
+}
+
+export function isSingleServiceSsrProfile(profile = {}) {
+  if (profile?.type !== "fullstack_framework") return false;
+  const frameworks = [profile.framework, ...(profile.frontendFrameworks || []).map((item) => item.code)].filter(Boolean).map((item) => String(item).toLowerCase());
+  return frameworks.some((item) => ["next","nuxt","tanstack_start"].includes(item));
+}
+
+export function detectInspectionType(flags) {
+  if (flags.hasOutIndex) return "out";
+  if (flags.hasSsr) return "runtime";
+  if (flags.hasBackend && !flags.hasDistIndex && !flags.hasBuildIndex && !flags.hasOutIndex && !flags.hasPublicIndex) return "backend";
+  if (flags.hasPackageJson && flags.hasBuildScript && flags.hasSourceIndicators && flags.hasRootIndex) return "source";
+  if (flags.hasRootIndex) return "static-root";
+  if (flags.hasDistIndex) return "dist";
+  if (flags.hasBuildIndex) return "build";
+  if (flags.hasPublicIndex) return "public";
+  if (flags.singleHtmlEntry) return "single-html";
+  if (flags.hasPackageJson) return "source";
+  return "unknown";
+}
+
+export function detectRuntimeMetadata(analysis, flags = {}) {
+  const startCommand = String(analysis.packageScripts?.start || "").trim();
+  const dependencies = analysis.packageDependencies || {};
+  const paths = analysis.paths || [];
+  const scripts = analysis.packageScripts || {};
+  const dependencyNames = Object.keys(dependencies || {}).map((name) => name.toLowerCase());
+  const runtimeWarnings = detectRuntimeWarnings({ dependencies: dependencyNames, scripts, paths });
+  const framework = inferNodeFramework(dependencies, paths);
+  return {
+    engine: inferRuntimeEngine(paths, dependencies, flags),
+    hasStartScript: Boolean(startCommand), startCommand, scripts,
+    hasBuildScript: Boolean(scripts.build),
+    hasStartProdScript: Boolean(scripts["start:prod"]),
+    selectedStartCommand: scripts["start:prod"] ? "npm run start:prod" : "npm start",
+    buildBeforeStart: shouldBuildBeforeNodeStart(scripts),
+    packageManager: analysis.paths?.includes("pnpm-lock.yaml") ? "pnpm" : analysis.paths?.includes("yarn.lock") ? "yarn" : "npm",
+    framework, frameworkLabel: formatRuntimeFramework(framework),
+    requiresServer: Boolean(flags.hasBackend || flags.hasSsr),
+    requiresDatabase: runtimeWarnings.requiresDatabase,
+    requiresMysql: runtimeWarnings.requiresMysql,
+    requiresPostgres: runtimeWarnings.requiresPostgres,
+    requiresMongo: runtimeWarnings.requiresMongo,
+    requiresRedis: runtimeWarnings.requiresRedis,
+    requiresOtherDatabase: runtimeWarnings.requiresOtherDatabase,
+    databaseEngine: runtimeWarnings.databaseEngine,
+    requiresWebSocket: runtimeWarnings.requiresWebSocket,
+    warnings: runtimeWarnings.warnings,
+    unsupportedReasons: runtimeWarnings.unsupportedReasons
+  };
+}
+
+
 export function createRuntimeConfig(config = {}) {
   return {
     enabled: Boolean(config.runtimeEnabled),
@@ -84,15 +262,15 @@ function createRuntimeEnvFailureDiagnosis(inspection, missing = []) {
   return {
     category: "runtime_env",
     severity: "warning",
-    title: "??????",
-    summary: "???????????????????????",
-    evidence: missing.length ? ["???????" + missing.join("?")] : [],
+    title: "运行时环境变量缺失",
+    summary: "项目需要运行时环境变量，但未在项目中找到对应的配置",
+    evidence: missing.length ? ["缺少环境变量: " + missing.join(", ")] : [],
     userActions: [
-      "????????????????",
-      "????? .env.example??????????????",
-      "?????? .env ????????"
+      "请在项目中添加环境变量配置",
+      "参考 .env.example 文件补充所需的环境变量",
+      "确保 .env 文件包含正确的变量值"
     ],
-    aiPrompt: "?????????" + (missing.length ? missing.join("?") : "???") + "????????????????? .env.example ??????",
+    aiPrompt: "请补充以下环境变量: " + (missing.length ? missing.join(", ") : "?") + "。在项目根目录创建或更新 .env.example 文件",
     createdAt: new Date().toISOString()
   };
 }
@@ -117,7 +295,7 @@ export async function startNodeRuntime({ slug, projectDir, inspection, config, e
     if (eligibility.configRequired) {
       return {
         status: "config_required",
-        statusLabel: "??????",
+        statusLabel: "需要配置环境变量",
         failureDiagnosis: createRuntimeEnvFailureDiagnosis(inspection, eligibility.missing || [])
       };
     }
@@ -132,14 +310,14 @@ export async function startNodeRuntime({ slug, projectDir, inspection, config, e
   const record = driver === "host"
     ? await startHostRuntime({ slug, projectDir, inspection, runtimeConfig, runtimeEnv: env })
     : await startDockerRuntime({ slug, projectDir, inspection, runtimeConfig, runtimeEnv: env });
-  runtimeProcesses.set(slug, record);
+  runtimeProcesses.set(slug, record); saveRuntimeState().catch(() => {});
   return await publicRuntimeRecord(record, runtimeConfig);
 }
 
 export async function stopRuntime(slug) {
   const record = runtimeProcesses.get(slug);
   if (!record) return null;
-  runtimeProcesses.delete(slug);
+  runtimeProcesses.delete(slug); saveRuntimeState().catch(() => {});
   if (record.driver === "host" && record.process && !record.process.killed) {
     await stopHostProcessTree(record.process);
   }

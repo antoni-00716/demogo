@@ -1,39 +1,31 @@
-﻿// DemoGo v0.9.3 - Demo management routes (extracted from server.js)
-// Covers: GET/POST /api/demos/* (user-facing demo CRUD + runtime management)
+// DemoGo v0.9.8 - demos routes (refactored: direct imports + deps for middleware only)
+import crypto from "node:crypto";
+import { join as pathJoin } from "node:path";
+import { dataDir } from "../config.js";
+import { readJson, writeJson } from "../lib/data-access.js";
+import { calculateQuota } from "../services/quota-service.js";
+import { writeAuditLog } from "../lib/audit-log.js";
+import { getClientIp } from "../lib/request-utils.js";
+import { writeTrialEvent } from "../lib/trial-log.js";
+import { publicUserDemo, mergeRuntimeEnv, createRuntimeConfigStatus, publicRuntimeEnv, runtimeEnvForDemo } from "../lib/admin-helpers.js";
+import { normalizeCustomSlug, canCustomizeSlug, isReservedSlug, isSlugClaimedByDemo } from "../lib/slug-utils.js";
+import { publicDemoDatabase } from "../services/demo-database-service.js";
+import { formatBytes } from "../services/build-service.js";
 
-import { loadAllDemos, findUserDemo, saveAllDemos, saveAllDemosWithLock } from "../lib/demo-helpers.js";
-import path from "node:path";
-import { normalizeCustomSlug, canCustomizeSlug, isReservedSlug, isSlugClaimedByDemo, isExpired } from "../lib/slug-utils.js";
+const demosFile = pathJoin(dataDir, "demos.json");
+const usersFile = pathJoin(dataDir, "users.json");
 
-export function registerDemosRoutes(app, deps) {
-  const {
-    requireUser,
-    readJson, writeJson, demosFile,
-    getUserFromRequest, flushUsageStats,
-    calculateQuota, publicUserDemo,
-    readDeploymentEventsForDemo,
-    demoRoot, exists, getArchivedDemoDir,
-    stopRuntime, removeDemoFiles, deleteDemoFiles, startNodeRuntime,
-    hostingConfig, runtimeEnvForDemo,
-    writeAuditLog, writeTrialEvent, getClientIp,
-    publicBaseUrl,
-    expireDemoFiles,
-    userDeployEvents,
-    uploadProjectArchive,
-    performUpdateDeployment,
-    createDeploymentJob, findDeploymentJob, publicDeploymentJob, runDeploymentJob,
-    restartDemoRuntime,
-    mergeRuntimeEnv, createRuntimeConfigStatus, createExternalBackendConfigWithConnection,
-    hasSupabaseProject, publicExternalBackend,
-    createApplicationReadiness,
-    publicRuntimeEnv,
-    publicDemoDatabase, resetDemoDatabase,
-    fs,
-    path: pathModule,
-  } = deps;
-
-  // --- GET /api/demos ---
-  app.get("/api/demos", async (req, res, next) => {
+export function registerDemosRoutes(app, {
+  requireUser,
+  uploadProjectArchive,
+  flushUsageStats,
+  getUserFromRequest,
+  readDeploymentEventsForDemo,
+  createDeploymentJob,
+  runDeploymentJob,
+  publicDeploymentJob,
+}) {
+app.get("/api/demos", async (req, res, next) => {
   try {
     await flushUsageStats();
     const user = await getUserFromRequest(req);
@@ -41,7 +33,7 @@ export function registerDemosRoutes(app, deps) {
       res.status(401).json({ error: "请先登录" });
       return;
     }
-    const demos = await loadAllDemos(readJson, demosFile);
+    const demos = await readJson(demosFile, []);
     res.json({
       demos: demos.filter((demo) => demo.userId === user.id).map(publicUserDemo),
       quota: calculateQuota(user, demos)
@@ -50,12 +42,10 @@ export function registerDemosRoutes(app, deps) {
     next(error);
   }
 });
-
-  // --- GET /api/demos/:id ---
   app.get("/api/demos/:id", requireUser, async (req, res, next) => {
   try {
     await flushUsageStats();
-    const demos = await loadAllDemos(readJson, demosFile);
+    const demos = await readJson(demosFile, []);
     const demo = demos.find((item) => item.id === req.params.id && item.userId === req.user.id);
     if (!demo) {
       res.status(404).json({ error: "未找到该 Demo" });
@@ -71,11 +61,9 @@ export function registerDemosRoutes(app, deps) {
     next(error);
   }
 });
-
-  // --- GET /api/demos/:id/events ---
   app.get("/api/demos/:id/events", requireUser, async (req, res, next) => {
   try {
-    const demos = await loadAllDemos(readJson, demosFile);
+    const demos = await readJson(demosFile, []);
     const demo = demos.find((item) => item.id === req.params.id && item.userId === req.user.id);
     if (!demo) {
       res.status(404).json({ error: "未找到该 Demo" });
@@ -86,11 +74,9 @@ export function registerDemosRoutes(app, deps) {
     next(error);
   }
 });
-
-  // --- GET /api/demos/:id/inspection ---
   app.get("/api/demos/:id/inspection", requireUser, async (req, res, next) => {
   try {
-    const demos = await loadAllDemos(readJson, demosFile);
+    const demos = await readJson(demosFile, []);
     const demo = demos.find((item) => item.id === req.params.id && item.userId === req.user.id);
     if (!demo) {
       res.status(404).json({ error: "未找到该 Demo" });
@@ -101,43 +87,17 @@ export function registerDemosRoutes(app, deps) {
     next(error);
   }
 });
-
-  // --- GET /api/deploy-events ---
-  app.get("/api/deploy-events", requireUser, async (req, res, next) => {
-  try {
-    const demos = await loadAllDemos(readJson, demosFile);
-    res.json(userDeployEvents(req.user, demos, { limit: req.query?.limit }));
-  } catch (error) {
-    next(error);
-  }
-});
-
-  // --- GET /api/deployment-jobs/:id ---
-  app.get("/api/deployment-jobs/:id", requireUser, async (req, res, next) => {
-  try {
-    const job = await findDeploymentJob(req.params.id);
-    if (!job || job.userId !== req.user.id) {
-      res.status(404).json({ error: "未找到这次生成任务" });
-      return;
-    }
-    res.json({ job: publicDeploymentJob(job) });
-  } catch (error) {
-    next(error);
-  }
-});
-
-  // --- POST /api/demos/:id/offline ---
   app.post("/api/demos/:id/offline", requireUser, async (req, res, next) => {
   try {
-    const demos = await loadAllDemos(readJson, demosFile);
-    const found = findUserDemo(demos, req.params.id, req.user.id);
-        if (!found) {
-          res.status(404).json({ error: "未找到该 Demo" });
-          return;
-        }
-    const demo = found.demo;
-    const demoIndex = found.index;
-    const _version0 = found.demo.updatedAt;
+    const demos = await readJson(demosFile, []);
+    const demoIndex = demos.findIndex((demo) => demo.id === req.params.id && demo.userId === req.user.id);
+
+    if (demoIndex === -1) {
+      res.status(404).json({ error: "未找到该 Demo" });
+      return;
+    }
+
+    const demo = demos[demoIndex];
     if (demo.status !== "published") {
       res.json({ demo: publicUserDemo(demo), quota: calculateQuota(req.user, demos) });
       return;
@@ -151,9 +111,7 @@ export function registerDemosRoutes(app, deps) {
       offlineAt: new Date().toISOString(),
       offlineBy: "user"
     };
-    await saveAllDemosWithLock(writeJson, demosFile, readJson, demo.id, _version0, (freshDemos, target) => {
-      Object.assign(target, demos[demoIndex]);
-    });
+    await writeJson(demosFile, demos);
     await writeAuditLog({
       action: "user_offline_demo",
       actorType: "user",
@@ -167,18 +125,17 @@ export function registerDemosRoutes(app, deps) {
     next(error);
   }
 });
-
-  // --- POST /api/demos/:id/delete ---
   app.post("/api/demos/:id/delete", requireUser, async (req, res, next) => {
   try {
-    const demos = await loadAllDemos(readJson, demosFile);
-    const found = findUserDemo(demos, req.params.id, req.user.id);
-        if (!found) {
-          res.status(404).json({ error: "未找到该 Demo" });
-          return;
-        }
-    const demo = found.demo;
-    const demoIndex = found.index;
+    const demos = await readJson(demosFile, []);
+    const demoIndex = demos.findIndex((demo) => demo.id === req.params.id && demo.userId === req.user.id);
+
+    if (demoIndex === -1) {
+      res.status(404).json({ error: "未找到该 Demo" });
+      return;
+    }
+
+    const demo = demos[demoIndex];
     if (demo.status === "published") {
       res.status(409).json({ error: "已发布 Demo 不能直接删除，请先下线" });
       return;
@@ -190,14 +147,14 @@ export function registerDemosRoutes(app, deps) {
     }
 
     await stopRuntime(demo.slug);
-    await deleteDemoFiles(demo.slug);
+    await deleteDemoFiles(demo);
     demos[demoIndex] = {
       ...demo,
       status: "deleted",
       deletedAt: new Date().toISOString(),
       deletedBy: "user"
     };
-    await saveAllDemos(writeJson, demosFile, demos);
+    await writeJson(demosFile, demos);
     await writeAuditLog({
       action: "user_delete_demo",
       actorType: "user",
@@ -211,8 +168,6 @@ export function registerDemosRoutes(app, deps) {
     next(error);
   }
 });
-
-  // --- POST /api/demos/:id/slug ---
   app.post("/api/demos/:id/slug", requireUser, async (req, res, next) => {
   try {
     const requestedSlug = normalizeCustomSlug(req.body?.slug);
@@ -229,14 +184,13 @@ export function registerDemosRoutes(app, deps) {
       return;
     }
 
-    const demos = await loadAllDemos(readJson, demosFile);
-    const found = findUserDemo(demos, req.params.id, req.user.id);
-        if (!found) {
-          res.status(404).json({ error: "未找到该试用项目" });
-          return;
-        }
-    const demo = found.demo;
-    const demoIndex = found.index;
+    const demos = await readJson(demosFile, []);
+    const demoIndex = demos.findIndex((demo) => demo.id === req.params.id && demo.userId === req.user.id);
+    if (demoIndex === -1) {
+      res.status(404).json({ error: "未找到该试用项目" });
+      return;
+    }
+    const demo = demos[demoIndex];
     if (demo.status !== "published") {
       res.status(409).json({ error: "只有在线试用项目可以修改链接后缀。" });
       return;
@@ -290,7 +244,6 @@ export function registerDemosRoutes(app, deps) {
     }
     const aliases = Array.from(new Set([...(demo.aliases || []), previousSlug]));
     const publicUrl = `${publicBaseUrl.replace(/\/$/, "")}/d/${requestedSlug}/`;
-    const _slugPrevAt = demo.updatedAt;
     demos[demoIndex] = {
       ...demo,
       slug: requestedSlug,
@@ -299,14 +252,7 @@ export function registerDemosRoutes(app, deps) {
       linkMode: "custom_path",
       updatedAt: new Date().toISOString()
     };
-    await saveAllDemosWithLock(writeJson, demosFile, readJson, demo.id, _slugPrevAt, (freshDemos, target) => {
-      target.slug = requestedSlug;
-      target.aliases = aliases;
-      target.publicUrl = publicUrl;
-      target.linkMode = "custom_path";
-      target.inspection = freshDemos[found.index].inspection;
-      target.hosting = freshDemos[found.index].hosting;
-    });
+    await writeJson(demosFile, demos);
     await writeAuditLog({
       action: "update_demo_slug",
       actorType: "user",
@@ -321,18 +267,74 @@ export function registerDemosRoutes(app, deps) {
     next(error);
   }
 });
-
-  // --- POST /api/demos/:id/restore ---
+  app.post("/api/demos/:id/subdomain-requests", requireUser, async (req, res, next) => {
+  try {
+    if (String(req.user.plan || "free") !== "pro") {
+      res.status(403).json({ error: "自定义二级域名是 Pro 权益，请升级后再申请。" });
+      return;
+    }
+    const subdomain = normalizeCustomSlug(req.body?.subdomain);
+    if (!subdomain) {
+      res.status(400).json({ error: "请输入 3-40 位小写英文、数字或短横线。" });
+      return;
+    }
+    if (isReservedSlug(subdomain)) {
+      res.status(400).json({ error: "这个二级域名前缀不能使用，请换一个。" });
+      return;
+    }
+    const demos = await readJson(demosFile, []);
+    const demo = demos.find((item) => item.id === req.params.id && item.userId === req.user.id);
+    if (!demo) {
+      res.status(404).json({ error: "未找到该试用项目" });
+      return;
+    }
+    const requests = await readJson(subdomainRequestsFile, []);
+    if (requests.some((item) => item.subdomain === subdomain && ["open", "approved"].includes(item.status))) {
+      res.status(409).json({ error: "这个二级域名已被申请，请换一个。" });
+      return;
+    }
+    const now = new Date().toISOString();
+    const request = {
+      id: crypto.randomUUID(),
+      userId: req.user.id,
+      userEmail: req.user.email,
+      demoId: demo.id,
+      demoSlug: demo.slug,
+      demoName: demo.name || demo.slug,
+      subdomain,
+      fullDomain: `${subdomain}.${platformHost()}`,
+      status: "open",
+      message: String(req.body?.message || "").trim().slice(0, 500),
+      createdAt: now,
+      updatedAt: now
+    };
+    requests.unshift(request);
+    await writeJson(subdomainRequestsFile, requests.slice(0, 2000));
+    await writeAuditLog({
+      action: "create_subdomain_request",
+      actorType: "user",
+      actorId: req.user.id,
+      targetType: "subdomain_request",
+      targetId: request.id,
+      ip: getClientIp(req),
+      metadata: { subdomain, demoId: demo.id, demoSlug: demo.slug }
+    });
+    res.json({ request });
+  } catch (error) {
+    next(error);
+  }
+});
   app.post("/api/demos/:id/restore", requireUser, async (req, res, next) => {
   try {
-    const demos = await loadAllDemos(readJson, demosFile);
-    const found = findUserDemo(demos, req.params.id, req.user.id);
-        if (!found) {
-          res.status(404).json({ error: "未找到该 Demo" });
-          return;
-        }
-    const demo = found.demo;
-    const demoIndex = found.index;
+    const demos = await readJson(demosFile, []);
+    const demoIndex = demos.findIndex((demo) => demo.id === req.params.id && demo.userId === req.user.id);
+
+    if (demoIndex === -1) {
+      res.status(404).json({ error: "未找到该 Demo" });
+      return;
+    }
+
+    const demo = demos[demoIndex];
     if (isExpired(demo)) {
       await expireDemoFiles(demo);
       demos[demoIndex] = {
@@ -340,7 +342,7 @@ export function registerDemosRoutes(app, deps) {
         status: "expired",
         expiredAt: new Date().toISOString()
       };
-      await saveAllDemos(writeJson, demosFile, demos);
+      await writeJson(demosFile, demos);
       await writeAuditLog({
         action: "expire_demo",
         actorType: "system",
@@ -425,7 +427,7 @@ export function registerDemosRoutes(app, deps) {
     };
     delete demos[demoIndex].offlineAt;
     delete demos[demoIndex].offlineBy;
-    await saveAllDemos(writeJson, demosFile, demos);
+    await writeJson(demosFile, demos);
     await writeAuditLog({
       action: "restore_demo",
       actorType: "user",
@@ -439,19 +441,36 @@ export function registerDemosRoutes(app, deps) {
     next(error);
   }
 });
+  app.post("/api/demos/:id/update", requireUser, uploadProjectArchive, async (req, res, next) => {
+  const uploadedFile = req.file;
+  const user = req.user;
+  const clientIp = getClientIp(req);
 
+  if (!uploadedFile) {
+    res.status(400).json({ error: "请上传 .zip、.tar.gz 或 .tgz 项目包" });
+    return;
+  }
 
-  // --- POST /api/demos/:id/runtime/restart ---
+  try {
+    res.json(await performUpdateDeployment({
+      demoId: req.params.id,
+      uploadedFile,
+      user,
+      clientIp
+    }));
+  } catch (error) {
+    next(error);
+  }
+});
   app.post("/api/demos/:id/runtime/restart", requireUser, async (req, res, next) => {
   try {
-    const demos = await loadAllDemos(readJson, demosFile);
-    const found = findUserDemo(demos, req.params.id, req.user.id);
-        if (!found) {
-          res.status(404).json({ error: "未找到该试用项目" });
-          return;
-        }
-    const demo = found.demo;
-    const demoIndex = found.index;
+    const demos = await readJson(demosFile, []);
+    const demoIndex = demos.findIndex((demo) => demo.id === req.params.id && demo.userId === req.user.id);
+    if (demoIndex === -1) {
+      res.status(404).json({ error: "未找到该试用项目" });
+      return;
+    }
+    const demo = demos[demoIndex];
     if (demo.status !== "published" || demo.hostingMode !== "node_runtime") {
       res.status(409).json({ error: "只有在线的 Node.js 试用项目可以重启运行环境。" });
       return;
@@ -461,7 +480,7 @@ export function registerDemosRoutes(app, deps) {
     if (!restarted.runtime) {
       if (demoIndex >= 0 && restarted.demo) {
         demos[demoIndex] = restarted.demo;
-        await saveAllDemos(writeJson, demosFile, demos);
+        await writeJson(demosFile, demos);
       }
       res.status(400).json({
         error: restarted.error || "运行环境重启失败。",
@@ -471,7 +490,7 @@ export function registerDemosRoutes(app, deps) {
       return;
     }
     demos[demoIndex] = restarted.demo;
-    await saveAllDemos(writeJson, demosFile, demos);
+    await writeJson(demosFile, demos);
     await writeAuditLog({
       action: "restart_demo_runtime",
       actorType: "user",
@@ -485,18 +504,15 @@ export function registerDemosRoutes(app, deps) {
     next(error);
   }
 });
-
-  // --- POST /api/demos/:id/runtime-env ---
   app.post("/api/demos/:id/runtime-env", requireUser, async (req, res, next) => {
   try {
-    const demos = await loadAllDemos(readJson, demosFile);
-    const found = findUserDemo(demos, req.params.id, req.user.id);
-        if (!found) {
-          res.status(404).json({ error: "未找到该试用项目" });
-          return;
-        }
-    const demo = found.demo;
-    const demoIndex = found.index;
+    const demos = await readJson(demosFile, []);
+    const demoIndex = demos.findIndex((demo) => demo.id === req.params.id && demo.userId === req.user.id);
+    if (demoIndex === -1) {
+      res.status(404).json({ error: "未找到该试用项目" });
+      return;
+    }
+    const demo = demos[demoIndex];
     if (demo.hostingMode !== "node_runtime" && !hasSupabaseProject(demo.inspection || {})) {
       res.status(409).json({ error: "这个项目没有识别到需要保存的运行配置或外部后端配置。" });
       return;
@@ -508,7 +524,6 @@ export function registerDemosRoutes(app, deps) {
       ...(demo.inspection || {}),
       externalBackend
     };
-    const _rtEnvVersion = demo.updatedAt;
     let nextDemo = {
       ...demo,
       runtimeEnv: saved,
@@ -523,9 +538,7 @@ export function registerDemosRoutes(app, deps) {
       applicationReadiness: nextDemo.applicationReadiness
     };
     demos[demoIndex] = nextDemo;
-    await saveAllDemosWithLock(writeJson, demosFile, readJson, demo.id, _rtEnvVersion, (freshDemos, target) => {
-      Object.assign(target, demos[demoIndex]);
-    });
+    await writeJson(demosFile, demos);
     await writeAuditLog({
       action: "update_demo_runtime_env",
       actorType: "user",
@@ -546,18 +559,15 @@ export function registerDemosRoutes(app, deps) {
     next(error);
   }
 });
-
-  // --- POST /api/demos/:id/database/reset ---
   app.post("/api/demos/:id/database/reset", requireUser, async (req, res, next) => {
   try {
-    const demos = await loadAllDemos(readJson, demosFile);
-    const found = findUserDemo(demos, req.params.id, req.user.id);
-        if (!found) {
-          res.status(404).json({ error: "未找到该试用项目" });
-          return;
-        }
-    const demo = found.demo;
-    const demoIndex = found.index;
+    const demos = await readJson(demosFile, []);
+    const demoIndex = demos.findIndex((demo) => demo.id === req.params.id && demo.userId === req.user.id);
+    if (demoIndex === -1) {
+      res.status(404).json({ error: "未找到该试用项目" });
+      return;
+    }
+    const demo = demos[demoIndex];
     if (!demo.database?.enabled) {
       res.status(409).json({ error: "这个项目没有 MySQL 试用数据库。" });
       return;
@@ -578,7 +588,7 @@ export function registerDemosRoutes(app, deps) {
       applicationReadiness: nextDemo.applicationReadiness
     };
     demos[demoIndex] = nextDemo;
-    await saveAllDemos(writeJson, demosFile, demos);
+    await writeJson(demosFile, demos);
     await writeAuditLog({
       action: "reset_demo_database",
       actorType: "user",
@@ -596,8 +606,6 @@ export function registerDemosRoutes(app, deps) {
     next(error);
   }
 });
-
-  // --- POST /api/demos/:id/deployment-jobs ---
   app.post("/api/demos/:id/deployment-jobs", requireUser, uploadProjectArchive, async (req, res, next) => {
   const uploadedFile = req.file;
   if (!uploadedFile) {
@@ -631,11 +639,10 @@ export function registerDemosRoutes(app, deps) {
     });
     res.status(202).json({ job: publicDeploymentJob(job) });
     runDeploymentJob(job.id).catch((error) => {
-      console.error("Deployment job failed", error);
+      logger.error({ err: error }, "Deployment job failed");
     });
   } catch (error) {
     next(error);
   }
 });
-
 }

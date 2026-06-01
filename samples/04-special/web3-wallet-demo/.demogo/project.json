@@ -1,0 +1,6 @@
+{
+  "name": "Web3 钱包演示",
+  "description": "基于 ethers.js 的 Web3 前端应用",
+  "tags": ["Web3", "ethers.js", "区块链"],
+  "demoType": "web3_frontend"
+}

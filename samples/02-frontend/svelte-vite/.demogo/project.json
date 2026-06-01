@@ -1,0 +1,6 @@
+{
+  "name": "Svelte + Vite",
+  "description": "Svelte 框架 + Vite 构建工具项目示例",
+  "tags": ["Svelte", "Vite", "前端"],
+  "demoType": "frontend_build"
+}

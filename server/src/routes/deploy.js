@@ -1,20 +1,38 @@
-// DemoGo v0.9.3 - Deploy & inspect routes (extracted from server.js)
-// Covers: POST /api/inspect, POST /api/deployment-jobs
+import { join as pathJoin } from "node:path";
+import fs from "node:fs/promises";
+import { dataDir } from "../config.js";
+import logger from "../lib/logger.js";
+import { readJson } from "../lib/data-access.js";
+import { userDeployEvents } from "../services/deploy-event-service.js";
+// findDeploymentJob, createDeploymentJob, runDeploymentJob, publicDeploymentJob - passed via deps (server-local)
+// inspectProjectArchive - passed via deps (server-local)
+import { classifyFailureMessage } from "../services/trial-analytics-service.js";
+import { getClientIp } from "../lib/request-utils.js";
+import { writeTrialEvent } from "../lib/trial-log.js";
 
-export function registerDeployRoutes(app, deps) {
-  const {
-    requireUser,
-    uploadProjectArchive,
-    inspectProjectArchive,
-    classifyFailureMessage,
-    writeTrialEvent, getClientIp,
-    fs: fsPromises,
-    createDeploymentJob,
-    publicDeploymentJob,
-    runDeploymentJob,
-  } = deps;
+const demosFile = pathJoin(dataDir, "demos.json");
 
-  // --- POST /api/inspect ---
+export function registerDeployRoutes(app, { requireUser, uploadProjectArchive, handleCreateDeployment, findDeploymentJob, createDeploymentJob, runDeploymentJob, publicDeploymentJob, inspectProjectArchive }) {
+  app.get("/api/deploy-events", requireUser, async (req, res, next) => {
+    try {
+      const demos = await readJson(demosFile, []);
+      res.json(userDeployEvents(req.user, demos, { limit: req.query?.limit }));
+    } catch (error) {
+      next(error);
+    }
+  });
+  app.get("/api/deployment-jobs/:id", requireUser, async (req, res, next) => {
+  try {
+    const job = await findDeploymentJob(req.params.id);
+    if (!job || job.userId !== req.user.id) {
+      res.status(404).json({ error: "未找到这次生成任务" });
+      return;
+    }
+    res.json({ job: publicDeploymentJob(job) });
+  } catch (error) {
+    next(error);
+  }
+});
   app.post("/api/inspect", requireUser, uploadProjectArchive, async (req, res, next) => {
   const uploadedFile = req.file;
   if (!uploadedFile) {
@@ -42,11 +60,9 @@ export function registerDeployRoutes(app, deps) {
   } catch (error) {
     next(error);
   } finally {
-    await fsPromises.rm(uploadedFile.path, { force: true });
+    await fs.rm(uploadedFile.path, { force: true });
   }
 });
-
-  // --- POST /api/deployment-jobs ---
   app.post("/api/deployment-jobs", requireUser, uploadProjectArchive, async (req, res, next) => {
   const uploadedFile = req.file;
   if (!uploadedFile) {
@@ -78,11 +94,13 @@ export function registerDeployRoutes(app, deps) {
     });
     res.status(202).json({ job: publicDeploymentJob(job) });
     runDeploymentJob(job.id).catch((error) => {
-      console.error("Deployment job failed", error);
+      logger.error({ err: error }, "Deployment job failed");
     });
   } catch (error) {
     next(error);
   }
 });
-
+  app.post("/api/deploy", requireUser, uploadProjectArchive, async (req, res, next) => {
+    return handleCreateDeployment(req, res, next, { actor: "user" });
+  });
 }

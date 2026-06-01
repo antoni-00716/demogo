@@ -1,0 +1,6 @@
+{
+  "name": "基础静态网站",
+  "description": "最简单的静态网站示例，无需构建",
+  "tags": ["静态网站", "HTML", "CSS"],
+  "demoType": "static_site"
+}

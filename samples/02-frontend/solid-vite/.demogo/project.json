@@ -1,0 +1,6 @@
+{
+  "name": "Solid + Vite",
+  "description": "Solid 框架 + Vite 构建工具项目示例",
+  "tags": ["Solid", "Vite", "前端"],
+  "demoType": "frontend_build"
+}

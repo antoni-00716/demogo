@@ -1,0 +1,37 @@
+---
+const title = 'Astro 静态网站'
+---
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8">
+    <title>{title}</title>
+    <style>
+      body {
+        font-family: system-ui;
+        background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%);
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .card {
+        background: white;
+        padding: 60px;
+        border-radius: 20px;
+        text-align: center;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>🚀 {title}</h1>
+      <p>Astro 静态网站示例，可由 DemoGo 构建！</p>
+      <div style="margin-top: 20px;">
+        <span style="background: #e0e7ff; padding: 6px 16px; border-radius: 20px; margin: 5px;">Astro</span>
+        <span style="background: #fef3c7; padding: 6px 16px; border-radius: 20px; margin: 5px;">静态导出</span>
+      </div>
+    </div>
+  </body>
+</html>

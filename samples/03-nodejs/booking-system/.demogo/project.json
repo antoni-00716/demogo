@@ -1,0 +1,6 @@
+{
+  "name": "预订系统",
+  "description": "完整的 Node.js + MySQL 预订系统示例",
+  "tags": ["Express", "MySQL", "完整应用"],
+  "demoType": "node_service"
+}

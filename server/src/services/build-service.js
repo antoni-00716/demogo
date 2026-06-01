@@ -9,6 +9,20 @@ import { normalizeFormFields } from "./form-service.js";
 import { promoteSingleHtmlEntry } from "../lib/archive-analyzer.js";
 import { buildMode, buildTimeoutMs, dockerImage, dockerMemory, dockerCpus } from "../config.js";
 
+
+// Standalone exports for use by routes and other modules
+export function formatBytes(bytes) {
+  const value = Number(bytes || 0);
+  if (value >= 1024 * 1024 * 1024) return `${(value / 1024 / 1024 / 1024).toFixed(1)}GB`;
+  if (value >= 1024 * 1024) return `${(value / 1024 / 1024).toFixed(1)}MB`;
+  if (value >= 1024) return `${Math.round(value / 1024)}KB`;
+  return `${value}B`;
+}
+
+export function stripBom(content) {
+  return String(content || "").replace(/^\uFEFF/, "");
+}
+
 export function createBuildService(deps) {
   const {
     exists, createProjectError, inspectionTypeLabel, createUserFacingInspection,

@@ -1,0 +1,6 @@
+{
+  "name": "Vite + tRPC + Prisma",
+  "description": "Vite + tRPC + Prisma 完整全栈演示项目",
+  "tags": ["Vite", "tRPC", "Prisma", "React", "全栈"],
+  "demoType": "frontend_build"
+}

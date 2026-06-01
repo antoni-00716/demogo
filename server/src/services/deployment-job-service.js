@@ -1,24 +1,34 @@
-﻿// DemoGo v0.9.3 - Deployment job service (extracted from server.js)
+// DemoGo v0.9.11 - Deployment job service
+// Canonical implementation for deployment job CRUD, steps, and execution.
+// Migrated from server.js inline functions (v0.9.10 ? v0.9.11).
+
 import crypto from "node:crypto";
 
 export function createDeploymentJobService(deps) {
-  const { readJson, writeJson, deploymentJobsFile, deploymentEventsFile } = deps;
+  const {
+    readJson, writeJson,
+    deploymentJobsFile, deploymentEventsFile, usersFile,
+    writeTrialEvent, attachErrorDiagnosis, publicContentReview
+  } = deps;
+
+  // handlerRegistry lets server.js wire performCreateDeployment / performUpdateDeployment
+  // without creating a circular dependency.
   const handlerRegistry = { processCreateJob: null, processUpdateJob: null };
 
-  // --- Deployment steps ---
+  // ============ Deployment Steps ============
 
   function createDeploymentSteps(context = {}) {
     const now = new Date().toISOString();
     const steps = [
-      ["receive", "success", "接收文件完成"],
-      ["extract", "pending", "等待解压项目文件"],
-      ["security_check", "pending", "等待安全检查"],
-      ["inspect", "pending", "等待检测项目类型"],
-      ["build", "pending", "等待构建检查"],
-      ["content_review", "pending", "等待内容安全检查"],
-      ["form_hosting", "pending", "等待表单收集检查"],
-      ["publish", "pending", "等待发布文件"],
-      ["success", "pending", "等待生成访问地址"]
+      ["receive", "success", "??????"],
+      ["extract", "pending", "????????"],
+      ["security_check", "pending", "??????"],
+      ["inspect", "pending", "????????"],
+      ["build", "pending", "??????"],
+      ["content_review", "pending", "????????"],
+      ["form_hosting", "pending", "????????"],
+      ["publish", "pending", "??????"],
+      ["success", "pending", "????????"]
     ];
     return steps.map(([eventType, status, message]) => ({
       id: crypto.randomUUID(),
@@ -56,7 +66,7 @@ export function createDeploymentJobService(deps) {
   }
 
   function failedDeploymentSteps(error, steps = [], context = {}) {
-    const message = error instanceof Error ? error.message : "发布失败";
+    const message = error instanceof Error ? error.message : "????";
     const existing = completeDeploymentSteps(steps, context);
     const hasFailed = existing.some((step) => step.status === "failed");
     return [
@@ -75,7 +85,7 @@ export function createDeploymentJobService(deps) {
     ];
   }
 
-  // --- Deployment events ---
+  // ============ Deployment Events ============
 
   async function appendDeploymentEvents(events) {
     const items = Array.isArray(events) ? events.filter(Boolean) : [];
@@ -98,9 +108,10 @@ export function createDeploymentJobService(deps) {
       .sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0));
   }
 
-  // --- Job helpers ---
+  // ============ Job Helpers ============
 
   function sanitizeDeploymentJob(job) {
+    if (!job) return null;
     return {
       id: job.id,
       userId: job.userId,
@@ -121,7 +132,7 @@ export function createDeploymentJobService(deps) {
       inspection: job.inspection || job.result?.inspection || null,
       contentReview: job.contentReview || job.result?.contentReview || null,
       error: job.error || null,
-      diagnosis: job.diagnosis || null,
+      diagnosis: job.diagnosis || job.error?.diagnosis || null,
       createdAt: job.createdAt,
       updatedAt: job.updatedAt,
       startedAt: job.startedAt || null,
@@ -130,34 +141,16 @@ export function createDeploymentJobService(deps) {
   }
 
   function deploymentJobStatusLabel(status) {
-    if (status === "queued") return "等待开始";
-    if (status === "running") return "正在生成";
-    if (status === "success") return "已生成";
-    if (status === "failed") return "生成失败";
-    return "未知状态";
+    if (status === "queued") return "????";
+    if (status === "running") return "????";
+    if (status === "success") return "???";
+    if (status === "failed") return "????";
+    return "????";
   }
 
   function publicDeploymentJob(job) {
     if (!job) return null;
-    return {
-      id: job.id,
-      action: job.action,
-      demoId: job.demoId || null,
-      status: job.status,
-      statusLabel: job.statusLabel || deploymentJobStatusLabel(job.status),
-      message: job.message || "",
-      originalName: job.originalName || "",
-      result: job.result || null,
-      inspection: job.inspection || job.result?.inspection || null,
-      contentReview: job.contentReview || job.result?.contentReview || null,
-      steps: Array.isArray(job.steps) ? job.steps : [],
-      error: job.error || null,
-      diagnosis: job.diagnosis || null,
-      createdAt: job.createdAt,
-      updatedAt: job.updatedAt,
-      startedAt: job.startedAt || null,
-      finishedAt: job.finishedAt || null
-    };
+    return sanitizeDeploymentJob(job);
   }
 
   function markJobStepsFailed(steps, message) {
@@ -172,7 +165,7 @@ export function createDeploymentJobService(deps) {
     });
   }
 
-  // --- Job CRUD ---
+  // ============ Job Persistence ============
 
   async function saveDeploymentJob(job) {
     const cleanJob = sanitizeDeploymentJob(job);
@@ -181,9 +174,10 @@ export function createDeploymentJobService(deps) {
     if (index >= 0) {
       jobs[index] = cleanJob;
     } else {
-      jobs.push(cleanJob);
+      jobs.unshift(cleanJob);
     }
-    await writeJson(deploymentJobsFile, jobs);
+    await writeJson(deploymentJobsFile, jobs.slice(0, 1000));
+    return cleanJob;
   }
 
   async function updateDeploymentJob(jobId, patch) {
@@ -205,7 +199,7 @@ export function createDeploymentJobService(deps) {
     return jobs.find((j) => j.id === jobId) || null;
   }
 
-  // --- Job creation and execution ---
+  // ============ Job Creation & Execution ============
 
   async function createDeploymentJob({ user, action, demoId = "", requestedName = "", file, ip = "", actor = "user", deploySource = "web" }) {
     const now = new Date().toISOString();
@@ -222,8 +216,8 @@ export function createDeploymentJobService(deps) {
       deploySource,
       ip,
       status: "queued",
-      statusLabel: "等待开始",
-      message: "已接收项目包，正在排队处理。",
+      statusLabel: "????",
+      message: "??????????????",
       steps: createDeploymentSteps({ demoId: demoId || null, userId: user.id, deploymentId: "", action }).map((step) => ({
         ...step,
         deploymentId: null
@@ -232,69 +226,133 @@ export function createDeploymentJobService(deps) {
       error: null,
       inspection: null,
       contentReview: null,
+      diagnosis: null,
       createdAt: now,
       updatedAt: now,
       startedAt: null,
       finishedAt: null
     };
+    job.steps = job.steps.map((step) => ({ ...step, deploymentId: job.id }));
     await saveDeploymentJob(job);
     return job;
   }
 
   async function runDeploymentJob(jobId) {
     let job = await findDeploymentJob(jobId);
-    if (!job) return;
+    if (!job || job.status !== "queued") return;
     job = await updateDeploymentJob(jobId, {
       status: "running",
-      statusLabel: "正在生成",
+      statusLabel: "????",
+      message: "DemoGo ???????????????????",
       startedAt: new Date().toISOString()
     });
+
     try {
+      const users = await readJson(usersFile, []);
+      const user = users.find((item) => item.id === job.userId);
+      if (!user) {
+        const err = new Error("?????????????????");
+        err.statusCode = 404;
+        throw err;
+      }
+      const uploadedFile = {
+        path: job.filePath,
+        originalname: job.originalName
+      };
       let result;
       if (job.action === "update" && handlerRegistry.processUpdateJob) {
-        result = await handlerRegistry.processUpdateJob(job);
+        result = await handlerRegistry.processUpdateJob({
+          demoId: job.demoId,
+          uploadedFile,
+          user,
+          clientIp: job.ip,
+          actor: job.actor,
+          deploySource: job.deploySource,
+          deploymentId: job.id
+        });
       } else if (handlerRegistry.processCreateJob) {
-        result = await handlerRegistry.processCreateJob(job);
-      }
-      if (result) {
-          markDeploymentStep(job.steps, "success", "success", "试用链接已生成。");
-          const steps = completeDeploymentSteps(job.steps || [], { demoId: result.id || job.demoId });
-        await appendDeploymentEvents(steps);
-        await updateDeploymentJob(jobId, {
-          status: "success",
-          statusLabel: "已生成",
-          message: "试用链接已生成。",
-          result,
-          steps,
-          inspection: result.inspection || null,
-          contentReview: result.contentReview || null,
-          finishedAt: new Date().toISOString()
+        result = await handlerRegistry.processCreateJob({
+          uploadedFile,
+          requestedName: job.requestedName,
+          user,
+          clientIp: job.ip,
+          actor: job.actor,
+          deploySource: job.deploySource,
+          deploymentId: job.id
         });
       }
+      const finished = await updateDeploymentJob(jobId, {
+        status: "success",
+        statusLabel: "???",
+        message: job.action === "update" ? "?????????????????" : "?????????????????",
+        result,
+        inspection: result.inspection || null,
+        contentReview: result.contentReview || null,
+        steps: result.deploymentEvents || job.steps,
+        diagnosis: null,
+        finishedAt: new Date().toISOString()
+      });
+      return finished;
     } catch (error) {
-      const message = error instanceof Error ? error.message : "发布失败";
+      const message = error instanceof Error ? error.message : "????????????????";
       const events = error.deploymentEvents || await readDeploymentEventsForDeployment(jobId);
-      const diagnosis = error.inspection?.failureDiagnosis || error.diagnosis || null;
+      const diagnosis = attachErrorDiagnosis ? attachErrorDiagnosis(error, {
+        fileName: job.originalName,
+        actor: job.actor,
+        action: job.action,
+        deploySource: job.deploySource
+      }) : null;
       await updateDeploymentJob(jobId, {
         status: "failed",
-        statusLabel: "生成失败",
+        statusLabel: "????",
         message,
-        error: { message, stack: error.stack?.slice(0, 1024) || "" },
-        finishedAt: new Date().toISOString(),
+        error: {
+          message,
+          statusCode: error.statusCode || 500,
+          diagnosis
+        },
+        inspection: error.inspection || null,
+        contentReview: publicContentReview ? publicContentReview(error.contentReview) || null : null,
+        diagnosis,
         steps: events?.length ? events : markJobStepsFailed(job.steps, message),
-        inspection: error.inspection || job.inspection || null,
-        contentReview: error.contentReview || job.contentReview || null,
-        diagnosis
+        finishedAt: new Date().toISOString()
       });
+      if (writeTrialEvent) {
+        await writeTrialEvent({
+          eventType: "deploy_failed",
+          userId: job.userId,
+          userEmail: job.userEmail,
+          source: job.deploySource || job.actor || "web",
+          path: job.action === "update" ? "/api/demos/:id/deployment-jobs" : "/api/deployment-jobs",
+          ip: job.ip,
+          metadata: {
+            jobId,
+            demoId: job.demoId,
+            action: job.action,
+            statusCode: error.statusCode || 500,
+            message,
+            failureCategory: diagnosis?.category
+          }
+        });
+      }
+      return null;
     }
   }
 
+  // ============ Public API ============
+
   return {
+    // Steps
     createDeploymentSteps, markDeploymentStep, completeDeploymentSteps, failedDeploymentSteps,
+    // Events
     appendDeploymentEvents, readDeploymentEventsForDemo, readDeploymentEventsForDeployment,
+    // Helpers
     sanitizeDeploymentJob, deploymentJobStatusLabel, publicDeploymentJob, markJobStepsFailed,
+    // Persistence
     saveDeploymentJob, updateDeploymentJob, findDeploymentJob,
+    // Execution
     createDeploymentJob, runDeploymentJob,
+    // Handler wiring
     setHandlers: (h) => { if (h) Object.assign(handlerRegistry, h); }
   };
 }

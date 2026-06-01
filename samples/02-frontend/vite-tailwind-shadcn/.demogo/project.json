@@ -1,0 +1,6 @@
+{
+  "name": "Vite + React + Tailwind + shadcn/ui",
+  "description": "Vite + React + Tailwind CSS + shadcn/ui 完整演示项目",
+  "tags": ["Vite", "React", "Tailwind", "shadcn/ui", "前端"],
+  "demoType": "frontend_build"
+}

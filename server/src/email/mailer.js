@@ -123,3 +123,46 @@ export function createSmtpMailer(config) {
 
   return { sendSmtpMail };
 }
+
+
+// DemoGo v0.9.7 - Demo 到期提醒邮件
+export async function sendExpirationReminderEmail(to, { demoName, demoSlug, hoursLeft, expiresAt }, { sendSmtpMail, baseUrl }) {
+  const demoUrl = `${baseUrl || "https://demogo.cn"}/d/${demoSlug}`;
+  const timeLabel = hoursLeft <= 1 ? "1 小时内" : `${hoursLeft} 小时后`;
+  const expiryDate = new Date(expiresAt).toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" });
+
+  const subject = `[DemoGo] 你的试用 Demo「${demoName}」即将到期`;
+  const text = [
+    `你的 DemoGo 试用项目「${demoName}」将在 ${timeLabel} 到期。`,
+    "",
+    `到期时间：${expiryDate}`,
+    `访问地址：${demoUrl}`,
+    "",
+    "到期后链接将无法访问。如需继续使用，可以：",
+    "1. 重新上传发布（自动延长有效期）",
+    "2. 升级到 Lite 或 Pro 套餐（有效期延长至 30 天）",
+    "",
+    `升级地址：${baseUrl || "https://demogo.cn"}/dashboard`,
+    "",
+    "— DemoGo 团队"
+  ].join("\n");
+
+  const html = [
+    `<div style="max-width:560px;margin:0 auto;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">`,
+    `<h2 style="color:#1a1a2e;">你的试用 Demo 即将到期</h2>`,
+    `<p>你的 DemoGo 试用项目 <strong>「${demoName}」</strong> 将在 <strong style="color:#e74c3c;">${timeLabel}</strong> 到期。</p>`,
+    `<div style="background:#f8f9fa;border-radius:8px;padding:16px;margin:16px 0;">`,
+    `<p style="margin:4px 0;"><strong>到期时间：</strong>${expiryDate}</p>`,
+    `<p style="margin:4px 0;"><strong>访问地址：</strong><a href="${demoUrl}">${demoUrl}</a></p>`,
+    `</div>`,
+    `<p>到期后链接将无法访问。如需继续使用：</p>`,
+    `<ol>`,
+    `<li>重新上传发布（自动延长有效期）</li>`,
+    `<li><a href="${baseUrl || "https://demogo.cn"}/dashboard" style="color:#3498db;">升级到 Lite 或 Pro 套餐</a>（有效期延长至 30 天）</li>`,
+    `</ol>`,
+    `<p style="color:#888;font-size:12px;margin-top:24px;">— DemoGo 团队</p>`,
+    `</div>`
+  ].join("\n");
+
+  await sendSmtpMail({ to, subject, text, html });
+}

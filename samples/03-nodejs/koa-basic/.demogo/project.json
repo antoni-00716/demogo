@@ -1,0 +1,6 @@
+{
+  "name": "Koa 基础服务",
+  "description": "Koa 框架 Node.js 服务示例",
+  "tags": ["Koa", "Node.js", "后端"],
+  "demoType": "node_service"
+}

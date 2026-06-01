@@ -1,0 +1,6 @@
+{
+  "name": "SPA Dist 输出",
+  "description": "已构建的单页应用 dist 目录示例",
+  "tags": ["SPA", "dist", "构建产物"],
+  "demoType": "spa"
+}

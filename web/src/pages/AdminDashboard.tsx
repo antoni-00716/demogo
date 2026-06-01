@@ -21,6 +21,9 @@ import { BrandLogo } from "../components/BrandLogo";
 import { Button, LinkButton } from "../components/Button";
 import { Card } from "../components/Card";
 import { EmptyState } from "../components/EmptyState";
+import { RiskBadges } from "../components/dashboard/RiskBadges";
+import { AdminFailureDiagnosis } from "../components/dashboard/AdminFailureDiagnosis";
+import { SubdomainRequestCard } from "../components/dashboard/SubdomainRequestCard";
 import { IcpLink } from "../components/IcpLink";
 import { Toast } from "../components/Toast";
 import { planName } from "../config/plans";
@@ -725,50 +728,6 @@ function SubdomainRequestsAdmin({
         )}
       </Card>
     </section>
-  );
-}
-
-function SubdomainRequestCard({
-  request,
-  onChanged,
-  onError
-}: {
-  request: SubdomainRequest;
-  onChanged: (text: string) => Promise<void>;
-  onError: (text: string) => void;
-}) {
-  const [adminNote, setAdminNote] = useState(request.adminNote || "");
-
-  async function update(status: "approved" | "rejected") {
-    try {
-      await updateAdminSubdomainRequestStatus(request.id, { status, adminNote });
-      await onChanged(status === "approved" ? "二级域名申请已通过。" : "二级域名申请已拒绝。");
-    } catch (error) {
-      onError(error instanceof Error ? error.message : "二级域名申请处理失败。");
-    }
-  }
-
-  return (
-    <article className="request-card">
-      <div className="request-main">
-        <div>
-          <h3>{request.fullDomain || `${request.subdomain}.demogo.cn`}</h3>
-          <p>{request.userEmail || "-"} · {request.demoName || request.demoSlug || "-"}</p>
-          <small>{formatDate(request.createdAt)}</small>
-        </div>
-        <Badge tone={request.status === "open" ? "warning" : request.status === "approved" ? "success" : "neutral"}>{request.statusLabel || request.status}</Badge>
-      </div>
-      {request.message ? <p>{request.message}</p> : null}
-      {request.status === "open" ? (
-        <div className="request-actions">
-          <textarea className="textarea" value={adminNote} onChange={(event) => setAdminNote(event.target.value)} placeholder="处理备注，可选" />
-          <div className="row-actions">
-            <Button variant="primary" onClick={() => update("approved")}>通过</Button>
-            <Button variant="danger" onClick={() => update("rejected")}>拒绝</Button>
-          </div>
-        </div>
-      ) : request.adminNote ? <p className="muted">处理备注：{request.adminNote}</p> : null}
-    </article>
   );
 }
 
@@ -1506,64 +1465,6 @@ function missingRequirementLabel(value: string) {
     unsupported_runtime: "运行环境暂不支持"
   };
   return labels[value] || value;
-}
-
-function RiskBadges({ demo }: { demo: Demo & { riskSummary?: Array<{ type: string; label: string }> } }) {
-  const contentRisk = demo.contentReview?.status && demo.contentReview.status !== "passed"
-    ? [{ type: "content", label: demo.contentReview.statusLabel || "内容需关注" }]
-    : [];
-  const risks = [...contentRisk, ...(demo.riskSummary || [])];
-  if (!risks.length) return <span className="muted">无明显问题</span>;
-  return (
-    <div className="badge-row">
-      {risks.map((risk) => (
-        <Badge key={`${risk.type}-${risk.label}`} tone={["api", "blocked", "external_backend_warning"].includes(risk.type) ? "warning" : "info"}>{risk.label}</Badge>
-      ))}
-    </div>
-  );
-}
-
-function AdminFailureDiagnosis({ diagnosis }: { diagnosis: FailureDiagnosis }) {
-  return (
-    <div className="failure-diagnosis admin-diagnosis">
-      <div className="section-mini-head">
-        <div>
-          <h3>{diagnosis.title || "失败诊断"}</h3>
-          <p>{diagnosis.summary || "需要查看失败阶段和日志后处理。"}</p>
-        </div>
-        <Badge tone={diagnosis.severity === "blocked" ? "warning" : "info"}>{adminFailureCategoryLabel(diagnosis.category)}</Badge>
-      </div>
-      <div className="diagnosis-grid">
-        {diagnosis.evidence?.length ? (
-          <div>
-            <strong>依据</strong>
-            <ul>{diagnosis.evidence.slice(0, 6).map((item) => <li key={item}>{item}</li>)}</ul>
-          </div>
-        ) : null}
-        {diagnosis.userActions?.length ? (
-          <div>
-            <strong>建议动作</strong>
-            <ul>{diagnosis.userActions.slice(0, 5).map((item) => <li key={item}>{item}</li>)}</ul>
-          </div>
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
-function adminFailureCategoryLabel(category?: string) {
-  const labels: Record<string, string> = {
-    quota: "额度",
-    content: "内容",
-    package: "项目包",
-    unsupported: "能力边界",
-    runtime_env: "运行配置",
-    dependency_install: "依赖安装",
-    build: "构建",
-    runtime_start: "启动",
-    database_init: "数据库"
-  };
-  return labels[category || ""] || "其他";
 }
 
 function AdminUsers({ users, compact = false }: { users: AdminUser[]; compact?: boolean }) {

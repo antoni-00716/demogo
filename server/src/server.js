@@ -109,6 +109,7 @@ import {
 } from "./services/plan-request-service.js";
 import { calculateQuota as calculateUserQuota, getDeployEvents } from "./services/quota-service.js";
 import { adminUserSummary, filterAdminUsers, publicUser } from "./services/user-service.js";
+import { publicUserDemo, createRuntimeConfigStatus, publicRuntimeEnv, runtimeEnvForDemo, mergeRuntimeEnv } from "./lib/admin-helpers.js";
 import {
   contentReviewStatusLabel,
   createContentReviewError,
@@ -137,10 +138,18 @@ import {
 import {
   canStartNodeRuntime,
   createRuntimeConfig,
+  detectInspectionType,
+  detectRuntimeMetadata,
+  detectRuntimeWarnings,
   findRuntime,
+  formatRuntimeFramework,
+  inferNodeFramework,
+  inferRuntimeEngine,
+  isSingleServiceSsrProfile,
   listRuntimeRecords,
   prepareRuntimeProject,
   proxyRuntimeRequest,
+  shouldBuildBeforeNodeStart,
   startNodeRuntime,
   stopExpiredRuntimes,
   stopRuntime
@@ -152,13 +161,80 @@ import { createDeployRateLimiter } from "./lib/deploy-rate-limiter.js";
 import { requestIdMiddleware } from "./middleware/request-id.js";
 import { securityHeadersMiddleware } from "./middleware/security.js";
 import { createRateLimiter, createStrictRateLimiter } from "./middleware/rate-limiter.js";
-import { isEmailConfigured, sendVerificationEmail, createSmtpMailer } from "./email/mailer.js";
+import { isEmailConfigured, sendVerificationEmail, createSmtpMailer, sendExpirationReminderEmail } from "./email/mailer.js";
 import { createAuthMiddleware } from "./middleware/auth.js";
 import { createContentReviewProvider } from "./services/content-review-provider.js";
 import { csrfMiddleware } from "./middleware/csrf.js";
 import { apiVersionMiddleware } from "./middleware/api-version.js";
 import { startCleanupService } from "./services/cleanup-service.js";
+import { createDeploymentJobService } from "./services/deployment-job-service.js";
+import { createBuildService } from "./services/build-service.js";
+
 import { registerAgentRoutes } from "./routes/agent.js";
+import { registerAuthRoutes } from "./routes/auth.js";
+import { registerFeedbackRoutes } from "./routes/feedback.js";
+import { registerSubdomainRoutes } from "./routes/subdomain.js";
+import { registerPlanUpgradeRoutes } from "./routes/plan-upgrade.js";
+import { registerFormsRoutes } from "./routes/forms.js";
+import { registerMiscRoutes } from "./routes/misc.js";
+import { registerDeployRoutes } from "./routes/deploy.js";
+import { registerDemosRoutes } from "./routes/demos.js";
+import { registerAdminRoutes } from "./routes/admin.js";
+import { detectDeploySource, deploySourceLabel, normalizeDeploySource } from "./lib/deploy-helpers.js";
+import { cleanProjectName, isGenericProjectName, slugify } from "./lib/project-utils.js";
+
+import {
+  promoteSingleHtmlEntry,
+  isSupportedArchiveName,
+  detectArchiveType,
+  looksLikeAssetRequest,
+  stripArchiveExtension,
+  analyzeArchiveEntries,
+  cleanupArchiveAnalysis,
+  writeArchiveEntry,
+  normalizeZipPath,
+  findCommonRoot,
+  stripCommonRoot,
+  emptyArchiveAnalysis,
+  analyzeZipEntries,
+  analyzeTarEntries,
+  collectExtractedFiles,
+  normalizeArchivePath,
+  isSafeArchivePath,
+  isUnsafeTarEntryType,
+  classifyEntryPath,
+  isAllowedEnvTemplateName,
+  summarizePathIssues,
+  summarizeRootEntries,
+  detectEntryFile,
+  detectSingleHtmlEntry,
+  hasSourceProjectIndicators,
+  hasBackendIndicators,
+  hasNodeRuntimeDependency,
+  hasSsrIndicators,
+  shouldAnalyzeTextFile,
+  analyzeTextEntries,
+  pickTextSignal,
+  extractHtmlTitle,
+  extractHtmlHeading,
+  stripHtml,
+  analyzePackageJson,
+  analyzeEnvironmentVariableHints,
+  readZipEntryText,
+  readArchiveEntryText,
+  extractFormFields,
+  isCollectableFormField,
+  isNonCollectableControl,
+  parseHtmlAttributes,
+  inferFieldNamesFromCode,
+  inferFieldType,
+  inferFieldLabel,
+  extractApiCalls,
+  isLocalApiUrl,
+  createInvalidZipInspection,
+  createInvalidArchiveInspection,
+  createProjectError
+} from "./lib/archive-analyzer.js";
 
 const app = express();
 
@@ -308,79 +384,158 @@ const requireUser = authMiddleware.requireUser;
 const requireAgentToken = authMiddleware.requireAgentToken;
 const requireAdmin = authMiddleware.requireAdmin;
 
-// --- Agent route module ---
-registerAgentRoutes(app, {
-  requireAgentToken,
-  readJson, writeJson, demosFile,
-  readDeploymentEventsForDemo, publicUserDemo,
-  uploadProjectArchive,
-  handleCreateDeployment,
-  handleUpdateDeployment,
-  getClientIp
-});
 
+// --- Deployment job service (canonical) ---
+const deploymentJobService = createDeploymentJobService({
+  readJson, writeJson,
+  deploymentJobsFile, deploymentEventsFile, usersFile,
+  writeTrialEvent, attachErrorDiagnosis, publicContentReview
+});
+const { findDeploymentJob, createDeploymentJob, runDeploymentJob, publicDeploymentJob,
+  readDeploymentEventsForDemo: svcReadDeploymentEventsForDemo,
+} = deploymentJobService;
+
+// --- Build service (canonical) ---
+const buildService = createBuildService({
+  exists, createProjectError, inspectionTypeLabel, createUserFacingInspection,
+  readJson, writeJson, formsFile, formSubmissionsFile,
+  writeAuditLog, publicForm, publicBaseUrl, calculateFormQuota,
+  demosFile
+});
+const { detectBuildAndNormalizeOutput, findPublishableOutput,
+  summarizePublishedDirectory, promoteDirectory,
+  ensureAutoHostedForm, filterAutoHostableFormFields, injectAutoFormScript,
+  buildNodeProject, buildNodeProjectWithEnv, buildNodeProjectOnHost, buildNodeProjectInDocker,
+  runCommand, commandAvailable, explainBuildError,
+  injectTrackingScript, recordDemoVisit, flushUsageStats,
+  formatBytes, stripBom
+} = buildService;
+
+// --- Agent route module ---
 app.use(requestIdMiddleware);
 app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: false, limit: "1mb" }));
 app.use(cookieParser());
 app.use(csrfMiddleware);
 app.use(apiVersionMiddleware);
-app.use("/d", express.static(demoRoot));
-
-app.post("/api/trial-events", async (req, res, next) => {
-  try {
-    const eventType = normalizeTrialEventType(req.body?.eventType);
-    if (!eventType) {
-      res.status(400).json({ error: "事件类型无效。" });
-      return;
-    }
-    const user = await getUserFromRequest(req);
-    await writeTrialEvent({
-      eventType,
-      userId: user?.id || null,
-      userEmail: user?.email || null,
-      source: req.body?.source,
-      path: req.body?.path || req.get("referer") || "",
-      metadata: req.body?.metadata,
-      ip: getClientIp(req)
-    });
-    res.json({ ok: true });
-  } catch (error) {
-    next(error);
-  }
+registerAgentRoutes(app, {
+  requireAgentToken,
+  readJson, writeJson, demosFile,
+  svcReadDeploymentEventsForDemo, publicUserDemo,
+  uploadProjectArchive,
+  handleCreateDeployment,
+  handleUpdateDeployment,
+  getClientIp
 });
+
+// --- Auth route module ---
+registerAuthRoutes(app, {
+  requireUser,
+  requireAgentToken,
+  emailVerificationEnabled,
+  verificationCodeTtlMs,
+  verificationResendMs,
+  readJson,
+  writeJson,
+  usersFile,
+  sessionsFile,
+  emailVerificationsFile,
+  demosFile,
+  isEmailConfigured,
+  smtpHost,
+  smtpPort,
+  smtpUser,
+  smtpPass,
+  smtpFrom,
+  normalizeEmail,
+  hashPassword,
+  verifyPassword,
+  hashVerificationCode,
+  verifyEmailCode,
+  markEmailCodeUsed,
+  sendVerificationEmail,
+  sendSmtpMail,
+  createSession,
+  setSessionCookie,
+  checkLoginFailureRate,
+  recordLoginFailure,
+  clearLoginFailures,
+  createAgentTokenRecord,
+  publicAgentToken,
+  getUserFromRequest,
+  getClientIp,
+  writeTrialEvent,
+  writeAuditLog,
+  publicUser,
+  publicUserDemo,
+  calculateQuota,
+});
+
+// --- Feedback route module ---
+registerFeedbackRoutes(app, { requireUser });
+
+// --- Subdomain route module ---
+registerSubdomainRoutes(app, { requireUser });
+
+// --- Plan upgrade route module ---
+registerPlanUpgradeRoutes(app, { requireUser });
+
+// --- Forms route module ---
+registerFormsRoutes(app, { requireUser });
+
+// --- Misc route module ---
+registerMiscRoutes(app, {
+  routeRuntimeDemo,
+  securityHeadersMiddleware,
+  createStrictRateLimiter,
+  createRateLimiter,
+  express,
+  normalizeTrialEventType,
+  getUserFromRequest,
+  writeTrialEvent: writeTrialEvent,
+  redirectDemoAlias,
+  looksLikeAssetRequest,
+  hostingCapabilities,
+});
+
+// --- Deploy route module ---
+registerDeployRoutes(app, {
+  requireUser,
+  uploadProjectArchive,
+  handleCreateDeployment,
+  inspectProjectArchive,
+  findDeploymentJob,
+  createDeploymentJob,
+  runDeploymentJob,
+  publicDeploymentJob,
+});
+
+// --- Demos route module ---
+registerDemosRoutes(app, {
+  requireUser,
+  uploadProjectArchive,
+  flushUsageStats,
+  getUserFromRequest,
+  svcReadDeploymentEventsForDemo,
+  createDeploymentJob,
+  runDeploymentJob,
+  publicDeploymentJob,
+  writeTrialEvent: writeTrialEvent,
+});
+
+// --- Admin route module ---
+registerAdminRoutes(app, {
+  requireAdmin,
+  flushUsageStats,
+  svcReadDeploymentEventsForDemo,
+  writeTrialEvent: writeTrialEvent,
+});
+
+
 
 // ===== STATIC FILE SERVING =====
-app.get("/d/:slug", async (req, res, next) => {
-  try {
-    if (await redirectDemoAlias(req, res)) return;
-    next();
-  } catch (error) {
-    next(error);
-  }
-});
-app.get("/d/:slug/*", async (req, res, next) => {
-  try {
-    if (await redirectDemoAlias(req, res)) return;
-    if (looksLikeAssetRequest(req.path)) return next();
-    const slug = slugify(req.params.slug);
-    if (!slug) return next();
-    const indexPath = path.join(demoRoot, slug, "index.html");
-    if (!await exists(indexPath)) return next();
-    res.sendFile(indexPath);
-  } catch (error) {
-    next(error);
-  }
-});
 
 // ===== HEALTH & CAPABILITIES =====
-app.get("/api/health", (_req, res) => {
-  res.json({ ok: true, service: "demogo-server", version: serviceVersion });
-});
-
-app.get("/api/hosting/capabilities", (_req, res) => {
-  res.json({ capabilities: hostingCapabilities() });
-});
 
 async function routeRuntimeDemo(req, res, next) {
   try {
@@ -414,72 +569,6 @@ async function routeRuntimeDemo(req, res, next) {
   }
 }
 
-// ===== AUTH ROUTES =====
-app.get("/api/auth/register-options", (_req, res) => {
-  res.json({
-    emailVerificationEnabled,
-    emailConfigured: isEmailConfigured({ smtpHost, smtpPort, smtpUser, smtpPass, smtpFrom }),
-    emailRequired: emailVerificationEnabled,
-    canRegister: !emailVerificationEnabled || isEmailConfigured({ smtpHost, smtpPort, smtpUser, smtpPass, smtpFrom })
-  });
-});
-
-app.post("/api/auth/send-verification-code", async (req, res, next) => {
-  try {
-    if (!emailVerificationEnabled) {
-      res.json({ ok: true, message: "当前未开启邮箱验证码。" });
-      return;
-    }
-    if (!isEmailConfigured({ smtpHost, smtpPort, smtpUser, smtpPass, smtpFrom })) {
-      res.status(503).json({ error: "邮箱验证码暂未配置，请联系 DemoGo 管理员。" });
-      return;
-    }
-
-    const email = normalizeEmail(req.body?.email);
-    const password = String(req.body?.password || "");
-    if (!email || !password || password.length < 8) {
-      res.status(400).json({ error: "请输入邮箱和至少 8 位密码后再获取验证码" });
-      return;
-    }
-
-    const users = await readJson(usersFile, []);
-    if (users.some((user) => user.email === email)) {
-      res.status(409).json({ error: "该邮箱已注册，请直接登录" });
-      return;
-    }
-
-    const records = await readJson(emailVerificationsFile, []);
-    const now = Date.now();
-    const active = records.find((item) => item.email === email && item.purpose === "register" && !item.usedAt && new Date(item.expiresAt).getTime() > now);
-    if (active && new Date(active.lastSentAt || active.createdAt).getTime() + verificationResendMs > now) {
-      const seconds = Math.ceil((new Date(active.lastSentAt || active.createdAt).getTime() + verificationResendMs - now) / 1000);
-      res.status(429).json({ error: `验证码发送过于频繁，请 ${seconds} 秒后再试。` });
-      return;
-    }
-
-    const code = String(crypto.randomInt(100000, 1000000));
-    const salt = crypto.randomBytes(12).toString("hex");
-    const record = {
-      id: crypto.randomUUID(),
-      email,
-      purpose: "register",
-      codeHash: await hashVerificationCode(code, salt),
-      salt,
-      attempts: 0,
-      createdAt: new Date(now).toISOString(),
-      lastSentAt: new Date(now).toISOString(),
-      expiresAt: new Date(now + verificationCodeTtlMs).toISOString()
-    };
-    await sendVerificationEmail(email, code, { sendSmtpMail });
-    await writeJson(emailVerificationsFile, [
-      record,
-      ...records.filter((item) => !(item.email === email && item.purpose === "register" && !item.usedAt)).slice(0, 999)
-    ]);
-    res.json({ ok: true, expiresInSeconds: Math.floor(verificationCodeTtlMs / 1000), resendAfterSeconds: Math.floor(verificationResendMs / 1000) });
-  } catch (error) {
-    next(error);
-  }
-});
 
 await expireDemos();
 setInterval(() => {
@@ -506,1913 +595,38 @@ app.get("/api/demo-track/:slug", async (req, res) => {
   }
 });
 
-app.post("/api/auth/register", async (req, res, next) => {
-  try {
-    const email = normalizeEmail(req.body?.email);
-    const password = String(req.body?.password || "");
-    const verificationCode = String(req.body?.verificationCode || "").trim();
-
-    if (!email || !password || password.length < 8) {
-      res.status(400).json({ error: "请输入邮箱和至少 8 位密码" });
-      return;
-    }
-
-    const users = await readJson(usersFile, []);
-    if (users.some((user) => user.email === email)) {
-      res.status(409).json({ error: "该邮箱已注册，请直接登录" });
-      return;
-    }
-
-    if (emailVerificationEnabled) {
-      if (!isEmailConfigured({ smtpHost, smtpPort, smtpUser, smtpPass, smtpFrom })) {
-        res.status(503).json({ error: "邮箱验证码暂未配置，请联系 DemoGo 管理员。" });
-        return;
-      }
-      const verification = await verifyEmailCode(email, verificationCode, "register");
-      if (!verification.ok) {
-        res.status(400).json({ error: verification.error });
-        return;
-      }
-    }
-
-    const user = {
-      id: crypto.randomUUID(),
-      email,
-      plan: "free",
-      createdAt: new Date().toISOString(),
-      passwordHash: await hashPassword(password)
-    };
-
-    users.push(user);
-    await writeJson(usersFile, users);
-    if (emailVerificationEnabled) await markEmailCodeUsed(email, verificationCode, "register");
-    await writeTrialEvent({
-      eventType: "register_success",
-      userId: user.id,
-      userEmail: user.email,
-      source: "auth",
-      path: "/api/auth/register",
-      ip: getClientIp(req)
-    });
-    const session = await createSession(user.id);
-    setSessionCookie(res, session.token);
-    res.json({ user: publicUser(user) });
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.post("/api/auth/login", async (req, res, next) => {
-  try {
-    const email = normalizeEmail(req.body?.email);
-    const password = String(req.body?.password || "");
-    const clientIp = getClientIp(req);
-    const rate = checkLoginFailureRate(email, clientIp);
-    if (!rate.allowed) {
-      res.status(429).json({ error: "登录尝试过多，请稍后再试" });
-      return;
-    }
-    const users = await readJson(usersFile, []);
-    const user = users.find((item) => item.email === email);
-
-    if (!user || !(await verifyPassword(password, user.passwordHash))) {
-      recordLoginFailure(email, clientIp);
-      res.status(401).json({ error: "邮箱或密码不正确" });
-      return;
-    }
-
-    clearLoginFailures(email, clientIp);
-    const session = await createSession(user.id);
-    setSessionCookie(res, session.token);
-    res.json({ user: publicUser(user) });
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.post("/api/auth/logout", async (req, res, next) => {
-  try {
-    const token = req.cookies?.demogo_session;
-    if (token) {
-      const sessions = await readJson(sessionsFile, []);
-      await writeJson(sessionsFile, sessions.filter((session) => session.token !== token));
-    }
-    res.clearCookie("demogo_session");
-    res.json({ ok: true });
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.get("/api/me", async (req, res, next) => {
-  try {
-    const user = await getUserFromRequest(req);
-    if (!user) {
-      res.status(401).json({ error: "请先登录" });
-      return;
-    }
-    const demos = await readJson(demosFile, []);
-    res.json({
-      user: publicUser(user),
-      demos: demos.filter((demo) => demo.userId === user.id).map(publicUserDemo),
-      quota: calculateQuota(user, demos)
-    });
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.get("/api/agent-token", requireUser, async (req, res, next) => {
-  try {
-    res.json({ token: publicAgentToken(req.user) });
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.post("/api/agent-token", requireUser, async (req, res, next) => {
-  try {
-    const users = await readJson(usersFile, []);
-    const userIndex = users.findIndex((user) => user.id === req.user.id);
-    if (userIndex === -1) {
-      res.status(404).json({ error: "未找到当前用户，请重新登录。" });
-      return;
-    }
-
-    const { plainToken, token } = createAgentTokenRecord();
-    users[userIndex] = {
-      ...users[userIndex],
-      agentToken: token,
-      updatedAt: new Date().toISOString()
-    };
-    await writeJson(usersFile, users);
-    await writeAuditLog({
-      action: "reset_agent_token",
-      actorType: "user",
-      actorId: req.user.id,
-      targetType: "user",
-      targetId: req.user.id,
-      ip: getClientIp(req),
-      metadata: { prefix: token.prefix }
-    });
-    res.json({ token: { ...publicAgentToken(users[userIndex]), value: plainToken } });
-  } catch (error) {
-    next(error);
-  }
-});
 
 // ===== AGENT TOKEN & PROJECT =====
-app.get("/api/agent/token-check", requireAgentToken, async (req, res) => {
-  res.json({
-    ok: true,
-    token: publicAgentToken(req.user),
-    user: {
-      id: req.user.id,
-      email: req.user.email,
-      plan: req.user.plan
-    }
-  });
-});
-
-app.get("/api/agent/project/:id", requireAgentToken, async (req, res, next) => {
-  try {
-    const demos = await readJson(demosFile, []);
-    const demo = demos.find((item) => item.id === req.params.id && item.userId === req.user.id);
-    if (!demo) {
-      res.status(404).json({ error: "未找到该项目" });
-      return;
-    }
-    const events = await readDeploymentEventsForDemo(demo.id);
-    res.json({
-      demo: publicUserDemo(demo),
-      events,
-      inspection: demo.inspection || null
-    });
-  } catch (error) {
-    next(error);
-  }
-});
 
 // ===== DEMOS CRUD =====
-app.get("/api/demos", async (req, res, next) => {
-  try {
-    await flushUsageStats();
-    const user = await getUserFromRequest(req);
-    if (!user) {
-      res.status(401).json({ error: "请先登录" });
-      return;
-    }
-    const demos = await readJson(demosFile, []);
-    res.json({
-      demos: demos.filter((demo) => demo.userId === user.id).map(publicUserDemo),
-      quota: calculateQuota(user, demos)
-    });
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.get("/api/demos/:id", requireUser, async (req, res, next) => {
-  try {
-    await flushUsageStats();
-    const demos = await readJson(demosFile, []);
-    const demo = demos.find((item) => item.id === req.params.id && item.userId === req.user.id);
-    if (!demo) {
-      res.status(404).json({ error: "未找到该 Demo" });
-      return;
-    }
-    const events = await readDeploymentEventsForDemo(demo.id);
-    res.json({
-      demo: publicUserDemo(demo),
-      events,
-      inspection: demo.inspection || null
-    });
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.get("/api/demos/:id/events", requireUser, async (req, res, next) => {
-  try {
-    const demos = await readJson(demosFile, []);
-    const demo = demos.find((item) => item.id === req.params.id && item.userId === req.user.id);
-    if (!demo) {
-      res.status(404).json({ error: "未找到该 Demo" });
-      return;
-    }
-    res.json({ events: await readDeploymentEventsForDemo(demo.id) });
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.get("/api/demos/:id/inspection", requireUser, async (req, res, next) => {
-  try {
-    const demos = await readJson(demosFile, []);
-    const demo = demos.find((item) => item.id === req.params.id && item.userId === req.user.id);
-    if (!demo) {
-      res.status(404).json({ error: "未找到该 Demo" });
-      return;
-    }
-    res.json({ inspection: demo.inspection || null });
-  } catch (error) {
-    next(error);
-  }
-});
 
 // ===== DEPLOY EVENTS & JOBS =====
-app.get("/api/deploy-events", requireUser, async (req, res, next) => {
-  try {
-    const demos = await readJson(demosFile, []);
-    res.json(userDeployEvents(req.user, demos, { limit: req.query?.limit }));
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.get("/api/deployment-jobs/:id", requireUser, async (req, res, next) => {
-  try {
-    const job = await findDeploymentJob(req.params.id);
-    if (!job || job.userId !== req.user.id) {
-      res.status(404).json({ error: "未找到这次生成任务" });
-      return;
-    }
-    res.json({ job: publicDeploymentJob(job) });
-  } catch (error) {
-    next(error);
-  }
-});
 
 // ===== FORMS =====
-app.get("/api/forms", requireUser, async (req, res, next) => {
-  try {
-    const [forms, submissions] = await Promise.all([
-      readJson(formsFile, []),
-      readJson(formSubmissionsFile, [])
-    ]);
-    const userForms = forms
-      .filter((form) => form.userId === req.user.id && form.status !== "deleted")
-      .map((form) => publicForm(form, { publicBaseUrl }));
-    res.json({
-      forms: userForms,
-      quota: calculateFormQuota(req.user, forms, submissions)
-    });
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.post("/api/forms", requireUser, async (req, res, next) => {
-  try {
-    const demoId = String(req.body?.demoId || "").trim();
-    const name = String(req.body?.name || "").trim().slice(0, 120);
-    const requestedFields = normalizeFormFields(req.body?.fields || []);
-    const [demos, forms, submissions] = await Promise.all([
-      readJson(demosFile, []),
-      readJson(formsFile, []),
-      readJson(formSubmissionsFile, [])
-    ]);
-    const demo = demos.find((item) => item.id === demoId && item.userId === req.user.id);
-
-    if (!demo) {
-      res.status(404).json({ error: "未找到要开启报名/留言收集的试用项目" });
-      return;
-    }
-
-    if (demo.status !== "published") {
-      res.status(409).json({ error: "只有在线试用项目可以开启报名/留言收集" });
-      return;
-    }
-
-    const existing = forms.find((form) => form.demoId === demo.id && form.userId === req.user.id && form.status !== "deleted");
-    if (existing) {
-      res.json({
-        form: publicForm(existing, { publicBaseUrl }),
-        quota: calculateFormQuota(req.user, forms, submissions)
-      });
-      return;
-    }
-
-    const quota = calculateFormQuota(req.user, forms, submissions);
-    if (quota.forms.used >= quota.forms.limit) {
-      res.status(403).json({ error: `当前套餐最多托管 ${quota.forms.limit} 个表单，请升级套餐或关闭其他表单后再试` });
-      return;
-    }
-
-    const now = new Date().toISOString();
-    const item = {
-      id: crypto.randomUUID(),
-      userId: req.user.id,
-      userEmail: req.user.email,
-      demoId: demo.id,
-      demoSlug: demo.slug,
-      demoName: demo.name || demo.slug,
-      publicToken: crypto.randomBytes(24).toString("hex"),
-      name: name || `${demo.name || demo.slug} 表单`,
-      status: "active",
-      fields: requestedFields.length
-        ? requestedFields
-        : (normalizeFormFields(demo.inspection?.formFields || []).length
-            ? normalizeFormFields(demo.inspection?.formFields || [])
-            : defaultFormFields()),
-      submissionCount: 0,
-      createdAt: now,
-      updatedAt: now
-    };
-
-    forms.unshift(item);
-    await writeJson(formsFile, forms.slice(0, 2000));
-    await writeAuditLog({
-      action: "create_form_hosting",
-      actorType: "user",
-      actorId: req.user.id,
-      targetType: "form",
-      targetId: item.id,
-      ip: getClientIp(req),
-      metadata: {
-        demoId: demo.id,
-        demoSlug: demo.slug
-      }
-    });
-
-    res.json({
-      form: publicForm(item, { publicBaseUrl }),
-      quota: calculateFormQuota(req.user, forms, submissions)
-    });
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.get("/api/forms/:id", requireUser, async (req, res, next) => {
-  try {
-    const [forms, submissions] = await Promise.all([
-      readJson(formsFile, []),
-      readJson(formSubmissionsFile, [])
-    ]);
-    const form = forms.find((item) => item.id === req.params.id && item.userId === req.user.id && item.status !== "deleted");
-    if (!form) {
-      res.status(404).json({ error: "未找到表单" });
-      return;
-    }
-    res.json({
-      form: publicForm(form, { publicBaseUrl }),
-      submissions: submissions
-        .filter((item) => item.formId === form.id && item.userId === req.user.id)
-        .slice(0, 100)
-        .map(publicFormSubmission)
-    });
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.post("/api/forms/:id/status", requireUser, async (req, res, next) => {
-  try {
-    const nextStatus = normalizeFormStatus(req.body?.status);
-    if (!["active", "closed", "deleted"].includes(nextStatus)) {
-      res.status(400).json({ error: "请选择有效的表单状态" });
-      return;
-    }
-
-    const [forms, submissions] = await Promise.all([
-      readJson(formsFile, []),
-      readJson(formSubmissionsFile, [])
-    ]);
-    const formIndex = forms.findIndex((item) => item.id === req.params.id && item.userId === req.user.id);
-    if (formIndex === -1) {
-      res.status(404).json({ error: "未找到表单" });
-      return;
-    }
-
-    forms[formIndex] = {
-      ...forms[formIndex],
-      status: nextStatus,
-      updatedAt: new Date().toISOString()
-    };
-    await writeJson(formsFile, forms);
-    await writeAuditLog({
-      action: "update_form_status",
-      actorType: "user",
-      actorId: req.user.id,
-      targetType: "form",
-      targetId: forms[formIndex].id,
-      ip: getClientIp(req),
-      metadata: {
-        status: nextStatus,
-        demoSlug: forms[formIndex].demoSlug
-      }
-    });
-
-    res.json({
-      form: publicForm(forms[formIndex], { publicBaseUrl }),
-      quota: calculateFormQuota(req.user, forms, submissions)
-    });
-  } catch (error) {
-    next(error);
-  }
-});
 
 // ===== PUBLIC FORM SUBMISSION =====
-app.post("/api/public/forms/:token/submit", async (req, res, next) => {
-  try {
-    const token = String(req.params.token || "").trim();
-    const [forms, submissions, users] = await Promise.all([
-      readJson(formsFile, []),
-      readJson(formSubmissionsFile, []),
-      readJson(usersFile, [])
-    ]);
-    const formIndex = forms.findIndex((item) => item.publicToken === token && (item.status || "active") === "active");
-    if (formIndex === -1) {
-      res.status(404).json({ error: "表单不存在或已关闭" });
-      return;
-    }
-
-    const form = forms[formIndex];
-    const owner = users.find((user) => user.id === form.userId) || { id: form.userId, plan: "free" };
-    const quota = calculateFormQuota(owner, forms, submissions);
-    if (quota.monthlySubmissions.limit && quota.monthlySubmissions.used >= quota.monthlySubmissions.limit) {
-      res.status(403).json({ error: "本月表单提交额度已用完" });
-      return;
-    }
-
-    const payload = sanitizeSubmissionPayload(req.body || {}, form.fields || []);
-    if (!Object.keys(payload).length) {
-      res.status(400).json({ error: "请填写表单内容后再提交" });
-      return;
-    }
-
-    const now = new Date().toISOString();
-    const submission = {
-      id: crypto.randomUUID(),
-      formId: form.id,
-      userId: form.userId,
-      userEmail: form.userEmail,
-      demoId: form.demoId,
-      demoSlug: form.demoSlug,
-      payload,
-      ip: getClientIp(req),
-      userAgent: String(req.get("user-agent") || "").slice(0, 500),
-      createdAt: now
-    };
-
-    submissions.unshift(submission);
-    forms[formIndex] = {
-      ...form,
-      submissionCount: Number(form.submissionCount || 0) + 1,
-      updatedAt: now
-    };
-    await Promise.all([
-      writeJson(formSubmissionsFile, submissions.slice(0, 5000)),
-      writeJson(formsFile, forms)
-    ]);
-
-    res.json({ ok: true, submission: publicFormSubmission(submission) });
-  } catch (error) {
-    next(error);
-  }
-});
 
 // ===== ADMIN ROUTES =====
-app.get("/api/admin/overview", requireAdmin, async (req, res, next) => {
-  try {
-    await flushUsageStats();
-    const [users, demos, feedback, planRequests, forms, formSubmissions, contentReviews, auditLogs, deploymentEvents, trialEvents] = await Promise.all([
-      readJson(usersFile, []),
-      readJson(demosFile, []),
-      readJson(feedbackFile, []),
-      readJson(planRequestsFile, []),
-      readJson(formsFile, []),
-      readJson(formSubmissionsFile, []),
-      readJson(contentReviewsFile, []),
-      readJson(auditLogsFile, []),
-      readJson(deploymentEventsFile, []),
-      readJson(trialEventsFile, [])
-    ]);
-    const search = String(req.query?.search || "").trim().toLowerCase();
-    const status = String(req.query?.status || "").trim();
-    const userSearch = String(req.query?.user || "").trim().toLowerCase();
-    const demoSearch = String(req.query?.demo || "").trim().toLowerCase();
-    const liveDemos = demos.filter((demo) => demo.status === "published");
-    const offlineDemos = demos.filter((demo) => demo.status === "offline");
-    const expiredDemos = demos.filter((demo) => demo.status === "expired");
-    const deletedDemos = demos.filter((demo) => demo.status === "deleted");
-    const failedDemos = demos.filter((demo) => demo.status === "failed");
-    const filteredUsers = filterAdminUsers(users, { search: search || userSearch });
-    const filteredDemos = filterAdminDemos(demos, {
-      search: search || demoSearch,
-      status
-    });
-    const latestDemos = filteredDemos.slice(0, 50);
-    const latestFeedback = feedback.slice(0, 20);
-    const totalVisits = demos.reduce((sum, demo) => sum + Number(demo.usage?.visits || 0), 0);
-    const totalEstimatedBytes = demos.reduce((sum, demo) => sum + Number(demo.usage?.estimatedBytes || 0), 0);
-    const aiDeployAuditLogs = auditLogs.filter((item) => item.action === "agent_deploy_demo");
-    const failedDeploymentEvents = deploymentEvents.filter((item) => item.status === "failed");
-    const failureReasonCounts = summarizeFailureReasons(failedDeploymentEvents, contentReviews);
-    const trialFunnel = summarizeTrialFunnel(trialEvents, deploymentEvents, auditLogs, users);
-    const sourceBreakdown = summarizeDeploySources(auditLogs, demos);
-    const runtimeSummary = summarizeRuntimeOps(demos);
-    const planCounts = users.reduce((acc, user) => {
-      acc[user.plan] = (acc[user.plan] || 0) + 1;
-      return acc;
-    }, {});
-
-    res.json({
-      metrics: {
-        users: users.length,
-        demos: demos.length,
-        liveDemos: liveDemos.length,
-        offlineDemos: offlineDemos.length,
-        expiredDemos: expiredDemos.length,
-        deletedDemos: deletedDemos.length,
-        failedDemos: failedDemos.length,
-        totalVisits,
-        totalEstimatedBytes,
-        planCounts,
-        feedback: feedback.length,
-        openFeedback: feedback.filter((item) => item.status === "open").length,
-        forms: forms.filter((item) => item.status !== "deleted").length,
-        activeForms: forms.filter((item) => (item.status || "active") === "active").length,
-        formSubmissions: formSubmissions.length,
-        planUpgradeRequests: planRequests.length,
-        openPlanUpgradeRequests: planRequests.filter((item) => item.status === "open").length,
-        contentReviews: contentReviews.length,
-        blockedContentReviews: contentReviews.filter((item) => item.status === "blocked").length,
-        pendingContentReviews: contentReviews.filter((item) => item.status === "review_required").length,
-        pendingContentReviewResolutions: contentReviews.filter((item) => contentReviewResolutionStatus(item) === "pending_review").length,
-        aiDeploys: aiDeployAuditLogs.length,
-        deploySuccesses: deploymentEvents.filter((item) => item.eventType === "success" && item.status === "success").length,
-        deployFailures: failedDeploymentEvents.length,
-        failureReasons: failureReasonCounts,
-        trialFunnel,
-        deploySourceBreakdown: sourceBreakdown,
-        runtime: runtimeSummary
-      },
-      users: filteredUsers.slice(0, 50).map((user) => adminUserSummary(user, demos, calculateQuota)),
-      demos: latestDemos.map(adminDemoSummary),
-      forms: forms.slice(0, 50).map((form) => publicForm(form, { publicBaseUrl })),
-      feedback: latestFeedback.map(publicFeedback),
-      contentReviews: contentReviews.slice(0, 50).map(publicAdminContentReview)
-    });
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.get("/api/admin/forms", requireAdmin, async (req, res, next) => {
-  try {
-    const [forms, submissions] = await Promise.all([
-      readJson(formsFile, []),
-      readJson(formSubmissionsFile, [])
-    ]);
-    const filtered = filterAdminForms(forms, {
-      search: req.query?.search,
-      status: req.query?.status
-    });
-    res.json({
-      forms: filtered.slice(0, 200).map((form) => publicForm(form, { publicBaseUrl })),
-      submissions: submissions.slice(0, 100).map(publicFormSubmission)
-    });
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.get("/api/admin/users", requireAdmin, async (req, res, next) => {
-  try {
-    const [users, demos] = await Promise.all([
-      readJson(usersFile, []),
-      readJson(demosFile, [])
-    ]);
-    const filteredUsers = filterAdminUsers(users, {
-      search: req.query?.search,
-      plan: req.query?.plan
-    });
-    res.json({
-      users: filteredUsers.slice(0, 200).map((user) => adminUserSummary(user, demos, calculateQuota)),
-      plans: Object.values(plans)
-    });
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.get("/api/plan-upgrade-requests", requireUser, async (req, res, next) => {
-  try {
-    const requests = await readJson(planRequestsFile, []);
-    res.json({
-      requests: requests
-        .filter((item) => item.userId === req.user.id)
-        .slice(0, 20)
-        .map(publicPlanRequest)
-    });
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.post("/api/plan-upgrade-requests", requireUser, async (req, res, next) => {
-  try {
-    const requestedPlan = normalizeRequestedPlan(req.body?.plan);
-    const contact = String(req.body?.contact || "").trim();
-    const message = String(req.body?.message || "").trim();
-    const currentPlan = req.user.plan || "free";
-
-    if (!requestedPlan) {
-      res.status(400).json({ error: "请选择 Lite 或 Pro 套餐" });
-      return;
-    }
-
-    if (requestedPlan === currentPlan) {
-      res.status(400).json({ error: "你已经是当前套餐，无需重复申请" });
-      return;
-    }
-
-    if (!canUpgradePlan(currentPlan, requestedPlan)) {
-      res.status(400).json({ error: "当前套餐有效期间暂不支持降级或重复申请低等级套餐" });
-      return;
-    }
-
-    if (contact.length > 120) {
-      res.status(400).json({ error: "联系方式过长，请控制在 120 字以内" });
-      return;
-    }
-
-    if (message.length > 500) {
-      res.status(400).json({ error: "申请说明过长，请控制在 500 字以内" });
-      return;
-    }
-
-    const requests = await readJson(planRequestsFile, []);
-    const existingOpen = requests.find((item) => item.userId === req.user.id && item.status === "open");
-    if (existingOpen) {
-      res.status(409).json({ error: "你已有一个待处理的升级申请，请等待管理员处理" });
-      return;
-    }
-
-    const now = new Date().toISOString();
-    const item = {
-      id: crypto.randomUUID(),
-      userId: req.user.id,
-      userEmail: req.user.email,
-      currentPlan,
-      requestedPlan,
-      status: "open",
-      contact: contact.slice(0, 120),
-      message: message.slice(0, 500),
-      createdAt: now,
-      updatedAt: now
-    };
-
-    requests.unshift(item);
-    await writeJson(planRequestsFile, requests.slice(0, 2000));
-    await writeAuditLog({
-      action: "request_plan_upgrade",
-      actorType: "user",
-      actorId: req.user.id,
-      targetType: "plan_upgrade_request",
-      targetId: item.id,
-      ip: getClientIp(req),
-      metadata: {
-        currentPlan,
-        requestedPlan,
-        userEmail: req.user.email
-      }
-    });
-
-    res.json({ request: publicPlanRequest(item) });
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.get("/api/admin/plan-upgrade-requests", requireAdmin, async (req, res, next) => {
-  try {
-    const requests = await readJson(planRequestsFile, []);
-    const filtered = filterPlanRequests(requests, {
-      search: req.query?.search,
-      status: req.query?.status,
-      plan: req.query?.plan
-    });
-    res.json({
-      requests: filtered.slice(0, 200).map(publicPlanRequest)
-    });
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.get("/api/admin/subdomain-requests", requireAdmin, async (req, res, next) => {
-  try {
-    const requests = await readJson(subdomainRequestsFile, []);
-    res.json({ requests: filterSubdomainRequests(requests, { status: req.query?.status }) });
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.post("/api/admin/subdomain-requests/:id/status", requireAdmin, async (req, res, next) => {
-  try {
-    const nextStatus = normalizeSubdomainRequestStatus(req.body?.status);
-    const adminNote = String(req.body?.adminNote || "").trim().slice(0, 500);
-    if (!["approved", "rejected"].includes(nextStatus)) {
-      res.status(400).json({ error: "请选择通过或拒绝。" });
-      return;
-    }
-    const requests = await readJson(subdomainRequestsFile, []);
-    const index = requests.findIndex((item) => item.id === req.params.id);
-    if (index === -1) {
-      res.status(404).json({ error: "未找到该二级域名申请。" });
-      return;
-    }
-    const now = new Date().toISOString();
-    requests[index] = {
-      ...requests[index],
-      status: nextStatus,
-      statusLabel: subdomainRequestStatusLabel(nextStatus),
-      adminNote,
-      handledBy: adminUser,
-      handledAt: now,
-      updatedAt: now
-    };
-    await writeJson(subdomainRequestsFile, requests);
-    await writeAuditLog({
-      action: nextStatus === "approved" ? "admin_approve_subdomain_request" : "admin_reject_subdomain_request",
-      actorType: "admin",
-      targetType: "subdomain_request",
-      targetId: requests[index].id,
-      metadata: { subdomain: requests[index].subdomain, demoId: requests[index].demoId }
-    });
-    res.json({ request: requests[index] });
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.post("/api/admin/plan-upgrade-requests/:id/status", requireAdmin, async (req, res, next) => {
-  try {
-    const nextStatus = normalizePlanRequestStatus(req.body?.status);
-    const adminNote = String(req.body?.adminNote || "").trim().slice(0, 500);
-
-    if (!["approved", "rejected"].includes(nextStatus)) {
-      res.status(400).json({ error: "请选择开通或拒绝" });
-      return;
-    }
-
-    const [requests, users, demos] = await Promise.all([
-      readJson(planRequestsFile, []),
-      readJson(usersFile, []),
-      readJson(demosFile, [])
-    ]);
-    const requestIndex = requests.findIndex((item) => item.id === req.params.id);
-    if (requestIndex === -1) {
-      res.status(404).json({ error: "未找到升级申请" });
-      return;
-    }
-
-    const request = requests[requestIndex];
-    if ((request.status || "open") !== "open") {
-      res.status(409).json({ error: "该申请已经处理过" });
-      return;
-    }
-
-    const now = new Date().toISOString();
-    let updatedUser = null;
-    if (nextStatus === "approved") {
-      const userIndex = users.findIndex((user) => user.id === request.userId);
-      if (userIndex === -1) {
-        res.status(404).json({ error: "申请用户不存在，无法开通套餐" });
-        return;
-      }
-      const previousPlan = users[userIndex].plan || "free";
-      users[userIndex] = {
-        ...users[userIndex],
-        plan: request.requestedPlan,
-        updatedAt: now,
-        planUpdatedAt: now
-      };
-      updatedUser = users[userIndex];
-      await writeJson(usersFile, users);
-      await writeAuditLog({
-        action: "admin_approve_plan_upgrade",
-        actorType: "admin",
-        targetType: "user",
-        targetId: updatedUser.id,
-        ip: getClientIp(req),
-        metadata: {
-          requestId: request.id,
-          email: updatedUser.email,
-          previousPlan,
-          nextPlan: request.requestedPlan
-        }
-      });
-    }
-
-    requests[requestIndex] = {
-      ...request,
-      status: nextStatus,
-      adminNote,
-      handledBy: adminUser || "admin",
-      handledAt: now,
-      updatedAt: now
-    };
-    await writeJson(planRequestsFile, requests);
-    await writeAuditLog({
-      action: nextStatus === "approved" ? "admin_update_plan_request_approved" : "admin_update_plan_request_rejected",
-      actorType: "admin",
-      targetType: "plan_upgrade_request",
-      targetId: request.id,
-      ip: getClientIp(req),
-      metadata: {
-        userId: request.userId,
-        userEmail: request.userEmail,
-        requestedPlan: request.requestedPlan,
-        adminNote
-      }
-    });
-
-    res.json({
-      request: publicPlanRequest(requests[requestIndex]),
-      user: updatedUser ? adminUserSummary(updatedUser, demos, calculateQuota) : null
-    });
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.get("/api/admin/feedback", requireAdmin, async (req, res, next) => {
-  try {
-    const feedback = await readJson(feedbackFile, []);
-    const filtered = filterFeedback(feedback, {
-      search: req.query?.search,
-      type: req.query?.type,
-      status: req.query?.status
-    });
-    res.json({
-      feedback: filtered.slice(0, 200).map(publicFeedback)
-    });
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.post("/api/admin/feedback/:id/status", requireAdmin, async (req, res, next) => {
-  try {
-    const nextStatus = normalizeFeedbackStatus(req.body?.status);
-    if (!nextStatus) {
-      res.status(400).json({ error: "请选择有效反馈状态" });
-      return;
-    }
-
-    const feedback = await readJson(feedbackFile, []);
-    const feedbackIndex = feedback.findIndex((item) => item.id === req.params.id);
-    if (feedbackIndex === -1) {
-      res.status(404).json({ error: "未找到反馈" });
-      return;
-    }
-
-    const previousStatus = feedback[feedbackIndex].status || "open";
-    feedback[feedbackIndex] = {
-      ...feedback[feedbackIndex],
-      status: nextStatus,
-      updatedAt: new Date().toISOString()
-    };
-    await writeJson(feedbackFile, feedback);
-    await writeAuditLog({
-      action: "admin_update_feedback_status",
-      actorType: "admin",
-      targetType: "feedback",
-      targetId: feedback[feedbackIndex].id,
-      ip: getClientIp(req),
-      metadata: {
-        previousStatus,
-        nextStatus,
-        userEmail: feedback[feedbackIndex].userEmail,
-        demoSlug: feedback[feedbackIndex].demoSlug
-      }
-    });
-
-    res.json({ feedback: publicFeedback(feedback[feedbackIndex]) });
-  } catch (error) {
-    next(error);
-  }
-});
 
 // ===== FEEDBACK =====
-app.post("/api/feedback", requireUser, async (req, res, next) => {
-  try {
-    const message = String(req.body?.message || "").trim();
-    const type = normalizeFeedbackType(req.body?.type);
-    const demoId = String(req.body?.demoId || "").trim();
-    const contact = String(req.body?.contact || "").trim();
-
-    if (message.length < 5) {
-      res.status(400).json({ error: "请至少填写 5 个字的问题描述" });
-      return;
-    }
-
-    if (message.length > 1000) {
-      res.status(400).json({ error: "问题描述过长，请控制在 1000 字以内" });
-      return;
-    }
-
-    const demos = await readJson(demosFile, []);
-    const relatedDemo = demoId ? demos.find((demo) => demo.id === demoId && demo.userId === req.user.id) : null;
-    if (demoId && !relatedDemo) {
-      res.status(404).json({ error: "未找到关联 Demo" });
-      return;
-    }
-
-    const feedback = await readJson(feedbackFile, []);
-    const now = new Date().toISOString();
-    const item = {
-      id: crypto.randomUUID(),
-      userId: req.user.id,
-      userEmail: req.user.email,
-      demoId: relatedDemo?.id || null,
-      demoSlug: relatedDemo?.slug || null,
-      type,
-      message,
-      contact: contact.slice(0, 120),
-      status: "open",
-      ip: getClientIp(req),
-      createdAt: now,
-      updatedAt: now
-    };
-
-    feedback.unshift(item);
-    await writeJson(feedbackFile, feedback.slice(0, 2000));
-    await writeAuditLog({
-      action: "submit_feedback",
-      actorType: "user",
-      actorId: req.user.id,
-      targetType: "feedback",
-      targetId: item.id,
-      ip: item.ip,
-      metadata: {
-        type,
-        demoId: item.demoId,
-        demoSlug: item.demoSlug
-      }
-    });
-
-    res.json({ feedback: publicFeedback(item) });
-  } catch (error) {
-    next(error);
-  }
-});
 
 // ===== INSPECT & DEPLOY =====
-app.post("/api/inspect", requireUser, uploadProjectArchive, async (req, res, next) => {
-  const uploadedFile = req.file;
-  if (!uploadedFile) {
-    res.status(400).json({ error: "请上传 .zip、.tar.gz 或 .tgz 项目包" });
-    return;
-  }
-
-  try {
-    const inspection = await inspectProjectArchive(uploadedFile.path, uploadedFile.originalname);
-    await writeTrialEvent({
-      eventType: inspection.canPublish ? "project_inspect_passed" : "project_inspect_failed",
-      userId: req.user.id,
-      userEmail: req.user.email,
-      source: "web",
-      path: "/api/inspect",
-      ip: getClientIp(req),
-      metadata: {
-        fileName: uploadedFile.originalname,
-        detectedType: inspection.detectedType,
-        canPublish: Boolean(inspection.canPublish),
-        failureCategory: inspection.canPublish ? "" : classifyFailureMessage(`${inspection.summary || ""} ${(inspection.issues || []).join(" ")}`)
-      }
-    });
-    res.json({ inspection });
-  } catch (error) {
-    next(error);
-  } finally {
-    await fs.rm(uploadedFile.path, { force: true });
-  }
-});
 
 // ===== ADMIN CONTENT REVIEWS =====
-app.get("/api/admin/content-reviews", requireAdmin, async (req, res, next) => {
-  try {
-    const reviews = await readJson(contentReviewsFile, []);
-    const status = String(req.query?.status || "").trim();
-    const resolutionStatus = String(req.query?.resolutionStatus || "").trim();
-    const search = String(req.query?.search || "").trim().toLowerCase();
-    const filtered = reviews.filter((review) => {
-      if (status && review.status !== status) return false;
-      if (resolutionStatus && contentReviewResolutionStatus(review) !== resolutionStatus) return false;
-      if (!search) return true;
-      return [
-        review.projectName,
-        review.fileName,
-        review.userEmail,
-        review.demoSlug,
-        review.summary
-      ].some((value) => String(value || "").toLowerCase().includes(search));
-    });
-    res.json({
-      reviews: filtered.slice(0, 200).map(publicAdminContentReview)
-    });
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.post("/api/admin/content-reviews/:id/status", requireAdmin, async (req, res, next) => {
-  try {
-    const reviews = await readJson(contentReviewsFile, []);
-    const index = reviews.findIndex((review) => review.id === req.params.id);
-    if (index === -1) {
-      res.status(404).json({ error: "未找到内容检查记录" });
-      return;
-    }
-
-    const resolutionStatus = normalizeContentReviewResolutionStatus(req.body?.resolutionStatus);
-    if (!resolutionStatus) {
-      res.status(400).json({ error: "请选择有效的处理结果" });
-      return;
-    }
-
-    const now = new Date().toISOString();
-    const updated = {
-      ...reviews[index],
-      resolutionStatus,
-      adminNote: String(req.body?.adminNote || "").trim().slice(0, 1000),
-      handledBy: adminUser || "admin",
-      handledAt: now
-    };
-    reviews[index] = updated;
-    await writeJson(contentReviewsFile, reviews);
-    await writeAuditLog({
-      action: "admin_handle_content_review",
-      actorType: "admin",
-      targetType: "content_review",
-      targetId: updated.id,
-      metadata: {
-        resolutionStatus,
-        reviewStatus: updated.status,
-        projectName: updated.projectName,
-        demoSlug: updated.demoSlug
-      }
-    });
-    res.json({ review: publicAdminContentReview(updated) });
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.post("/api/admin/demos/:id/offline", requireAdmin, async (req, res, next) => {
-  try {
-    const demos = await readJson(demosFile, []);
-    const demoIndex = demos.findIndex((demo) => demo.id === req.params.id);
-
-    if (demoIndex === -1) {
-      res.status(404).json({ error: "未找到该 Demo" });
-      return;
-    }
-
-    const demo = demos[demoIndex];
-    if (demo.status !== "published") {
-      res.json({ demo: adminDemoSummary(demo) });
-      return;
-    }
-
-    await stopRuntime(demo.slug);
-    await removeDemoFiles(demo.slug);
-    demos[demoIndex] = {
-      ...demo,
-      status: "offline",
-      offlineAt: new Date().toISOString(),
-      offlineBy: "admin"
-    };
-    await writeJson(demosFile, demos);
-    await writeAuditLog({
-      action: "admin_offline_demo",
-      actorType: "admin",
-      targetType: "demo",
-      targetId: demo.id,
-      metadata: { slug: demo.slug, userEmail: demo.userEmail }
-    });
-    res.json({ demo: adminDemoSummary(demos[demoIndex]) });
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.post("/api/admin/demos/:id/delete", requireAdmin, async (req, res, next) => {
-  try {
-    const demos = await readJson(demosFile, []);
-    const demoIndex = demos.findIndex((demo) => demo.id === req.params.id);
-
-    if (demoIndex === -1) {
-      res.status(404).json({ error: "未找到该 Demo" });
-      return;
-    }
-
-    const demo = demos[demoIndex];
-    if (demo.status === "published") {
-      res.status(409).json({ error: "已发布 Demo 不能直接删除，请先下线" });
-      return;
-    }
-
-    if (demo.status === "deleted") {
-      res.json({ demo: adminDemoSummary(demo) });
-      return;
-    }
-
-    await stopRuntime(demo.slug);
-    await deleteDemoFiles(demo);
-    demos[demoIndex] = {
-      ...demo,
-      status: "deleted",
-      deletedAt: new Date().toISOString(),
-      deletedBy: "admin"
-    };
-    await writeJson(demosFile, demos);
-    await writeAuditLog({
-      action: "admin_delete_demo",
-      actorType: "admin",
-      targetType: "demo",
-      targetId: demo.id,
-      metadata: { slug: demo.slug, userEmail: demo.userEmail, previousStatus: demo.status }
-    });
-    res.json({ demo: adminDemoSummary(demos[demoIndex]) });
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.get("/api/admin/runtimes", requireAdmin, async (_req, res, next) => {
-  try {
-    const demos = await readJson(demosFile, []);
-    const runtimeRecords = await listRuntimeRecords(hostingConfig());
-    const runtimeBySlug = new Map(runtimeRecords.map((runtime) => [runtime.slug, runtime]));
-    const runtimeDemos = demos
-      .filter((demo) => demo.hostingMode === "node_runtime" || demo.runtime || demo.database?.enabled)
-      .map((demo) => {
-        const liveRuntime = runtimeBySlug.get(demo.slug);
-        return adminRuntimeDemoSummary({
-          ...demo,
-          runtime: liveRuntime || demo.runtime || demo.hosting?.runtime || null
-        });
-      });
-    res.json({
-      summary: summarizeRuntimeOps(demos, runtimeRecords),
-      runtimes: runtimeRecords,
-      demos: runtimeDemos
-    });
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.post("/api/admin/demos/:id/runtime/stop", requireAdmin, async (req, res, next) => {
-  try {
-    const demos = await readJson(demosFile, []);
-    const demoIndex = demos.findIndex((demo) => demo.id === req.params.id);
-    if (demoIndex === -1) {
-      res.status(404).json({ error: "未找到该试用项目" });
-      return;
-    }
-    const demo = demos[demoIndex];
-    if (demo.hostingMode !== "node_runtime") {
-      res.status(409).json({ error: "只有 Node.js 试用项目才有运行环境。" });
-      return;
-    }
-    const stopped = await stopRuntime(demo.slug);
-    const nextRuntime = {
-      ...(demo.runtime || {}),
-      status: "stopped",
-      statusLabel: "已停止",
-      lifecycle: {
-        ...(demo.runtime?.lifecycle || {}),
-        stage: "stopped",
-        stageLabel: "已停止",
-        stoppedAt: new Date().toISOString()
-      }
-    };
-    demos[demoIndex] = {
-      ...demo,
-      runtime: nextRuntime,
-      hosting: {
-        ...(demo.hosting || {}),
-        runtime: {
-          ...(demo.hosting?.runtime || {}),
-          ...nextRuntime
-        }
-      },
-      inspection: {
-        ...(demo.inspection || {}),
-        runtime: {
-          ...(demo.inspection?.runtime || {}),
-          ...nextRuntime
-        },
-        hosting: {
-          ...(demo.inspection?.hosting || demo.hosting || {}),
-          runtime: {
-            ...(demo.inspection?.hosting?.runtime || demo.hosting?.runtime || {}),
-            ...nextRuntime
-          }
-        }
-      },
-      updatedAt: new Date().toISOString()
-    };
-    demos[demoIndex].applicationReadiness = createApplicationReadiness({ demo: demos[demoIndex], inspection: demos[demoIndex].inspection || {} });
-    demos[demoIndex].inspection = {
-      ...(demos[demoIndex].inspection || {}),
-      applicationReadiness: demos[demoIndex].applicationReadiness
-    };
-    await writeJson(demosFile, demos);
-    await writeAuditLog({
-      action: "admin_stop_demo_runtime",
-      actorType: "admin",
-      targetType: "demo",
-      targetId: demo.id,
-      metadata: {
-        slug: demo.slug,
-        userEmail: demo.userEmail,
-        stoppedRuntimeId: stopped?.id || stopped?.containerName || ""
-      }
-    });
-    res.json({ demo: adminDemoSummary(demos[demoIndex]), runtime: nextRuntime });
-  } catch (error) {
-    next(error);
-  }
-});
 
 // ===== DEMO LIFECYCLE (offline/delete/slug/restore) =====
-app.post("/api/demos/:id/offline", requireUser, async (req, res, next) => {
-  try {
-    const demos = await readJson(demosFile, []);
-    const demoIndex = demos.findIndex((demo) => demo.id === req.params.id && demo.userId === req.user.id);
-
-    if (demoIndex === -1) {
-      res.status(404).json({ error: "未找到该 Demo" });
-      return;
-    }
-
-    const demo = demos[demoIndex];
-    if (demo.status !== "published") {
-      res.json({ demo: publicUserDemo(demo), quota: calculateQuota(req.user, demos) });
-      return;
-    }
-
-    await stopRuntime(demo.slug);
-    await removeDemoFiles(demo.slug);
-    demos[demoIndex] = {
-      ...demo,
-      status: "offline",
-      offlineAt: new Date().toISOString(),
-      offlineBy: "user"
-    };
-    await writeJson(demosFile, demos);
-    await writeAuditLog({
-      action: "user_offline_demo",
-      actorType: "user",
-      actorId: req.user.id,
-      targetType: "demo",
-      targetId: demo.id,
-      metadata: { slug: demo.slug }
-    });
-    res.json({ demo: publicUserDemo(demos[demoIndex]), quota: calculateQuota(req.user, demos) });
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.post("/api/demos/:id/delete", requireUser, async (req, res, next) => {
-  try {
-    const demos = await readJson(demosFile, []);
-    const demoIndex = demos.findIndex((demo) => demo.id === req.params.id && demo.userId === req.user.id);
-
-    if (demoIndex === -1) {
-      res.status(404).json({ error: "未找到该 Demo" });
-      return;
-    }
-
-    const demo = demos[demoIndex];
-    if (demo.status === "published") {
-      res.status(409).json({ error: "已发布 Demo 不能直接删除，请先下线" });
-      return;
-    }
-
-    if (demo.status === "deleted") {
-      res.json({ demo: publicUserDemo(demo), quota: calculateQuota(req.user, demos) });
-      return;
-    }
-
-    await stopRuntime(demo.slug);
-    await deleteDemoFiles(demo);
-    demos[demoIndex] = {
-      ...demo,
-      status: "deleted",
-      deletedAt: new Date().toISOString(),
-      deletedBy: "user"
-    };
-    await writeJson(demosFile, demos);
-    await writeAuditLog({
-      action: "user_delete_demo",
-      actorType: "user",
-      actorId: req.user.id,
-      targetType: "demo",
-      targetId: demo.id,
-      metadata: { slug: demo.slug, previousStatus: demo.status }
-    });
-    res.json({ demo: publicUserDemo(demos[demoIndex]), quota: calculateQuota(req.user, demos) });
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.post("/api/demos/:id/slug", requireUser, async (req, res, next) => {
-  try {
-    const requestedSlug = normalizeCustomSlug(req.body?.slug);
-    if (!canCustomizeSlug(req.user.plan)) {
-      res.status(403).json({ error: "当前套餐暂不支持修改链接后缀，请升级到 Lite 或 Pro。" });
-      return;
-    }
-    if (!requestedSlug) {
-      res.status(400).json({ error: "请输入 3-40 位小写英文、数字或短横线。" });
-      return;
-    }
-    if (isReservedSlug(requestedSlug)) {
-      res.status(400).json({ error: "这个链接后缀不能使用，请换一个。" });
-      return;
-    }
-
-    const demos = await readJson(demosFile, []);
-    const demoIndex = demos.findIndex((demo) => demo.id === req.params.id && demo.userId === req.user.id);
-    if (demoIndex === -1) {
-      res.status(404).json({ error: "未找到该试用项目" });
-      return;
-    }
-    const demo = demos[demoIndex];
-    if (demo.status !== "published") {
-      res.status(409).json({ error: "只有在线试用项目可以修改链接后缀。" });
-      return;
-    }
-    if (requestedSlug === demo.slug) {
-      res.json({ demo: publicUserDemo(demo), quota: calculateQuota(req.user, demos) });
-      return;
-    }
-    if (isSlugClaimedByDemo(requestedSlug, demos, demo.id)) {
-      res.status(409).json({ error: "这个链接后缀已被占用，请换一个。" });
-      return;
-    }
-    if (await exists(path.join(demoRoot, requestedSlug)) || await exists(getArchivedDemoDir(requestedSlug))) {
-      res.status(409).json({ error: "这个链接后缀已被占用，请换一个。" });
-      return;
-    }
-
-    const previousSlug = demo.slug;
-    if (demo.hostingMode === "node_runtime") {
-      await fs.rename(path.join(demoRoot, previousSlug), path.join(demoRoot, requestedSlug));
-      await stopRuntime(previousSlug);
-      const refreshedInspection = demo.inspection || {};
-      const runtime = await startNodeRuntime({
-        slug: requestedSlug,
-        projectDir: path.join(demoRoot, requestedSlug),
-        inspection: refreshedInspection,
-        config: hostingConfig(),
-        env: runtimeEnvForDemo(demo)
-      });
-      demo.runtime = {
-        ...(demo.runtime || {}),
-        ...runtime
-      };
-      demo.hosting = {
-        ...(demo.hosting || {}),
-        runtime: {
-          ...(demo.hosting?.runtime || {}),
-          ...runtime
-        }
-      };
-      demo.inspection = {
-        ...(demo.inspection || {}),
-        runtime: {
-          ...(demo.inspection?.runtime || {}),
-          ...runtime
-        },
-        hosting: demo.hosting
-      };
-    } else {
-      await fs.rename(path.join(demoRoot, previousSlug), path.join(demoRoot, requestedSlug));
-    }
-    const aliases = Array.from(new Set([...(demo.aliases || []), previousSlug]));
-    const publicUrl = `${publicBaseUrl.replace(/\/$/, "")}/d/${requestedSlug}/`;
-    demos[demoIndex] = {
-      ...demo,
-      slug: requestedSlug,
-      aliases,
-      publicUrl,
-      linkMode: "custom_path",
-      updatedAt: new Date().toISOString()
-    };
-    await writeJson(demosFile, demos);
-    await writeAuditLog({
-      action: "update_demo_slug",
-      actorType: "user",
-      actorId: req.user.id,
-      targetType: "demo",
-      targetId: demo.id,
-      ip: getClientIp(req),
-      metadata: { previousSlug, nextSlug: requestedSlug }
-    });
-    res.json({ demo: publicUserDemo(demos[demoIndex]), quota: calculateQuota(req.user, demos) });
-  } catch (error) {
-    next(error);
-  }
-});
 
 // ===== SUBDOMAIN REQUESTS =====
-app.get("/api/subdomain-requests", requireUser, async (req, res, next) => {
-  try {
-    const requests = await readJson(subdomainRequestsFile, []);
-    res.json({
-      requests: filterSubdomainRequests(requests, { status: req.query?.status })
-        .filter((item) => item.userId === req.user.id)
-        .slice(0, 200)
-    });
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.post("/api/demos/:id/subdomain-requests", requireUser, async (req, res, next) => {
-  try {
-    if (String(req.user.plan || "free") !== "pro") {
-      res.status(403).json({ error: "自定义二级域名是 Pro 权益，请升级后再申请。" });
-      return;
-    }
-    const subdomain = normalizeCustomSlug(req.body?.subdomain);
-    if (!subdomain) {
-      res.status(400).json({ error: "请输入 3-40 位小写英文、数字或短横线。" });
-      return;
-    }
-    if (isReservedSlug(subdomain)) {
-      res.status(400).json({ error: "这个二级域名前缀不能使用，请换一个。" });
-      return;
-    }
-    const demos = await readJson(demosFile, []);
-    const demo = demos.find((item) => item.id === req.params.id && item.userId === req.user.id);
-    if (!demo) {
-      res.status(404).json({ error: "未找到该试用项目" });
-      return;
-    }
-    const requests = await readJson(subdomainRequestsFile, []);
-    if (requests.some((item) => item.subdomain === subdomain && ["open", "approved"].includes(item.status))) {
-      res.status(409).json({ error: "这个二级域名已被申请，请换一个。" });
-      return;
-    }
-    const now = new Date().toISOString();
-    const request = {
-      id: crypto.randomUUID(),
-      userId: req.user.id,
-      userEmail: req.user.email,
-      demoId: demo.id,
-      demoSlug: demo.slug,
-      demoName: demo.name || demo.slug,
-      subdomain,
-      fullDomain: `${subdomain}.${platformHost()}`,
-      status: "open",
-      message: String(req.body?.message || "").trim().slice(0, 500),
-      createdAt: now,
-      updatedAt: now
-    };
-    requests.unshift(request);
-    await writeJson(subdomainRequestsFile, requests.slice(0, 2000));
-    await writeAuditLog({
-      action: "create_subdomain_request",
-      actorType: "user",
-      actorId: req.user.id,
-      targetType: "subdomain_request",
-      targetId: request.id,
-      ip: getClientIp(req),
-      metadata: { subdomain, demoId: demo.id, demoSlug: demo.slug }
-    });
-    res.json({ request });
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.post("/api/demos/:id/restore", requireUser, async (req, res, next) => {
-  try {
-    const demos = await readJson(demosFile, []);
-    const demoIndex = demos.findIndex((demo) => demo.id === req.params.id && demo.userId === req.user.id);
-
-    if (demoIndex === -1) {
-      res.status(404).json({ error: "未找到该 Demo" });
-      return;
-    }
-
-    const demo = demos[demoIndex];
-    if (isExpired(demo)) {
-      await expireDemoFiles(demo);
-      demos[demoIndex] = {
-        ...demo,
-        status: "expired",
-        expiredAt: new Date().toISOString()
-      };
-      await writeJson(demosFile, demos);
-      await writeAuditLog({
-        action: "expire_demo",
-        actorType: "system",
-        targetType: "demo",
-        targetId: demo.id,
-        metadata: { slug: demo.slug, source: "restore_attempt" }
-      });
-      res.status(409).json({ error: "已过期 Demo 不能重新上线，请重新上传发布" });
-      return;
-    }
-
-    if (demo.status === "published") {
-      res.json({ demo: publicUserDemo(demo), quota: calculateQuota(req.user, demos) });
-      return;
-    }
-
-    if (demo.status === "deleted") {
-      res.status(409).json({ error: "已删除 Demo 不能重新上线，请重新上传发布" });
-      return;
-    }
-
-    if (demo.status === "expired") {
-      res.status(409).json({ error: "已过期 Demo 不能重新上线，请重新上传发布" });
-      return;
-    }
-
-    const quota = calculateQuota(req.user, demos);
-    if (quota.onlineDemos.used >= quota.onlineDemos.limit) {
-      res.status(403).json({ error: `当前套餐最多保留 ${quota.onlineDemos.limit} 个在线 Demo，请先下线其他 Demo 或升级套餐` });
-      return;
-    }
-
-    const archiveDir = getArchivedDemoDir(demo.slug);
-    if (!await exists(archiveDir)) {
-      res.status(409).json({ error: "Demo 文件已被清理，无法重新上线，请重新上传发布" });
-      return;
-    }
-
-    const liveDir = path.join(demoRoot, demo.slug);
-    if (await exists(liveDir)) {
-      res.status(409).json({ error: "该访问路径已被占用，无法重新上线，请重新上传发布" });
-      return;
-    }
-
-    await fs.cp(archiveDir, liveDir, { recursive: true });
-    let restoredRuntime = null;
-    if (demo.hostingMode === "node_runtime") {
-      restoredRuntime = await startNodeRuntime({
-        slug: demo.slug,
-        projectDir: liveDir,
-        inspection: demo.inspection || {},
-        config: hostingConfig(),
-        env: runtimeEnvForDemo(demo)
-      });
-    }
-    demos[demoIndex] = {
-      ...demo,
-      status: "published",
-      restoredAt: new Date().toISOString(),
-      runtime: restoredRuntime ? { ...(demo.runtime || {}), ...restoredRuntime } : demo.runtime,
-      hosting: restoredRuntime ? {
-        ...(demo.hosting || {}),
-        runtime: {
-          ...(demo.hosting?.runtime || {}),
-          ...restoredRuntime
-        }
-      } : demo.hosting,
-      inspection: restoredRuntime ? {
-        ...(demo.inspection || {}),
-        runtime: {
-          ...(demo.inspection?.runtime || {}),
-          ...restoredRuntime
-        },
-        hosting: {
-          ...(demo.hosting || {}),
-          runtime: {
-            ...(demo.hosting?.runtime || {}),
-            ...restoredRuntime
-          }
-        }
-      } : demo.inspection
-    };
-    delete demos[demoIndex].offlineAt;
-    delete demos[demoIndex].offlineBy;
-    await writeJson(demosFile, demos);
-    await writeAuditLog({
-      action: "restore_demo",
-      actorType: "user",
-      actorId: req.user.id,
-      targetType: "demo",
-      targetId: demo.id,
-      metadata: { slug: demo.slug }
-    });
-    res.json({ demo: publicUserDemo(demos[demoIndex]), quota: calculateQuota(req.user, demos) });
-  } catch (error) {
-    next(error);
-  }
-});
 
 // ===== DEMO UPDATE =====
-app.post("/api/demos/:id/update", requireUser, uploadProjectArchive, async (req, res, next) => {
-  const uploadedFile = req.file;
-  const user = req.user;
-  const clientIp = getClientIp(req);
-
-  if (!uploadedFile) {
-    res.status(400).json({ error: "请上传 .zip、.tar.gz 或 .tgz 项目包" });
-    return;
-  }
-
-  try {
-    res.json(await performUpdateDeployment({
-      demoId: req.params.id,
-      uploadedFile,
-      user,
-      clientIp
-    }));
-  } catch (error) {
-    next(error);
-  }
-});
 
 // ===== DEPLOYMENT JOBS (async) =====
-app.post("/api/deployment-jobs", requireUser, uploadProjectArchive, async (req, res, next) => {
-  const uploadedFile = req.file;
-  if (!uploadedFile) {
-    res.status(400).json({ error: "请上传 .zip、.tar.gz 或 .tgz 项目包" });
-    return;
-  }
-
-  try {
-    const job = await createDeploymentJob({
-      user: req.user,
-      action: "create",
-      requestedName: String(req.body?.name || "").trim(),
-      file: uploadedFile,
-      ip: getClientIp(req),
-      actor: "user",
-      deploySource: "web"
-    });
-    await writeTrialEvent({
-      eventType: "deploy_upload_started",
-      userId: req.user.id,
-      userEmail: req.user.email,
-      source: "web",
-      path: "/api/deployment-jobs",
-      ip: getClientIp(req),
-      metadata: {
-        jobId: job.id,
-        fileName: uploadedFile.originalname
-      }
-    });
-    res.status(202).json({ job: publicDeploymentJob(job) });
-    runDeploymentJob(job.id).catch((error) => {
-      logger.error({ err: error }, "Deployment job failed");
-    });
-  } catch (error) {
-    next(error);
-  }
-});
 
 // ===== RUNTIME MANAGEMENT =====
-app.post("/api/demos/:id/runtime/restart", requireUser, async (req, res, next) => {
-  try {
-    const demos = await readJson(demosFile, []);
-    const demoIndex = demos.findIndex((demo) => demo.id === req.params.id && demo.userId === req.user.id);
-    if (demoIndex === -1) {
-      res.status(404).json({ error: "未找到该试用项目" });
-      return;
-    }
-    const demo = demos[demoIndex];
-    if (demo.status !== "published" || demo.hostingMode !== "node_runtime") {
-      res.status(409).json({ error: "只有在线的 Node.js 试用项目可以重启运行环境。" });
-      return;
-    }
-    await stopRuntime(demo.slug);
-    const restarted = await restartDemoRuntime(demo);
-    if (!restarted.runtime) {
-      if (demoIndex >= 0 && restarted.demo) {
-        demos[demoIndex] = restarted.demo;
-        await writeJson(demosFile, demos);
-      }
-      res.status(400).json({
-        error: restarted.error || "运行环境重启失败。",
-        demo: publicUserDemo(restarted.demo),
-        diagnosis: restarted.diagnosis || null
-      });
-      return;
-    }
-    demos[demoIndex] = restarted.demo;
-    await writeJson(demosFile, demos);
-    await writeAuditLog({
-      action: "restart_demo_runtime",
-      actorType: "user",
-      actorId: req.user.id,
-      targetType: "demo",
-      targetId: demo.id,
-      metadata: { slug: demo.slug, driver: restarted.runtime.driver }
-    });
-    res.json({ demo: publicUserDemo(restarted.demo), runtime: restarted.runtime });
-  } catch (error) {
-    next(error);
-  }
-});
 
 // ===== RUNTIME ENV CONFIG =====
-app.post("/api/demos/:id/runtime-env", requireUser, async (req, res, next) => {
-  try {
-    const demos = await readJson(demosFile, []);
-    const demoIndex = demos.findIndex((demo) => demo.id === req.params.id && demo.userId === req.user.id);
-    if (demoIndex === -1) {
-      res.status(404).json({ error: "未找到该试用项目" });
-      return;
-    }
-    const demo = demos[demoIndex];
-    if (demo.hostingMode !== "node_runtime" && !hasSupabaseProject(demo.inspection || {})) {
-      res.status(409).json({ error: "这个项目没有识别到需要保存的运行配置或外部后端配置。" });
-      return;
-    }
-    const saved = mergeRuntimeEnv(demo.runtimeEnv, req.body?.env || req.body || {});
-    const runtimeConfigStatus = createRuntimeConfigStatus(demo.inspection || {}, saved, demo.database);
-    const externalBackend = await createExternalBackendConfigWithConnection(demo.inspection || {}, saved, demo.externalBackend);
-    const nextInspection = {
-      ...(demo.inspection || {}),
-      externalBackend
-    };
-    let nextDemo = {
-      ...demo,
-      runtimeEnv: saved,
-      runtimeConfig: runtimeConfigStatus,
-      externalBackend,
-      inspection: nextInspection,
-      updatedAt: new Date().toISOString()
-    };
-    nextDemo.applicationReadiness = createApplicationReadiness({ demo: nextDemo, inspection: nextDemo.inspection });
-    nextDemo.inspection = {
-      ...nextDemo.inspection,
-      applicationReadiness: nextDemo.applicationReadiness
-    };
-    demos[demoIndex] = nextDemo;
-    await writeJson(demosFile, demos);
-    await writeAuditLog({
-      action: "update_demo_runtime_env",
-      actorType: "user",
-      actorId: req.user.id,
-      targetType: "demo",
-      targetId: demo.id,
-      metadata: {
-        slug: demo.slug,
-        keys: Object.keys(publicRuntimeEnv(saved))
-      }
-    });
-    res.json({
-      demo: publicUserDemo(nextDemo),
-      runtimeConfig: runtimeConfigStatus,
-      externalBackend: publicExternalBackend(externalBackend)
-    });
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.post("/api/demos/:id/database/reset", requireUser, async (req, res, next) => {
-  try {
-    const demos = await readJson(demosFile, []);
-    const demoIndex = demos.findIndex((demo) => demo.id === req.params.id && demo.userId === req.user.id);
-    if (demoIndex === -1) {
-      res.status(404).json({ error: "未找到该试用项目" });
-      return;
-    }
-    const demo = demos[demoIndex];
-    if (!demo.database?.enabled) {
-      res.status(409).json({ error: "这个项目没有 MySQL 试用数据库。" });
-      return;
-    }
-    const liveDir = path.join(demoRoot, demo.slug);
-    const database = await resetDemoDatabase(demo.database, {
-      projectDir: liveDir,
-      config: hostingConfig()
-    });
-    const nextDemo = {
-      ...demo,
-      database,
-      updatedAt: new Date().toISOString()
-    };
-    nextDemo.applicationReadiness = createApplicationReadiness({ demo: nextDemo, inspection: nextDemo.inspection || {} });
-    nextDemo.inspection = {
-      ...(nextDemo.inspection || {}),
-      applicationReadiness: nextDemo.applicationReadiness
-    };
-    demos[demoIndex] = nextDemo;
-    await writeJson(demosFile, demos);
-    await writeAuditLog({
-      action: "reset_demo_database",
-      actorType: "user",
-      actorId: req.user.id,
-      targetType: "demo",
-      targetId: demo.id,
-      metadata: {
-        slug: demo.slug,
-        databaseName: database.databaseName,
-        schemaStatus: database.schema?.status || "skipped"
-      }
-    });
-    res.json({ demo: publicUserDemo(nextDemo), database: publicDemoDatabase(database) });
-  } catch (error) {
-    next(error);
-  }
-});
-
-app.post("/api/demos/:id/deployment-jobs", requireUser, uploadProjectArchive, async (req, res, next) => {
-  const uploadedFile = req.file;
-  if (!uploadedFile) {
-    res.status(400).json({ error: "请上传 .zip、.tar.gz 或 .tgz 项目包" });
-    return;
-  }
-
-  try {
-    const job = await createDeploymentJob({
-      user: req.user,
-      action: "update",
-      demoId: req.params.id,
-      file: uploadedFile,
-      ip: getClientIp(req),
-      actor: "user",
-      deploySource: "web"
-    });
-    await writeTrialEvent({
-      eventType: "deploy_upload_started",
-      userId: req.user.id,
-      userEmail: req.user.email,
-      source: "web",
-      path: "/api/demos/:id/deployment-jobs",
-      ip: getClientIp(req),
-      metadata: {
-        jobId: job.id,
-        demoId: req.params.id,
-        fileName: uploadedFile.originalname,
-        action: "update"
-      }
-    });
-    res.status(202).json({ job: publicDeploymentJob(job) });
-    runDeploymentJob(job.id).catch((error) => {
-      logger.error({ err: error }, "Deployment job failed");
-    });
-  } catch (error) {
-    next(error);
-  }
-});
 
 // ===== USER DEPLOY =====
-app.post("/api/deploy", requireUser, uploadProjectArchive, async (req, res, next) => {
-  return handleCreateDeployment(req, res, next, { actor: "user" });
-});
 
 async function handleCreateDeployment(req, res, next, options = {}) {
   const uploadedFile = req.file;
@@ -3484,206 +1698,6 @@ function summarizeResponseLimits(quota) {
   };
 }
 
-async function createDeploymentJob({ user, action, demoId = "", requestedName = "", file, ip = "", actor = "user", deploySource = "web" }) {
-  const now = new Date().toISOString();
-  const job = {
-    id: crypto.randomUUID(),
-    userId: user.id,
-    userEmail: user.email,
-    action,
-    demoId: demoId || null,
-    requestedName,
-    filePath: file.path,
-    originalName: file.originalname,
-    actor,
-    deploySource,
-    ip,
-    status: "queued",
-    statusLabel: "等待开始",
-    message: "已接收项目包，正在排队处理。",
-    steps: createDeploymentSteps({ demoId: demoId || null, userId: user.id, deploymentId: "", action }).map((step) => ({
-      ...step,
-      deploymentId: null
-    })),
-    result: null,
-    error: null,
-    inspection: null,
-    contentReview: null,
-    diagnosis: null,
-    createdAt: now,
-    updatedAt: now,
-    startedAt: null,
-    finishedAt: null
-  };
-  job.steps = job.steps.map((step) => ({ ...step, deploymentId: job.id }));
-  await saveDeploymentJob(job);
-  return job;
-}
-
-async function runDeploymentJob(jobId) {
-  let job = await findDeploymentJob(jobId);
-  if (!job || job.status !== "queued") return;
-  job = await updateDeploymentJob(jobId, {
-    status: "running",
-    statusLabel: "正在生成",
-    message: "DemoGo 正在检查项目、处理内容并生成试用链接。",
-    startedAt: new Date().toISOString()
-  });
-
-  try {
-    const users = await readJson(usersFile, []);
-    const user = users.find((item) => item.id === job.userId);
-    if (!user) {
-      throw createHttpError("当前用户不存在，请重新登录后再试。", 404);
-    }
-    const uploadedFile = {
-      path: job.filePath,
-      originalname: job.originalName
-    };
-    const result = job.action === "update"
-      ? await performUpdateDeployment({
-          demoId: job.demoId,
-          uploadedFile,
-          user,
-          clientIp: job.ip,
-          actor: job.actor,
-          deploySource: job.deploySource,
-          deploymentId: job.id
-        })
-      : await performCreateDeployment({
-          uploadedFile,
-          requestedName: job.requestedName,
-          user,
-          clientIp: job.ip,
-          actor: job.actor,
-          deploySource: job.deploySource,
-          deploymentId: job.id
-        });
-    const finished = await updateDeploymentJob(jobId, {
-      status: "success",
-      statusLabel: "已生成",
-      message: job.action === "update" ? "试用项目已更新，可以打开链接检查。" : "试用链接已生成，可以发给别人试用。",
-      result,
-      inspection: result.inspection || null,
-      contentReview: result.contentReview || null,
-      steps: result.deploymentEvents || job.steps,
-      finishedAt: new Date().toISOString()
-    });
-    return finished;
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "生成失败，请根据提示调整后重试。";
-    const events = error.deploymentEvents || await readDeploymentEventsForDeployment(jobId);
-    const diagnosis = attachErrorDiagnosis(error, {
-      fileName: job.originalName,
-      actor: job.actor,
-      action: job.action,
-      deploySource: job.deploySource
-    });
-    await updateDeploymentJob(jobId, {
-      status: "failed",
-      statusLabel: "生成失败",
-      message,
-      error: {
-        message,
-        statusCode: error.statusCode || 500,
-        diagnosis
-      },
-      inspection: error.inspection || null,
-      contentReview: publicContentReview(error.contentReview) || null,
-      diagnosis,
-      steps: events?.length ? events : markJobStepsFailed(job.steps, message),
-      finishedAt: new Date().toISOString()
-    });
-    await writeTrialEvent({
-      eventType: "deploy_failed",
-      userId: job.userId,
-      userEmail: job.userEmail,
-      source: job.deploySource || job.actor || "web",
-      path: job.action === "update" ? "/api/demos/:id/deployment-jobs" : "/api/deployment-jobs",
-      ip: job.ip,
-      metadata: {
-        jobId,
-        demoId: job.demoId,
-        action: job.action,
-        statusCode: error.statusCode || 500,
-        message,
-        failureCategory: diagnosis.category
-      }
-    });
-    return null;
-  }
-}
-
-async function saveDeploymentJob(job) {
-  const jobs = await readJson(deploymentJobsFile, []);
-  const cleanJob = sanitizeDeploymentJob(job);
-  const index = jobs.findIndex((item) => item.id === cleanJob.id);
-  if (index >= 0) jobs[index] = cleanJob;
-  else jobs.unshift(cleanJob);
-  await writeJson(deploymentJobsFile, jobs.slice(0, 1000));
-  return cleanJob;
-}
-
-async function updateDeploymentJob(jobId, patch) {
-  const jobs = await readJson(deploymentJobsFile, []);
-  const index = jobs.findIndex((item) => item.id === jobId);
-  if (index === -1) return null;
-  const next = sanitizeDeploymentJob({
-    ...jobs[index],
-    ...patch,
-    updatedAt: new Date().toISOString()
-  });
-  jobs[index] = next;
-  await writeJson(deploymentJobsFile, jobs);
-  return next;
-}
-
-async function findDeploymentJob(jobId) {
-  const jobs = await readJson(deploymentJobsFile, []);
-  return jobs.find((item) => item.id === jobId) || null;
-}
-
-function sanitizeDeploymentJob(job) {
-  if (!job) return null;
-  return {
-    ...job,
-    filePath: job.filePath || "",
-    result: job.result || null,
-    steps: Array.isArray(job.steps) ? job.steps : []
-  };
-}
-
-function publicDeploymentJob(job) {
-  if (!job) return null;
-  const result = sanitizeDeploymentResult(job.result || null);
-  return {
-    id: job.id,
-    action: job.action,
-    demoId: job.demoId || null,
-    status: job.status,
-    statusLabel: job.statusLabel || deploymentJobStatusLabel(job.status),
-    message: job.message || "",
-    originalName: job.originalName || "",
-    result,
-    inspection: job.inspection || result?.inspection || null,
-    contentReview: job.contentReview || result?.contentReview || null,
-    diagnosis: job.diagnosis || job.error?.diagnosis || null,
-    steps: Array.isArray(job.steps) ? job.steps : [],
-    error: job.error || null,
-    createdAt: job.createdAt,
-    updatedAt: job.updatedAt,
-    startedAt: job.startedAt || null,
-    finishedAt: job.finishedAt || null
-  };
-}
-
-function sanitizeDeploymentResult(result) {
-  if (!result || typeof result !== "object") return result || null;
-  return {
-    ...result,
-    database: publicDemoDatabase(result.database)
-  };
-}
 
 function attachErrorDiagnosis(error, context = {}) {
   if (!error || typeof error !== "object") {
@@ -3730,30 +1744,14 @@ function deploymentJobStatusLabel(status) {
   return "未知状态";
 }
 
-async function readDeploymentEventsForDeployment(deploymentId) {
-  const events = await readJson(deploymentEventsFile, []);
-  return events
-    .filter((event) => event.deploymentId === deploymentId)
-    .sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0));
-}
-
-function markJobStepsFailed(steps, message) {
-  const items = Array.isArray(steps) ? steps : [];
-  let failedMarked = false;
-  return completeDeploymentSteps(items).map((step) => {
-    if (!failedMarked && step.status === "skipped") {
-      failedMarked = true;
-      return { ...step, status: "failed", message };
-    }
-    return step;
-  });
-}
 
 function createHttpError(message, statusCode = 400) {
   const error = new Error(message);
   error.statusCode = statusCode;
   return error;
 }
+
+app.use("/d", express.static(demoRoot));
 
 app.use((error, _req, res, _next) => {
   let message = error instanceof Error ? error.message : "发布失败";
@@ -3778,8 +1776,30 @@ app.use((error, _req, res, _next) => {
   });
 });
 
+// Demo 到期提醒定时任务，每 6 小时执行一次
+async function runExpirationCheck() {
+  try {
+    const result = await checkAndRemindExpiringDemos({
+      readJson,
+      writeJson,
+      demosFile,
+      usersFile,
+      isEmailConfigured,
+      sendExpirationEmail: (to, info) => sendExpirationReminderEmail(to, info, { sendSmtpMail, baseUrl: publicBaseUrl }),
+      isExpired,
+    });
+    if (result.reminded > 0) {
+      console.log("[到期提醒] 已发送 " + result.reminded + " 封提醒邮件");
+    }
+  } catch (err) {
+    console.error("[到期提醒] 执行失败:", err.message);
+  }
+}
+
 app.listen(port, () => {
   console.log(`DemoGo server listening on ${port}`);
+  setTimeout(runExpirationCheck, 30000);
+  setInterval(runExpirationCheck, 6 * 60 * 60 * 1000);
 });
 
 async function createAvailableSlug(_input, existingDemos = []) {
@@ -3855,56 +1875,6 @@ function inferProjectDisplayName({ requestedName, uploadedFileName, inspection }
   return (strong || candidates[0] || "DemoGo 试用项目").slice(0, 80);
 }
 
-function cleanProjectName(value) {
-  return decodeHtmlEntities(String(value || ""))
-    .replace(/\s+/g, " ")
-    .replace(/[\\/:*?"<>|]+/g, " ")
-    .trim();
-}
-
-function isGenericProjectName(value) {
-  const normalized = String(value || "")
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, "-")
-    .replace(/[^a-z0-9\u4e00-\u9fa5-]+/g, "");
-  return [
-    "demogo",
-    "demo",
-    "project",
-    "test",
-    "app",
-    "site",
-    "website",
-    "dist",
-    "build",
-    "out",
-    "public",
-    "my-app",
-    "react-app",
-    "vite-project"
-  ].includes(normalized);
-}
-
-function decodeHtmlEntities(value) {
-  return String(value || "")
-    .replace(/&nbsp;/gi, " ")
-    .replace(/&amp;/gi, "&")
-    .replace(/&lt;/gi, "<")
-    .replace(/&gt;/gi, ">")
-    .replace(/&quot;/gi, '"')
-    .replace(/&#39;/g, "'");
-}
-
-function slugify(input) {
-  return String(input)
-    .toLowerCase()
-    .replace(/\.zip$/i, "")
-    .replace(/[^a-z0-9\u4e00-\u9fa5]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 48);
-}
-
 async function exists(filePath) {
   try {
     await fs.access(filePath);
@@ -3913,9 +1883,6 @@ async function exists(filePath) {
     return false;
   }
 }
-
-
-
 
 function readBearerToken(req) {
   const authorization = String(req.get("authorization") || "");
@@ -3942,28 +1909,6 @@ async function getUserFromAgentToken(value) {
   if (!token) return null;
   const users = await readJson(usersFile, []);
   return users.find((user) => verifyAgentToken(user, token)) || null;
-}
-
-
-
-
-function detectDeploySource(req, actor = "user") {
-  if (actor !== "agent") return "web";
-  const requested = normalizeDeploySource(req.body?.source || req.get("x-demogo-deploy-source"));
-  if (requested) return requested;
-  const userAgent = String(req.get("user-agent") || "").toLowerCase();
-  if (userAgent.includes("demogo-mcp")) return "mcp";
-  if (userAgent.includes("demogo-cli")) return "cli";
-  return "agent_api";
-}
-
-function normalizeDeploySource(value) {
-  const source = String(value || "").trim().toLowerCase();
-  return ["web", "cli", "mcp", "agent_api"].includes(source) ? source : "";
-}
-
-function deploySourceLabel(source) {
-  return deploySourceLabels[source] || deploySourceLabels.agent_api;
 }
 
 async function resolveAgentUpdateDemoId({ user, demoRef }) {
@@ -4001,162 +1946,6 @@ function extractDemoSlug(value) {
   }
 }
 
-
-
-
-
-
-
-function filterAdminDemos(demos, filters) {
-  const search = String(filters.search || "").toLowerCase();
-  const status = String(filters.status || "");
-  return demos.filter((demo) => {
-    if (status && demo.status !== status) return false;
-    if (!search) return true;
-    return [
-      demo.name,
-      demo.slug,
-      demo.userEmail,
-      demo.publicUrl
-    ].some((value) => String(value || "").toLowerCase().includes(search));
-  });
-}
-
-function publicUserDemo(demo) {
-  if (!demo) return demo;
-  const runtime = demo.runtime || demo.inspection?.runtime || demo.hosting?.runtime || null;
-  const externalBackend = demo.externalBackend || createExternalBackendConfigStatus(demo.inspection || {}, demo.runtimeEnv || {}, demo.externalBackend);
-  const enrichedDemo = {
-    ...demo,
-    runtime,
-    externalBackend
-  };
-  const applicationReadiness = demo.applicationReadiness || createApplicationReadiness({ demo: enrichedDemo, inspection: demo.inspection || {} });
-  return {
-    ...demo,
-    runtime,
-    failureDiagnosis: demo.failureDiagnosis || runtime?.failureDiagnosis || demo.inspection?.failureDiagnosis || null,
-    database: publicDemoDatabase(demo.database),
-    runtimeEnv: publicRuntimeEnv(demo.runtimeEnv),
-    runtimeConfig: demo.runtimeConfig || createRuntimeConfigStatus(demo.inspection || {}, demo.runtimeEnv, demo.database),
-    externalBackend: publicExternalBackend(externalBackend),
-    applicationReadiness: publicApplicationReadiness(applicationReadiness)
-  };
-}
-
-function adminDemoSummary(demo) {
-  const architecture = demo.architecture || demo.inspection?.projectArchitecture || null;
-  const hosting = demo.hosting || demo.inspection?.hosting || architecture?.hosting || null;
-  const externalBackend = demo.externalBackend || createExternalBackendConfigStatus(demo.inspection || {}, demo.runtimeEnv || {}, demo.externalBackend);
-  const enrichedDemo = {
-    ...demo,
-    architecture,
-    hosting,
-    externalBackend
-  };
-  const applicationReadiness = demo.applicationReadiness || createApplicationReadiness({ demo: enrichedDemo, inspection: demo.inspection || {} });
-  return {
-    ...demo,
-    architecture,
-    hosting,
-    hostingMode: demo.hostingMode || demo.inspection?.hostingMode || architecture?.projectKind || hosting?.mode || "",
-    hostingModeLabel: demo.hostingModeLabel || demo.inspection?.hostingModeLabel || architecture?.projectKindLabel || hosting?.modeLabel || "",
-    runtime: demo.runtime || demo.inspection?.runtime || hosting?.runtime || null,
-    failureDiagnosis: demo.failureDiagnosis || demo.runtime?.failureDiagnosis || demo.inspection?.failureDiagnosis || null,
-    database: publicDemoDatabase(demo.database),
-    runtimeEnv: publicRuntimeEnv(demo.runtimeEnv),
-    runtimeConfig: demo.runtimeConfig || createRuntimeConfigStatus(demo.inspection || {}, demo.runtimeEnv, demo.database),
-    externalBackend: publicExternalBackend(externalBackend),
-    applicationReadiness: publicApplicationReadiness(applicationReadiness),
-    projectProfile: demo.projectProfile || demo.inspection?.projectProfile || null,
-    projectCategory: demo.projectCategory || demo.inspection?.projectCategory || demo.inspection?.projectProfile?.label || "",
-    deploySourceLabel: demo.deploySourceLabel || deploySourceLabel(demo.deploySource || "web"),
-    riskSummary: summarizeDemoRisks(demo)
-  };
-}
-
-function mergeRuntimeEnv(existing = {}, input = {}) {
-  const current = sanitizeStoredRuntimeEnv(existing);
-  for (const [rawKey, rawValue] of Object.entries(input || {})) {
-    const key = normalizeEnvKey(rawKey);
-    if (!key || isPlatformEnvKey(key)) continue;
-    if (isUnsafeExternalSecretKey(key)) {
-      throw createHttpError("Supabase service_role 是高权限密钥，不能保存到 DemoGo。请使用 anon key。", 400);
-    }
-    const value = String(rawValue ?? "").trim();
-    if (!value) {
-      delete current[key];
-      continue;
-    }
-    current[key] = {
-      value,
-      updatedAt: new Date().toISOString()
-    };
-  }
-  return current;
-}
-
-function sanitizeStoredRuntimeEnv(value = {}) {
-  const result = {};
-  for (const [rawKey, rawRecord] of Object.entries(value || {})) {
-    const key = normalizeEnvKey(rawKey);
-    if (!key || isPlatformEnvKey(key) || isUnsafeExternalSecretKey(key)) continue;
-    const storedValue = typeof rawRecord === "object" && rawRecord !== null ? rawRecord.value : rawRecord;
-    if (storedValue === undefined || storedValue === null || String(storedValue) === "") continue;
-    result[key] = {
-      value: String(storedValue),
-      updatedAt: typeof rawRecord === "object" && rawRecord !== null ? rawRecord.updatedAt || null : null
-    };
-  }
-  return result;
-}
-
-function runtimeEnvValues(value = {}) {
-  return Object.fromEntries(
-    Object.entries(sanitizeStoredRuntimeEnv(value)).map(([key, record]) => [key, record.value])
-  );
-}
-
-function publicRuntimeEnv(value = {}) {
-  return Object.fromEntries(
-    Object.entries(sanitizeStoredRuntimeEnv(value)).map(([key, record]) => [key, {
-      configured: true,
-      maskedValue: maskSecretValue(record.value),
-      updatedAt: record.updatedAt || null
-    }])
-  );
-}
-
-function createRuntimeConfigStatus(inspection = {}, runtimeEnv = {}, database = null) {
-  const required = Array.from(new Set([
-    ...((inspection.projectAssessment?.environmentVariables?.required || [])),
-    ...((inspection.projectProfile?.environmentVariables?.required || [])),
-    ...externalBackendEnvKeys(inspection)
-  ].map(normalizeEnvKey).filter(Boolean)));
-  const provided = new Set([
-    ...Object.keys(publicRuntimeEnv(runtimeEnv)),
-    ...Object.keys(demoDatabaseEnv(database || {}))
-  ]);
-  const missing = required.filter((key) => !isPlatformEnvKey(key) && !provided.has(key));
-  return {
-    required,
-    configured: required.filter((key) => provided.has(key)),
-    missing,
-    canStart: missing.length === 0,
-    status: missing.length ? "missing" : "ready",
-    statusLabel: missing.length ? "缺少运行配置" : "运行配置已就绪",
-    nextAction: missing.length ? `请补充运行配置：${missing.join("、")}` : "运行配置已满足当前识别结果。"
-  };
-}
-
-function runtimeEnvForDemo(demo = {}) {
-  return {
-    ...demoDatabaseEnv(demo.database),
-    ...runtimeEnvValues(demo.runtimeEnv),
-    ...externalBackendEnvValues(demo.inspection || {}, demo.runtimeEnv)
-  };
-}
-
 function normalizeEnvKey(value) {
   const key = String(value || "").trim().toUpperCase();
   return /^[A-Z_][A-Z0-9_]*$/.test(key) ? key : "";
@@ -4171,100 +1960,6 @@ function maskSecretValue(value) {
   if (!text) return "";
   if (text.length <= 6) return "***";
   return `${text.slice(0, 3)}***${text.slice(-3)}`;
-}
-
-function adminRuntimeDemoSummary(demo) {
-  const summary = adminDemoSummary(demo);
-  return {
-    id: summary.id,
-    slug: summary.slug,
-    name: summary.name,
-    userEmail: summary.userEmail,
-    status: summary.status,
-    publicUrl: summary.publicUrl,
-    hostingMode: summary.hostingMode,
-    hostingModeLabel: summary.hostingModeLabel,
-    runtime: summary.runtime,
-    database: summary.database,
-    updatedAt: summary.updatedAt,
-    createdAt: summary.createdAt,
-    expiresAt: summary.expiresAt
-  };
-}
-
-function summarizeRuntimeOps(demos = [], runtimeRecords = []) {
-  const nodeDemos = demos.filter((demo) => demo.hostingMode === "node_runtime");
-  const databaseDemos = demos.filter((demo) => demo.database?.enabled && demo.database?.status !== "deleted");
-  return {
-    nodeProjects: nodeDemos.length,
-    runningRuntimes: runtimeRecords.length,
-    stoppedRuntimes: nodeDemos.filter((demo) => {
-      const status = String(demo.runtime?.status || demo.hosting?.runtime?.status || "").toLowerCase();
-      const stage = String(demo.runtime?.lifecycle?.stage || demo.hosting?.runtime?.lifecycle?.stage || "").toLowerCase();
-      return status === "stopped" || stage === "stopped";
-    }).length,
-    mysqlDatabases: databaseDemos.length,
-    mysqlReady: databaseDemos.filter((demo) => demo.database?.status === "ready").length
-  };
-}
-
-function summarizeDemoRisks(demo) {
-  const inspection = demo.inspection || {};
-  const contentReview = demo.contentReview || inspection.contentReview || {};
-  const apiCalls = Array.isArray(inspection.apiCalls) ? inspection.apiCalls : [];
-  const formFields = Array.isArray(inspection.formFields) ? inspection.formFields : [];
-  const blockedFiles = Array.isArray(inspection.blockedFiles) ? inspection.blockedFiles : [];
-  const risks = [];
-
-  if (contentReview.status && contentReview.status !== "passed") {
-    risks.push({
-      type: "content",
-      label: contentReviewStatusLabel(contentReview.status)
-    });
-  }
-
-  if (filterAutoHostableFormFields(formFields).length) {
-    risks.push({
-      type: "form",
-      label: `表单 ${formFields.length} 个字段`
-    });
-  } else if (formFields.length) {
-    risks.push({
-      type: "controls",
-      label: `填写控件 ${formFields.length} 个`
-    });
-  }
-
-  if (apiCalls.some((item) => item.isLocal)) {
-    risks.push({
-      type: "api",
-      label: "本地 API"
-    });
-  }
-
-  const externalBackend = demo.externalBackend || inspection.externalBackend || null;
-  if (externalBackend?.provider === "supabase") {
-    risks.push({
-      type: externalBackend.status === "ready" ? "external_backend" : "external_backend_warning",
-      label: externalBackend.statusLabel || "Supabase"
-    });
-  }
-
-  if (inspection.hasPackageJson && !inspection.hasBuildScript && !inspection.entryFile) {
-    risks.push({
-      type: "build",
-      label: "缺少 build"
-    });
-  }
-
-  if (blockedFiles.length || inspection.status === "blocked") {
-    risks.push({
-      type: "blocked",
-      label: "曾被阻止"
-    });
-  }
-
-  return risks;
 }
 
 async function createAndPersistContentReview(context) {
@@ -4719,7 +2414,6 @@ function getArchivedDemoDir(slug) {
   return path.join(dataDir, "offline-demos", slug);
 }
 
-
 async function writeAuditLog(log) {
   const logs = await readJson(auditLogsFile, []);
   logs.unshift({
@@ -4737,12 +2431,6 @@ async function appendDeploymentEvents(events) {
   await writeJson(deploymentEventsFile, [...items, ...existing].slice(0, 5000));
 }
 
-async function readDeploymentEventsForDemo(demoId) {
-  const events = await readJson(deploymentEventsFile, []);
-  return events
-    .filter((event) => event.demoId === demoId)
-    .sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0));
-}
 
 function createDeploymentSteps(context = {}) {
   const now = new Date().toISOString();
@@ -4818,12 +2506,6 @@ function getClientIp(req) {
     .split(",")[0]
     .trim();
 }
-
-
-
-
-
-
 
 function extractEmailAddress(value) {
   const match = String(value || "").match(/<([^>]+)>/);
@@ -5368,721 +3050,46 @@ async function extractRuntimeDemo(archivePath, targetDir, options = {}) {
   }
 }
 
-async function promoteSingleHtmlEntry(targetDir, entryFile) {
-  if (!entryFile || entryFile === "index.html" || entryFile.includes("/")) return false;
-  const source = path.join(targetDir, entryFile);
-  const destination = path.join(targetDir, "index.html");
-  if (!await exists(source) || await exists(destination)) return false;
-  await fs.copyFile(source, destination);
-  return true;
-}
-
-function isSupportedArchiveName(fileName) {
-  const lower = String(fileName || "").toLowerCase();
-  return lower.endsWith(".zip") || lower.endsWith(".tar.gz") || lower.endsWith(".tgz");
-}
-
-function detectArchiveType(fileName) {
-  const lower = String(fileName || "").toLowerCase();
-  if (lower.endsWith(".tar.gz") || lower.endsWith(".tgz")) return "tar.gz";
-  return "zip";
-}
-
-function looksLikeAssetRequest(requestPath) {
-  const lastPart = String(requestPath || "").split("/").pop() || "";
-  return /\.[a-z0-9]{1,12}$/i.test(lastPart);
-}
-
-function stripArchiveExtension(fileName) {
-  return String(fileName || "")
-    .replace(/\.html?$/i, "")
-    .replace(/\.tar\.gz$/i, "")
-    .replace(/\.tgz$/i, "")
-    .replace(/\.zip$/i, "");
-}
-
-async function analyzeArchiveEntries(archivePath, fileName = "", options = {}) {
-  const archiveType = detectArchiveType(fileName || archivePath);
-  return archiveType === "tar.gz"
-    ? analyzeTarEntries(archivePath, options)
-    : analyzeZipEntries(archivePath);
-}
-
-async function cleanupArchiveAnalysis(analysis) {
-  if (analysis?.archiveType === "tar.gz" && analysis.tempDir) {
-    await fs.rm(analysis.tempDir, { recursive: true, force: true });
-  }
-}
-
-async function writeArchiveEntry(item, destination) {
-  if (item.archiveType === "tar.gz") {
-    await fs.copyFile(item.tempPath, destination);
-    return;
-  }
-  await new Promise((resolve, reject) => {
-    item.entry
-      .stream()
-      .pipe(createWriteStream(destination))
-      .on("finish", resolve)
-      .on("error", reject);
-  });
-}
-
-function normalizeZipPath(zipEntryPath) {
-  return zipEntryPath.replace(/\\/g, "/").replace(/^\/+/, "");
-}
-
-function findCommonRoot(paths) {
-  const firstParts = paths[0]?.split("/") || [];
-  if (firstParts.length <= 1) return "";
-  const root = firstParts[0];
-  return paths.every((item) => item.startsWith(`${root}/`)) ? root : "";
-}
-
-function stripCommonRoot(entryPath, commonRoot) {
-  if (!commonRoot) return entryPath;
-  return entryPath === commonRoot ? "" : entryPath.slice(commonRoot.length + 1);
-}
-
-function emptyArchiveAnalysis(archiveType = "zip") {
-  return {
-    archiveType,
-    rawFileCount: 0,
-    rawBytes: 0,
-    publishableEntries: [],
-    publishableFileCount: 0,
-    publishableBytes: 0,
-    ignoredFiles: [],
-    blockedFiles: [],
-    rootEntries: [],
-    commonRoot: "",
-    paths: [],
-    entryFile: null,
-    projectTitle: "",
-    pageHeading: "",
-    hasPackageJson: false,
-    hasBuildScript: false,
-    formFields: [],
-    apiCalls: []
-  };
-}
-
-async function analyzeZipEntries(zipPath) {
-  let directory;
-  try {
-    directory = await unzipper.Open.file(zipPath);
-  } catch (error) {
-    throw createProjectError(createInvalidZipInspection(error), "压缩包不完整或格式异常，DemoGo 无法读取项目文件。");
-  }
-  const rawFiles = directory.files.filter((entry) => entry.type === "File");
-
-  if (rawFiles.length === 0) {
-    return {
-      ...emptyArchiveAnalysis("zip")
-    };
-  }
-
-  const unsafeEntry = rawFiles.find((entry) => !isSafeArchivePath(entry.path));
-  if (unsafeEntry) {
-    const inspection = createInvalidArchiveInspection("ZIP", `压缩包包含不安全条目：${unsafeEntry.path}`);
-    throw createProjectError(inspection, "压缩包包含不安全路径，DemoGo 已拒绝处理。");
-  }
-
-  const normalizedPaths = rawFiles.map((entry) => normalizeZipPath(entry.path));
-  const commonRoot = findCommonRoot(normalizedPaths);
-  const publishableEntries = [];
-  const ignoredFiles = [];
-  const blockedFiles = [];
-  const textEntries = [];
-  let packageJsonInfo = { hasPackageJson: false, hasBuildScript: false };
-  let rawBytes = 0;
-  let publishableBytes = 0;
-
-  for (const entry of rawFiles) {
-    const normalized = normalizeZipPath(entry.path);
-    const relativePath = stripCommonRoot(normalized, commonRoot);
-    const bytes = Number(entry.uncompressedSize || 0);
-    rawBytes += bytes;
-
-    if (!relativePath || relativePath.endsWith("/")) {
-      continue;
-    }
-
-    const pathIssue = classifyEntryPath(relativePath);
-    if (pathIssue.action === "block") {
-      blockedFiles.push({ path: relativePath, reason: pathIssue.reason });
-      continue;
-    }
-    if (pathIssue.action === "ignore") {
-      ignoredFiles.push({ path: relativePath, reason: pathIssue.reason });
-      continue;
-    }
-
-    publishableEntries.push({ archiveType: "zip", entry, relativePath, bytes });
-    publishableBytes += bytes;
-    if (shouldAnalyzeTextFile(relativePath, bytes)) {
-      textEntries.push({ archiveType: "zip", entry, relativePath, bytes });
-    }
-  }
-
-  const paths = publishableEntries.map((item) => item.relativePath);
-  const textAnalysis = await analyzeTextEntries(textEntries);
-  const envHints = await analyzeEnvironmentVariableHints(publishableEntries);
-  if (paths.includes("package.json")) {
-    packageJsonInfo = await analyzePackageJson(publishableEntries.find((item) => item.relativePath === "package.json"));
-  }
-  return {
-    rawFileCount: rawFiles.length,
-    archiveType: "zip",
-    rawBytes,
-    publishableEntries,
-    publishableFileCount: publishableEntries.length,
-    publishableBytes,
-    ignoredFiles: summarizePathIssues(ignoredFiles),
-    blockedFiles: summarizePathIssues(blockedFiles),
-    rootEntries: summarizeRootEntries(paths),
-    commonRoot,
-    paths,
-    entryFile: detectEntryFile(paths),
-    hasPackageJson: packageJsonInfo.hasPackageJson,
-    hasBuildScript: packageJsonInfo.hasBuildScript,
-    packageScripts: packageJsonInfo.scripts,
-    packageDependencies: packageJsonInfo.dependencies,
-    envHints,
-    projectTitle: textAnalysis.projectTitle,
-    pageHeading: textAnalysis.pageHeading,
-    formFields: textAnalysis.formFields,
-    apiCalls: textAnalysis.apiCalls
-  };
-}
-
-async function analyzeTarEntries(tarPath, options = {}) {
-  const tempDir = path.join(uploadDir, `tar-scan-${crypto.randomBytes(5).toString("hex")}`);
-  let keepTempDir = false;
-  await fs.mkdir(tempDir, { recursive: true });
-  try {
-    const entries = [];
-    await tar.t({
-      file: tarPath,
-      gzip: true,
-      onentry(entry) {
-        entries.push({
-          path: entry.path,
-          type: entry.type,
-          size: Number(entry.size || 0)
-        });
-      }
-    });
-
-    const unsafeEntry = entries.find((entry) => !isSafeArchivePath(entry.path) || isUnsafeTarEntryType(entry.type));
-    if (unsafeEntry) {
-      const inspection = createInvalidArchiveInspection("tar.gz", `压缩包包含不安全条目：${unsafeEntry.path}`);
-      throw createProjectError(inspection, "压缩包包含不安全路径、链接或特殊文件，DemoGo 已拒绝处理。");
-    }
-
-    await tar.x({
-      file: tarPath,
-      cwd: tempDir,
-      gzip: true,
-      preservePaths: false,
-      strict: true,
-      filter: (entryPath, entry) => isSafeArchivePath(entryPath) && !isUnsafeTarEntryType(entry.type)
-    });
-
-    const rawFiles = [];
-    await collectExtractedFiles(tempDir, tempDir, rawFiles);
-    if (!rawFiles.length) return emptyArchiveAnalysis("tar.gz");
-
-    const normalizedPaths = rawFiles.map((entry) => normalizeArchivePath(entry.relativePath));
-    const commonRoot = findCommonRoot(normalizedPaths);
-    const publishableEntries = [];
-    const ignoredFiles = [];
-    const blockedFiles = [];
-    const textEntries = [];
-    let packageJsonInfo = { hasPackageJson: false, hasBuildScript: false };
-    let rawBytes = 0;
-    let publishableBytes = 0;
-
-    for (const entry of rawFiles) {
-      const normalized = normalizeArchivePath(entry.relativePath);
-      const relativePath = stripCommonRoot(normalized, commonRoot);
-      const bytes = Number(entry.bytes || 0);
-      rawBytes += bytes;
-
-      if (!relativePath || relativePath.endsWith("/")) continue;
-
-      const pathIssue = classifyEntryPath(relativePath);
-      if (pathIssue.action === "block") {
-        blockedFiles.push({ path: relativePath, reason: pathIssue.reason });
-        continue;
-      }
-      if (pathIssue.action === "ignore") {
-        ignoredFiles.push({ path: relativePath, reason: pathIssue.reason });
-        continue;
-      }
-
-      publishableEntries.push({ archiveType: "tar.gz", tempPath: entry.fullPath, relativePath, bytes });
-      publishableBytes += bytes;
-      if (shouldAnalyzeTextFile(relativePath, bytes)) {
-        textEntries.push({ archiveType: "tar.gz", tempPath: entry.fullPath, relativePath, bytes });
-      }
-    }
-
-    const paths = publishableEntries.map((item) => item.relativePath);
-    const textAnalysis = await analyzeTextEntries(textEntries);
-    const envHints = await analyzeEnvironmentVariableHints(publishableEntries);
-    if (paths.includes("package.json")) {
-      packageJsonInfo = await analyzePackageJson(publishableEntries.find((item) => item.relativePath === "package.json"));
-    }
-
-    keepTempDir = Boolean(options.keepTempFiles);
-    return {
-      rawFileCount: rawFiles.length,
-      archiveType: "tar.gz",
-      rawBytes,
-      publishableEntries,
-      publishableFileCount: publishableEntries.length,
-      publishableBytes,
-      ignoredFiles: summarizePathIssues(ignoredFiles),
-      blockedFiles: summarizePathIssues(blockedFiles),
-      rootEntries: summarizeRootEntries(paths),
-      commonRoot,
-      paths,
-      entryFile: detectEntryFile(paths),
-      hasPackageJson: packageJsonInfo.hasPackageJson,
-      hasBuildScript: packageJsonInfo.hasBuildScript,
-      packageScripts: packageJsonInfo.scripts,
-      packageDependencies: packageJsonInfo.dependencies,
-      envHints,
-      projectTitle: textAnalysis.projectTitle,
-      pageHeading: textAnalysis.pageHeading,
-      formFields: textAnalysis.formFields,
-      apiCalls: textAnalysis.apiCalls,
-      tempDir: options.keepTempFiles ? tempDir : null
-    };
-  } catch (error) {
-    if (error.statusCode) throw error;
-    throw createProjectError(createInvalidArchiveInspection("tar.gz", error.message), "压缩包不完整或格式异常，DemoGo 无法读取项目文件。");
-  } finally {
-    if (!keepTempDir) {
-      await fs.rm(tempDir, { recursive: true, force: true });
-    }
-  }
-}
-
-async function collectExtractedFiles(rootDir, currentDir, result) {
-  const entries = await fs.readdir(currentDir, { withFileTypes: true });
-  for (const entry of entries) {
-    const fullPath = path.join(currentDir, entry.name);
-    const relativePath = path.relative(rootDir, fullPath).replace(/\\/g, "/");
-    if (entry.isSymbolicLink()) {
-      result.push({ fullPath, relativePath, bytes: 0, unsafe: true });
-      continue;
-    }
-    if (entry.isDirectory()) {
-      await collectExtractedFiles(rootDir, fullPath, result);
-      continue;
-    }
-    if (!entry.isFile()) continue;
-    const stat = await fs.stat(fullPath);
-    result.push({ fullPath, relativePath, bytes: stat.size });
-  }
-}
-
-function normalizeArchivePath(entryPath) {
-  return String(entryPath || "").replace(/\\/g, "/").replace(/^\/+/, "").replace(/^\.\//, "");
-}
-
-function isSafeArchivePath(entryPath) {
-  const normalized = String(entryPath || "").replace(/\\/g, "/");
-  if (!normalized || normalized.startsWith("/") || /^[a-zA-Z]:\//.test(normalized)) return false;
-  return !normalized.split("/").some((part) => part === "..");
-}
-
-function isUnsafeTarEntryType(type) {
-  return ["SymbolicLink", "Link", "CharacterDevice", "BlockDevice", "FIFO"].includes(String(type || ""));
-}
-
-function classifyEntryPath(relativePath) {
-  const parts = relativePath.split("/").filter(Boolean);
-
-  if (parts.some((part) => part === "..")) {
-    return { action: "block", reason: "包含不安全路径" };
-  }
-
-  for (const part of parts) {
-    const lower = part.toLowerCase();
-    const ext = path.extname(lower);
-    if (isAllowedEnvTemplateName(lower)) {
-      continue;
-    }
-
-    if (ignoredPathParts.has(lower) || ignoredExactNames.has(part) || ignoredExactNames.has(lower) || ignoredExtensions.has(ext)) {
-      return { action: "ignore", reason: "本地依赖、缓存或日志文件，已自动忽略" };
-    }
-
-    if (blockedExactNames.has(lower) || blockedExtensions.has(ext)) {
-      return { action: "block", reason: "包含敏感或不支持发布的文件" };
-    }
-  }
-
-  return { action: "publish" };
-}
-
-function isAllowedEnvTemplateName(name) {
-  return name === ".env.example" ||
-    name === ".env.template" ||
-    name === ".env.local.example" ||
-    name.endsWith(".env.example") ||
-    name.endsWith(".env.template");
-}
-
-function summarizePathIssues(items, limit = 8) {
-  return items.slice(0, limit).map((item) => item.path);
-}
-
-function summarizeRootEntries(paths) {
-  const entries = new Set();
-  for (const entryPath of paths) {
-    const [first] = entryPath.split("/");
-    if (first) entries.add(first);
-  }
-  return Array.from(entries).slice(0, 12);
-}
-
-function detectEntryFile(paths) {
-  if (paths.includes("index.html")) return "index.html";
-  if (paths.includes("dist/index.html")) return "dist/index.html";
-  if (paths.includes("build/index.html")) return "build/index.html";
-  if (paths.includes("out/index.html")) return "out/index.html";
-  if (paths.includes("public/index.html")) return "public/index.html";
-  return detectSingleHtmlEntry(paths);
-}
-
-function detectSingleHtmlEntry(paths) {
-  const rootHtmlFiles = (paths || []).filter((entryPath) => (
-    /^[^/]+\.html?$/i.test(String(entryPath || "")) &&
-    !/^admin\.html$/i.test(entryPath) &&
-    !/^login\.html$/i.test(entryPath)
-  ));
-  if (rootHtmlFiles.length === 1) return rootHtmlFiles[0];
-  return null;
-}
-
-function hasSourceProjectIndicators(paths) {
-  return paths.some((entryPath) => {
-    const lower = String(entryPath || "").replace(/\\/g, "/").toLowerCase();
-    return [
-      "vite.config.js",
-      "vite.config.ts",
-      "vite.config.mjs",
-      "webpack.config.js",
-      "webpack.config.ts",
-      "webpack.config.mjs",
-      "rollup.config.js",
-      "rollup.config.ts",
-      "next.config.js",
-      "next.config.mjs",
-      "nuxt.config.js",
-      "nuxt.config.ts",
-      "svelte.config.js"
-    ].includes(lower) || /^src\/(main|index|app)\.(js|jsx|ts|tsx|vue|svelte)$/.test(lower);
-  });
-}
-
-function hasBackendIndicators(paths, packageScripts = {}) {
-  const normalized = paths.map((entryPath) => String(entryPath || "").replace(/\\/g, "/").toLowerCase());
-  if (normalized.some((entryPath) => [
-    "server.js",
-    "app.js",
-    "src/server.js",
-    "src/app.js",
-    "main.py",
-    "app.py",
-    "requirements.txt",
-    "manage.py"
-  ].includes(entryPath))) return true;
-  const startScript = String(packageScripts.start || "").toLowerCase();
-  return /\b(node|nodemon|tsx|ts-node|nest)\b/.test(startScript) && !/\b(vite|webpack|parcel|react-scripts)\b/.test(startScript);
-}
-
-function hasNodeRuntimeDependency(analysis = {}) {
-  const dependencies = Object.keys(analysis.packageDependencies || {}).map((name) => name.toLowerCase());
-  return dependencies.some((name) => ["express", "koa", "fastify", "hono", "@nestjs/core"].includes(name));
-}
-
-function hasSsrIndicators(paths) {
-  const normalized = paths.map((entryPath) => String(entryPath || "").replace(/\\/g, "/").toLowerCase());
-  const hasSsrConfig = normalized.some((entryPath) => [
-    "next.config.js",
-    "next.config.mjs",
-    "next.config.ts",
-    "nuxt.config.js",
-    "nuxt.config.ts",
-    "remix.config.js",
-    "remix.config.ts",
-    "svelte.config.js",
-    "svelte.config.ts",
-    "astro.config.js",
-    "astro.config.mjs",
-    "astro.config.ts",
-    "vinxi.config.js",
-    "vinxi.config.ts",
-    "app.config.ts"
-  ].includes(entryPath));
-  if (!hasSsrConfig) return false;
-  return !(normalized.includes("out/index.html") || normalized.includes("dist/index.html") || normalized.includes("build/index.html"));
-}
-
-function shouldAnalyzeTextFile(relativePath, bytes) {
-  if (bytes > 256 * 1024) return false;
-  const lower = relativePath.toLowerCase();
-  return [".html", ".js", ".jsx", ".ts", ".tsx", ".vue", ".svelte"].some((ext) => lower.endsWith(ext));
-}
-
-async function analyzeTextEntries(entries) {
-  const formFields = new Map();
-  const apiCalls = new Map();
-  const pageTitles = [];
-  const pageHeadings = [];
-
-  for (const item of entries.slice(0, 80)) {
-    const content = await readArchiveEntryText(item);
-    const title = extractHtmlTitle(content);
-    const heading = extractHtmlHeading(content);
-    if (title) pageTitles.push({ value: title, sourceFile: item.relativePath });
-    if (heading) pageHeadings.push({ value: heading, sourceFile: item.relativePath });
-    for (const field of extractFormFields(content, item.relativePath)) {
-      const key = `${field.name || field.label}`;
-      if (!formFields.has(key)) formFields.set(key, field);
-    }
-    for (const apiCall of extractApiCalls(content, item.relativePath)) {
-      const key = `${apiCall.method}:${apiCall.url}`;
-      if (!apiCalls.has(key)) apiCalls.set(key, apiCall);
-    }
-  }
-
-  return {
-    formFields: Array.from(formFields.values()).slice(0, 20),
-    apiCalls: Array.from(apiCalls.values()).slice(0, 20),
-    projectTitle: pickTextSignal(pageTitles),
-    pageHeading: pickTextSignal(pageHeadings)
-  };
-}
-
-function pickTextSignal(items) {
-  const preferred = items.find((item) => ["index.html", "dist/index.html", "build/index.html", "out/index.html", "public/index.html"].includes(item.sourceFile));
-  return cleanProjectName(preferred?.value || items[0]?.value || "");
-}
-
-function extractHtmlTitle(content) {
-  const match = String(content || "").match(/<title[^>]*>([\s\S]*?)<\/title>/i);
-  return cleanProjectName(stripHtml(match?.[1] || ""));
-}
-
-function extractHtmlHeading(content) {
-  const match = String(content || "").match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
-  return cleanProjectName(stripHtml(match?.[1] || ""));
-}
-
-function stripHtml(value) {
-  return decodeHtmlEntities(String(value || "").replace(/<[^>]+>/g, " "));
-}
-
-async function analyzePackageJson(entry) {
-  if (!entry) return { hasPackageJson: false, hasBuildScript: false, scripts: {}, dependencies: {} };
-  try {
-    const content = await readArchiveEntryText(entry);
-    const packageJson = JSON.parse(content.replace(/^\uFEFF/, ""));
-    return {
-      hasPackageJson: true,
-      hasBuildScript: Boolean(packageJson.scripts?.build),
-      scripts: packageJson.scripts || {},
-      dependencies: {
-        ...(packageJson.dependencies || {}),
-        ...(packageJson.devDependencies || {})
-      }
-    };
-  } catch {
-    return { hasPackageJson: true, hasBuildScript: false, scripts: {}, dependencies: {} };
-  }
-}
-
-async function analyzeEnvironmentVariableHints(entries = []) {
-  const names = new Set();
-  const envEntries = entries.filter((item) => {
-    const file = String(item.relativePath || "").toLowerCase();
-    return file === ".env.example" ||
-      file === ".env.template" ||
-      file === ".env.local.example" ||
-      file.endsWith("/.env.example") ||
-      file.endsWith("/.env.template") ||
-      file.endsWith("/.env.local.example");
-  }).slice(0, 5);
-  for (const entry of envEntries) {
-    const content = await readArchiveEntryText(entry);
-    for (const line of content.split(/\r?\n/)) {
-      const match = line.match(/^\s*([A-Z][A-Z0-9_]{2,})\s*=/);
-      if (match) names.add(match[1]);
-    }
-  }
-  return Array.from(names).slice(0, 40);
-}
-
-function readZipEntryText(entry) {
-  return new Promise((resolve, reject) => {
-    const chunks = [];
-    let total = 0;
-    entry.stream()
-      .on("data", (chunk) => {
-        total += chunk.length;
-        if (total <= 256 * 1024) chunks.push(chunk);
-      })
-      .on("end", () => resolve(Buffer.concat(chunks).toString("utf8")))
-      .on("error", reject);
-  });
-}
-
-async function readArchiveEntryText(item) {
-  if (item?.archiveType === "tar.gz") {
-    const bytes = await fs.readFile(item.tempPath);
-    return bytes.subarray(0, 256 * 1024).toString("utf8");
-  }
-  return readZipEntryText(item?.entry || item);
-}
-
-function extractFormFields(content, sourceFile) {
-  const fields = [];
-  const inputPattern = /<(input|textarea|select)\b([^>]*)>/gi;
-  let match;
-  while ((match = inputPattern.exec(content))) {
-    const tag = match[1].toLowerCase();
-    const attrs = parseHtmlAttributes(match[2] || "");
-    const type = attrs.type || (tag === "textarea" ? "textarea" : tag === "select" ? "select" : "text");
-    if (["hidden", "submit", "button", "reset", "file", "image"].includes(type.toLowerCase())) continue;
-    const name = attrs.name || attrs.id || attrs["v-model"] || attrs["formcontrolname"] || "";
-    const label = inferFieldLabel(name || attrs.placeholder || attrs["aria-label"] || type);
-    if (!name && !label) continue;
-    fields.push({
-      name,
-      label,
-      type,
-      required: Object.prototype.hasOwnProperty.call(attrs, "required"),
-      sourceFile,
-      autoHostEligible: isCollectableFormField({ name, label, type, sourceFile })
-    });
-  }
-
-  for (const fieldName of inferFieldNamesFromCode(content)) {
-    fields.push({
-      name: fieldName,
-      label: inferFieldLabel(fieldName),
-      type: inferFieldType(fieldName),
-      required: false,
-      sourceFile,
-      autoHostEligible: isCollectableFormField({
-        name: fieldName,
-        label: inferFieldLabel(fieldName),
-        type: inferFieldType(fieldName),
-        sourceFile
-      })
-    });
-  }
-
-  return fields;
-}
-
-function isCollectableFormField(field) {
-  const text = `${field?.name || ""} ${field?.label || ""}`.toLowerCase();
-  if (isNonCollectableControl(text)) return false;
-  return /name|姓名|phone|mobile|tel|手机号|电话|email|邮箱|company|公司|message|留言|remark|备注|contact|联系|wechat|微信|address|地址/.test(text);
-}
-
-function isNonCollectableControl(text) {
-  return /price|cost|fee|amount|total|rate|toggle|switch|slider|model|deepseek|gpt|claude|gemini|token|temperature|quantity|count|number|calculator|calc|预算|价格|费用|金额|总价|费率|模型|开关|数量|人数|计算/.test(String(text || "").toLowerCase());
-}
-
-function parseHtmlAttributes(text) {
-  const attrs = {};
-  const pattern = /([:@\w-]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+)))?/g;
-  let match;
-  while ((match = pattern.exec(text))) {
-    attrs[match[1].toLowerCase()] = match[2] ?? match[3] ?? match[4] ?? "";
-  }
-  return attrs;
-}
-
-function inferFieldNamesFromCode(content) {
-  const names = new Set();
-  const patterns = [
-    /\b(name|phone|mobile|tel|email|company|message|remark|remarks|contact|address|wechat)\s*:/gi,
-    /\bset(Name|Phone|Mobile|Email|Company|Message|Remark|Address)\b/g
-  ];
-  for (const pattern of patterns) {
-    let match;
-    while ((match = pattern.exec(content))) {
-      names.add((match[1] || "").toString().replace(/^[A-Z]/, (value) => value.toLowerCase()));
-    }
-  }
-  return Array.from(names).filter(Boolean).slice(0, 12);
-}
-
-function inferFieldType(name) {
-  const lower = String(name || "").toLowerCase();
-  if (lower.includes("phone") || lower.includes("mobile") || lower.includes("tel")) return "phone";
-  if (lower.includes("email")) return "email";
-  if (lower.includes("count") || lower.includes("quantity") || lower.includes("number")) return "number";
-  if (lower.includes("message") || lower.includes("remark")) return "textarea";
-  return "text";
-}
-
-function inferFieldLabel(name) {
-  const lower = String(name || "").toLowerCase();
-  const labels = [
-    ["phone", "手机号"],
-    ["mobile", "手机号"],
-    ["tel", "电话"],
-    ["email", "邮箱"],
-    ["company", "公司"],
-    ["message", "留言"],
-    ["remark", "备注"],
-    ["address", "地址"],
-    ["quantity", "数量"],
-    ["count", "人数"],
-    ["name", "姓名"]
-  ];
-  return labels.find(([key]) => lower.includes(key))?.[1] || String(name || "").trim();
-}
-
-function extractApiCalls(content, sourceFile) {
-  const calls = [];
-  const patterns = [
-    { type: "fetch", regex: /fetch\s*\(\s*(['"`])([^'"`]+)\1/gi },
-    { type: "axios", regex: /axios\.(get|post|put|patch|delete)\s*\(\s*(['"`])([^'"`]+)\2/gi }
-  ];
-
-  for (const pattern of patterns) {
-    let match;
-    while ((match = pattern.regex.exec(content))) {
-      const method = pattern.type === "axios" ? match[1].toUpperCase() : "UNKNOWN";
-      const url = pattern.type === "axios" ? match[3] : match[2];
-      if (!url || url.startsWith("data:")) continue;
-      calls.push({
-        type: pattern.type,
-        method,
-        url,
-        isLocal: isLocalApiUrl(url),
-        sourceFile
-      });
-    }
-  }
-
-  return calls;
-}
-
-function isLocalApiUrl(url) {
-  return /^\/api\//.test(url) || /^api\//.test(url) || /^\.\.?\/api\//.test(url);
-}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 function createRuleReport(context) {
   const hasForms = context.formFields.length > 0;
@@ -6370,237 +3377,7 @@ function determineInspectionStatus(analysis, flags) {
   return "blocked";
 }
 
-function detectRuntimeMetadata(analysis, flags = {}) {
-  const startCommand = String(analysis.packageScripts?.start || "").trim();
-  const dependencies = analysis.packageDependencies || {};
-  const paths = analysis.paths || [];
-  const scripts = analysis.packageScripts || {};
-  const dependencyNames = Object.keys(dependencies || {}).map((name) => name.toLowerCase());
-  const runtimeWarnings = detectRuntimeWarnings({ dependencies: dependencyNames, scripts, paths });
-  const framework = inferNodeFramework(dependencies, paths);
-  return {
-    engine: inferRuntimeEngine(paths, dependencies, flags),
-    hasStartScript: Boolean(startCommand),
-    startCommand,
-    scripts,
-    hasBuildScript: Boolean(scripts.build),
-    hasStartProdScript: Boolean(scripts["start:prod"]),
-    selectedStartCommand: scripts["start:prod"] ? "npm run start:prod" : "npm start",
-    buildBeforeStart: shouldBuildBeforeNodeStart(scripts),
-    packageManager: analysis.paths?.includes("pnpm-lock.yaml")
-      ? "pnpm"
-      : analysis.paths?.includes("yarn.lock")
-        ? "yarn"
-        : "npm",
-    framework,
-    frameworkLabel: formatRuntimeFramework(framework),
-    requiresServer: Boolean(flags.hasBackend || flags.hasSsr),
-    requiresDatabase: runtimeWarnings.requiresDatabase,
-    requiresMysql: runtimeWarnings.requiresMysql,
-    requiresPostgres: runtimeWarnings.requiresPostgres,
-    requiresMongo: runtimeWarnings.requiresMongo,
-    requiresRedis: runtimeWarnings.requiresRedis,
-    requiresOtherDatabase: runtimeWarnings.requiresOtherDatabase,
-    databaseEngine: runtimeWarnings.databaseEngine,
-    requiresWebSocket: runtimeWarnings.requiresWebSocket,
-    warnings: runtimeWarnings.warnings,
-    unsupportedReasons: runtimeWarnings.unsupportedReasons
-  };
-}
 
-function shouldBuildBeforeNodeStart(scripts = {}) {
-  const start = String(scripts.start || "").toLowerCase();
-  if (!scripts.build) return false;
-  if (scripts["start:prod"]) return false;
-  if (/\bnext start\b|\bnuxt\b|\bvinxi start\b|\btanstack\b/.test(start)) return true;
-  if (/dist\/|build\/|node dist|node build|node \.output/.test(start)) return true;
-  if (/ts-node|tsx|nodemon/.test(start)) return true;
-  return false;
-}
-
-function detectRuntimeWarnings({ dependencies = [], scripts = {}, paths = [] }) {
-  const text = [
-    dependencies.join(" "),
-    Object.values(scripts).join(" "),
-    paths.join(" ")
-  ].join(" ").toLowerCase();
-  const mysqlPatterns = [
-    "mysql",
-    "mysql2",
-    "sequelize",
-    "typeorm",
-    "drizzle-orm"
-  ];
-  const postgresPatterns = [
-    "pg",
-    "postgres",
-    "postgresql"
-  ];
-  const mongoPatterns = [
-    "mongodb",
-    "mongoose"
-  ];
-  const redisPatterns = [
-    "redis",
-    "ioredis"
-  ];
-  const otherDatabasePatterns = ["prisma"];
-  const usesSupabase = text.includes("supabase");
-  const requiresMysql = mysqlPatterns.some((item) => text.includes(item));
-  const requiresPostgres = postgresPatterns.some((item) => text.includes(item)) && !usesSupabase;
-  const requiresMongo = mongoPatterns.some((item) => text.includes(item));
-  const requiresRedis = redisPatterns.some((item) => text.includes(item));
-  const requiresOtherDatabase = otherDatabasePatterns.some((item) => text.includes(item));
-  const requiresDatabase = requiresMysql || requiresPostgres || requiresMongo || requiresRedis || requiresOtherDatabase;
-  const requiresWebSocket = /\b(ws|socket\.io|websocket)\b/.test(text);
-  const warnings = [];
-  const unsupportedReasons = [];
-  if (requiresMysql) {
-    warnings.push("检测到 MySQL 依赖，发布时会分配空的试用数据库");
-  }
-  if (usesSupabase) {
-    warnings.push("检测到 Supabase 外部后端，需在项目详情页填写 Supabase URL 和 anon key");
-  }
-  if (requiresRedis) {
-    warnings.push("检测到 Redis 依赖");
-    unsupportedReasons.push("当前暂不支持 Redis 试用环境");
-  }
-  if (requiresMongo) {
-    warnings.push("检测到 MongoDB 依赖");
-    unsupportedReasons.push("当前暂不支持 MongoDB 试用环境");
-  }
-  if (requiresPostgres) {
-    warnings.push("检测到 PostgreSQL 依赖");
-    unsupportedReasons.push("当前暂不支持 PostgreSQL 试用环境");
-  }
-  if (requiresOtherDatabase && !requiresMysql) {
-    warnings.push("检测到数据库 ORM 或迁移工具");
-    unsupportedReasons.push("当前只支持 MySQL 空试用数据库，不自动执行 ORM 迁移");
-  }
-  if (requiresWebSocket) {
-    warnings.push("检测到 WebSocket 依赖");
-    unsupportedReasons.push("当前不支持 WebSocket 试用链路");
-  }
-  return {
-    requiresDatabase,
-    requiresMysql,
-    requiresPostgres,
-    requiresMongo,
-    requiresRedis,
-    requiresOtherDatabase,
-    databaseEngine: requiresMysql ? "mysql" : "",
-    requiresWebSocket,
-    warnings,
-    unsupportedReasons
-  };
-}
-
-function inferRuntimeEngine(paths = [], dependencies = {}, flags = {}) {
-  const normalized = paths.map((entryPath) => String(entryPath || "").replace(/\\/g, "/").toLowerCase());
-  if (normalized.some((entryPath) => ["requirements.txt", "main.py", "app.py", "manage.py"].includes(entryPath))) return "python";
-  if (normalized.some((entryPath) => ["pom.xml", "build.gradle", "build.gradle.kts"].includes(entryPath))) return "java";
-  if (normalized.some((entryPath) => ["go.mod", "main.go"].includes(entryPath))) return "go";
-  if (flags.hasBackend || Object.keys(dependencies || {}).length) return "node";
-  return "";
-}
-
-function inferNodeFramework(dependencies = {}, paths = []) {
-  const names = Object.keys(dependencies || {}).map((name) => name.toLowerCase());
-  if (names.includes("next")) return "next";
-  if (names.includes("nuxt")) return "nuxt";
-  if (names.includes("@tanstack/react-start") || names.includes("@tanstack/start")) return "tanstack_start";
-  if (names.includes("express")) return "express";
-  if (names.includes("koa")) return "koa";
-  if (names.includes("fastify")) return "fastify";
-  if (names.includes("@nestjs/core")) return "nestjs";
-  if (names.includes("hono")) return "hono";
-  if ((paths || []).some((item) => String(item || "").toLowerCase().includes("server.js"))) return "node";
-  return "";
-}
-
-function formatRuntimeFramework(value) {
-  const labels = {
-    express: "Express",
-    koa: "Koa",
-    fastify: "Fastify",
-    nestjs: "NestJS",
-    hono: "Hono",
-    next: "Next.js",
-    nuxt: "Nuxt",
-    tanstack_start: "TanStack Start",
-    node: "Node.js"
-  };
-  return labels[value] || "Node.js";
-}
-
-function isSingleServiceSsrProfile(profile = {}) {
-  if (profile?.type !== "fullstack_framework") return false;
-  const frameworks = [
-    profile.framework,
-    ...(profile.frontendFrameworks || []).map((item) => item.code)
-  ].filter(Boolean).map((item) => String(item).toLowerCase());
-  return frameworks.some((item) => ["next", "nuxt", "tanstack_start"].includes(item));
-}
-
-function detectInspectionType(flags) {
-  if (flags.hasOutIndex) return "out";
-  if (flags.hasSsr) return "runtime";
-  if (flags.hasBackend && !flags.hasDistIndex && !flags.hasBuildIndex && !flags.hasOutIndex && !flags.hasPublicIndex) return "backend";
-  if (flags.hasPackageJson && flags.hasBuildScript && flags.hasSourceIndicators && flags.hasRootIndex) return "source";
-  if (flags.hasRootIndex) return "static-root";
-  if (flags.hasDistIndex) return "dist";
-  if (flags.hasBuildIndex) return "build";
-  if (flags.hasPublicIndex) return "public";
-  if (flags.singleHtmlEntry) return "single-html";
-  if (flags.hasPackageJson) return "source";
-  return "unknown";
-}
-
-function createInvalidZipInspection(error) {
-  const technicalReason = error instanceof Error ? error.message : "";
-  return createInvalidArchiveInspection("ZIP", technicalReason);
-}
-
-function createInvalidArchiveInspection(archiveType, technicalReason = "") {
-  return {
-    status: "blocked",
-    canPublish: false,
-    detectedType: "unknown",
-    label: inspectionTypeLabel("unknown"),
-    summary: "压缩包不完整或格式异常，DemoGo 无法读取项目文件。",
-    issues: [
-      `压缩包缺少完整的 ${archiveType} 目录信息，可能是生成、下载或上传过程中被截断。`
-    ],
-    suggestions: [
-      "请从原项目文件夹重新压缩后上传，不要上传正在生成或传输未完成的文件。",
-      "如果文件来自其他工具导出，请先在本地解压验证，确认能正常打开后再上传。"
-    ],
-    rawFileCount: 0,
-    publishableFileCount: 0,
-    rawBytes: 0,
-    publishableBytes: 0,
-    ignoredFileCount: 0,
-    ignoredFiles: [],
-    blockedFiles: [],
-    rootEntries: [],
-    entryFile: null,
-    projectTitle: "",
-    pageHeading: "",
-    hasPackageJson: false,
-    hasBuildScript: false,
-    formFields: [],
-    apiCalls: [],
-    ruleReport: {
-      projectCategory: inspectionTypeLabel("unknown"),
-      publishability: "暂时无法发布",
-      risks: technicalReason ? [`${archiveType} 读取失败：${technicalReason}`] : [],
-      recommendations: [
-        "重新打包后再上传。"
-      ],
-      fixPrompt: "请重新导出或重新压缩项目，确保生成的是完整 .zip、.tar.gz 或 .tgz 文件，且压缩包内包含 index.html、dist/index.html 或 build/index.html。"
-    }
-  };
-}
 
 function inspectionTypeLabel(type) {
   const labels = {
@@ -6734,475 +3511,4 @@ function createUserFacingInspection(context) {
   };
 }
 
-function createProjectError(inspection, message) {
-  const error = new Error(message);
-  error.statusCode = 400;
-  error.inspection = {
-    ...inspection,
-    status: "blocked",
-    canPublish: false,
-    summary: message
-  };
-  return error;
-}
 
-async function detectBuildAndNormalizeOutput(targetDir, inspection, options = {}) {
-  const packageJsonPath = path.join(targetDir, "package.json");
-  const hasPackageJson = await exists(packageJsonPath);
-  const shouldBuildSourceProject = hasPackageJson && inspection?.detectedType === "source" && inspection?.hasBuildScript;
-  const buildEnv = options.env || {};
-
-  if (shouldBuildSourceProject) {
-    let buildLog = "";
-    try {
-      buildLog = await buildNodeProjectWithEnv(targetDir, buildEnv);
-    } catch (error) {
-      throw createProjectError(inspection, explainBuildError(error));
-    }
-
-    const builtOutput = await findPublishableOutput(targetDir, { built: true });
-    if (builtOutput) {
-      await promoteDirectory(builtOutput.dir, targetDir);
-      return { detectedType: builtOutput.type, buildLog };
-    }
-
-    throw createProjectError(inspection, "项目已完成生成，但未找到可发布的网页入口。请让 AI 工具生成 dist/index.html、build/index.html 或 out/index.html。");
-  }
-
-  const existingOutput = await findPublishableOutput(targetDir, { built: false });
-  if (existingOutput) {
-    if (existingOutput.dir !== targetDir) {
-      await promoteDirectory(existingOutput.dir, targetDir);
-    }
-    return { detectedType: existingOutput.type, buildLog: "" };
-  }
-
-  if (inspection?.detectedType === "single-html" && await promoteSingleHtmlEntry(targetDir, inspection.entryFile)) {
-    return { detectedType: "single-html", buildLog: "" };
-  }
-
-  if (hasPackageJson) {
-    let buildLog = "";
-    try {
-      buildLog = await buildNodeProjectWithEnv(targetDir, buildEnv);
-    } catch (error) {
-      throw createProjectError(inspection, explainBuildError(error));
-    }
-    const builtOutput = await findPublishableOutput(targetDir, { built: true });
-    if (builtOutput) {
-      await promoteDirectory(builtOutput.dir, targetDir);
-      return { detectedType: builtOutput.type, buildLog };
-    }
-    throw createProjectError(inspection, "项目已完成生成，但未找到可发布的网页入口。请让 AI 工具生成 dist/index.html、build/index.html 或 out/index.html。");
-  }
-
-  throw createProjectError(inspection, "未找到可访问的首页文件。请上传包含 index.html、dist/index.html、build/index.html 或 out/index.html 的项目包。");
-}
-
-async function findPublishableOutput(targetDir, options = {}) {
-  const prefix = options.built ? "built-" : "";
-  const candidates = [
-    { dir: targetDir, type: "static-root", allowWhenBuilt: false },
-    { dir: path.join(targetDir, "dist"), type: `${prefix}dist`, allowWhenBuilt: true },
-    { dir: path.join(targetDir, "build"), type: `${prefix}build`, allowWhenBuilt: true },
-    { dir: path.join(targetDir, "out"), type: `${prefix}out`, allowWhenBuilt: true },
-    { dir: path.join(targetDir, "public"), type: `${prefix}public`, allowWhenBuilt: false }
-  ];
-
-  for (const candidate of candidates) {
-    if (options.built && !candidate.allowWhenBuilt) continue;
-    if (await exists(path.join(candidate.dir, "index.html"))) return candidate;
-  }
-  return null;
-}
-
-async function summarizePublishedDirectory(rootDir) {
-  const summary = { fileCount: 0, totalBytes: 0 };
-  async function walk(currentDir) {
-    const entries = await fs.readdir(currentDir, { withFileTypes: true });
-    for (const entry of entries) {
-      const fullPath = path.join(currentDir, entry.name);
-      if (entry.isDirectory()) {
-        await walk(fullPath);
-        continue;
-      }
-      if (!entry.isFile()) continue;
-      const stat = await fs.stat(fullPath);
-      summary.fileCount += 1;
-      summary.totalBytes += stat.size;
-    }
-  }
-  await walk(rootDir);
-  return summary;
-}
-
-async function promoteDirectory(sourceDir, targetDir) {
-  const stagingDir = `${targetDir}-staging-${crypto.randomBytes(3).toString("hex")}`;
-  await fs.rename(sourceDir, stagingDir);
-  const entries = await fs.readdir(targetDir);
-
-  for (const entry of entries) {
-    await fs.rm(path.join(targetDir, entry), { recursive: true, force: true });
-  }
-
-  const promotedEntries = await fs.readdir(stagingDir);
-  for (const entry of promotedEntries) {
-    await fs.rename(path.join(stagingDir, entry), path.join(targetDir, entry));
-  }
-  await fs.rm(stagingDir, { recursive: true, force: true });
-}
-
-async function ensureAutoHostedForm({ user, demo, inspection, targetDir, now = new Date().toISOString() }) {
-  const allFields = Array.isArray(inspection?.formFields) ? inspection.formFields : [];
-  const autoHostableFields = filterAutoHostableFormFields(allFields);
-  const detectedFields = normalizeFormFields(autoHostableFields);
-  if (!allFields.length) {
-    return { reason: "未检测到可自动接管的表单" };
-  }
-  if (!detectedFields.length) {
-    return { reason: "检测到页面填写控件，但不像报名、预约或留言表单，已跳过自动表单收集" };
-  }
-
-  const [forms, submissions] = await Promise.all([
-    readJson(formsFile, []),
-    readJson(formSubmissionsFile, [])
-  ]);
-  const existingIndex = forms.findIndex((form) => form.demoId === demo.id && form.userId === user.id && form.status !== "deleted");
-  const quota = calculateFormQuota(user, forms, submissions);
-  if (existingIndex === -1 && quota.forms.limit && quota.forms.used >= quota.forms.limit) {
-    return { reason: `当前套餐最多托管 ${quota.forms.limit} 个表单，已跳过自动表单收集` };
-  }
-
-  const item = existingIndex >= 0
-    ? {
-        ...forms[existingIndex],
-        demoSlug: demo.slug,
-        demoName: demo.name || demo.slug,
-        fields: detectedFields.length ? detectedFields : normalizeFormFields(forms[existingIndex].fields || []),
-        status: forms[existingIndex].status || "active",
-        updatedAt: now
-      }
-    : {
-        id: crypto.randomUUID(),
-        userId: user.id,
-        userEmail: user.email,
-        demoId: demo.id,
-        demoSlug: demo.slug,
-        demoName: demo.name || demo.slug,
-        publicToken: crypto.randomBytes(24).toString("hex"),
-        name: `${demo.name || demo.slug} 表单`,
-        status: "active",
-        fields: detectedFields,
-        submissionCount: 0,
-        autoCreated: true,
-        createdAt: now,
-        updatedAt: now
-      };
-
-  if (existingIndex >= 0) {
-    forms[existingIndex] = item;
-  } else {
-    forms.unshift(item);
-  }
-  await writeJson(formsFile, forms.slice(0, 2000));
-  await injectAutoFormScript(targetDir, publicForm(item, { publicBaseUrl }));
-  await writeAuditLog({
-    action: existingIndex >= 0 ? "refresh_auto_form_hosting" : "auto_create_form_hosting",
-    actorType: "system",
-    actorId: user.id,
-    targetType: "form",
-    targetId: item.id,
-    metadata: {
-      demoId: demo.id,
-      demoSlug: demo.slug,
-      fieldCount: item.fields.length
-    }
-  });
-  return { form: item };
-}
-
-function filterAutoHostableFormFields(fields = []) {
-  const sourceFields = Array.isArray(fields) ? fields : [];
-  const names = sourceFields.map((field) => `${field.name || ""} ${field.label || ""}`.toLowerCase()).join(" ");
-  const hasContact = /phone|mobile|tel|手机号|电话|email|邮箱|wechat|微信|contact|联系/.test(names);
-  const hasMessage = /message|留言|remark|备注/.test(names);
-  const hasIdentity = /name|姓名|company|公司/.test(names);
-  if (!hasContact && !hasMessage && !hasIdentity) return [];
-  return sourceFields
-    .filter((field) => !isNonCollectableControl(`${field.name || ""} ${field.label || ""}`))
-    .map((field) => ({ ...field, autoHostEligible: true }))
-    .slice(0, 12);
-}
-
-async function injectAutoFormScript(targetDir, form) {
-  const indexPath = path.join(targetDir, "index.html");
-  if (!await exists(indexPath)) return;
-
-  const fields = normalizeFormFields(form.fields || []).map((field) => field.name);
-  const config = JSON.stringify({
-    submitUrl: form.submitUrl,
-    fields
-  }).replace(/</g, "\\u003c");
-  const script = [
-    "<script>",
-    "(function(){",
-    "if(window.__DEMOGO_AUTO_FORM__)return;",
-    `window.__DEMOGO_AUTO_FORM__=${config};`,
-    "var cfg=window.__DEMOGO_AUTO_FORM__;",
-    "function named(el){return el&&((el.getAttribute('name')||el.id||'').trim());}",
-    "function setText(form,text,ok){var box=form.querySelector('[data-demogo-form-status]');if(!box){box=document.createElement('div');box.setAttribute('data-demogo-form-status','');box.style.marginTop='10px';box.style.fontSize='14px';form.appendChild(box);}box.textContent=text;box.style.color=ok?'#087a69':'#b54708';}",
-    "document.addEventListener('submit',function(event){",
-    "var form=event.target;if(!form||form.tagName!=='FORM')return;",
-    "var controls=Array.prototype.slice.call(form.querySelectorAll('input,textarea,select')).filter(function(el){return named(el)&&el.type!=='button'&&el.type!=='submit'&&el.type!=='reset';});",
-    "if(!controls.length)return;",
-    "event.preventDefault();",
-    "var payload={};controls.forEach(function(el){var key=named(el);if(!key)return;if((el.type==='checkbox'||el.type==='radio')&&!el.checked)return;payload[key]=el.value;});",
-    "fetch(cfg.submitUrl,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}).then(function(res){if(!res.ok)throw new Error('submit failed');return res.json();}).then(function(){setText(form,'提交成功，我们会尽快联系你。',true);form.reset();}).catch(function(){setText(form,'提交失败，请稍后重试。',false);});",
-    "},true);",
-    "})();",
-    "</script>"
-  ].join("");
-
-  const html = await fs.readFile(indexPath, "utf8");
-  const cleaned = html.replace(/<script>\s*\(function\(\)\{\s*if\(window\.__DEMOGO_AUTO_FORM__\)[\s\S]*?<\/script>\s*/g, "");
-  const updated = cleaned.includes("</body>")
-    ? cleaned.replace("</body>", `${script}\n</body>`)
-    : `${cleaned}\n${script}`;
-  await fs.writeFile(indexPath, updated, "utf8");
-}
-
-async function buildNodeProject(projectDir) {
-  const packageJsonContent = await fs.readFile(path.join(projectDir, "package.json"), "utf8");
-  const packageJson = JSON.parse(packageJsonContent.replace(/^\uFEFF/, ""));
-  if (!packageJson.scripts?.build) {
-    throw new Error("检测到 package.json，但未找到 scripts.build，无法自动构建");
-  }
-
-  if (buildMode !== "host" && await commandAvailable("docker")) {
-    return buildNodeProjectInDocker(projectDir, {});
-  }
-
-  if (buildMode === "docker") {
-    throw new Error("已配置 Docker 构建模式，但服务器未检测到 docker 命令");
-  }
-
-  return buildNodeProjectOnHost(projectDir, {});
-}
-
-async function buildNodeProjectWithEnv(projectDir, env = {}) {
-  const packageJsonContent = await fs.readFile(path.join(projectDir, "package.json"), "utf8");
-  const packageJson = JSON.parse(packageJsonContent.replace(/^\uFEFF/, ""));
-  if (!packageJson.scripts?.build) {
-    throw new Error("检测到 package.json，但未找到 scripts.build，无法自动构建");
-  }
-
-  if (buildMode !== "host" && await commandAvailable("docker")) {
-    return buildNodeProjectInDocker(projectDir, env);
-  }
-
-  if (buildMode === "docker") {
-    throw new Error("已配置 Docker 构建模式，但服务器未检测到 docker 命令");
-  }
-
-  return buildNodeProjectOnHost(projectDir, env);
-}
-
-async function buildNodeProjectOnHost(projectDir, env = {}) {
-  const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
-  const installCommand = await exists(path.join(projectDir, "package-lock.json")) ? [npmCommand, ["ci"]] : [npmCommand, ["install"]];
-  const installLog = await runCommand(installCommand[0], installCommand[1], projectDir);
-  const buildLog = await runCommand(npmCommand, ["run", "build"], projectDir, env);
-  return ["[host build]", installLog, buildLog].join("\n");
-}
-
-async function buildNodeProjectInDocker(projectDir, env = {}) {
-  const installCommand = await exists(path.join(projectDir, "package-lock.json")) ? "npm ci" : "npm install";
-  const script = `${installCommand} && npm run build`;
-  const envArgs = Object.entries(sanitizeBuildEnv(env)).flatMap(([key, value]) => ["-e", `${key}=${value}`]);
-  const args = [
-    "run",
-    "--rm",
-    "--network=bridge",
-    "--memory",
-    dockerMemory,
-    "--cpus",
-    dockerCpus,
-    ...envArgs,
-    "-v",
-    `${path.resolve(projectDir)}:/workspace`,
-    "-w",
-    "/workspace",
-    dockerImage,
-    "sh",
-    "-lc",
-    script
-  ];
-  const log = await runCommand("docker", args, projectDir);
-  return [`[docker build] image=${dockerImage} memory=${dockerMemory} cpus=${dockerCpus}`, log].join("\n");
-}
-
-function runCommand(command, args, cwd, env = {}) {
-  return new Promise((resolve, reject) => {
-    execFile(command, args, {
-      cwd,
-      shell: process.platform === "win32",
-      timeout: buildTimeoutMs,
-      maxBuffer: 1024 * 1024 * 2,
-      env: {
-        ...process.env,
-        ...sanitizeBuildEnv(env),
-        CI: "true"
-      }
-    }, (error, stdout, stderr) => {
-      const output = [
-        `$ ${command} ${formatCommandArgsForLog(args).join(" ")}`,
-        stdout,
-        stderr
-      ].filter(Boolean).join("\n");
-
-      if (error) {
-        const commandError = new Error(`构建命令失败：${command} ${args.join(" ")}\n${error.message}\n${output}`);
-        commandError.code = error.code;
-        commandError.signal = error.signal;
-        commandError.killed = error.killed;
-        reject(commandError);
-        return;
-      }
-      resolve(output);
-    });
-  });
-}
-
-function formatCommandArgsForLog(args = []) {
-  return (args || []).map((arg, index) => {
-    const text = String(arg);
-    const previous = String(args[index - 1] || "");
-    if (previous === "-e" && /^[A-Z_][A-Z0-9_]*=/.test(text)) {
-      const [key] = text.split("=");
-      return `${key}=***`;
-    }
-    if (/^(.*(?:KEY|SECRET|TOKEN|PASS|PASSWORD|ANON).*)=/i.test(text)) {
-      return text.replace(/=.*/, "=***");
-    }
-    return text;
-  });
-}
-
-function sanitizeBuildEnv(env = {}) {
-  const result = {};
-  for (const [rawKey, rawValue] of Object.entries(env || {})) {
-    const key = normalizeEnvKey(rawKey);
-    if (!key || isPlatformEnvKey(key) || isUnsafeExternalSecretKey(key)) continue;
-    const value = String(rawValue ?? "").trim();
-    if (!value) continue;
-    result[key] = value;
-  }
-  return result;
-}
-
-async function commandAvailable(command) {
-  const checkCommand = process.platform === "win32" ? "where" : "which";
-  try {
-    await runCommand(checkCommand, [command], process.cwd());
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function explainBuildError(error) {
-  const message = String(error?.message || "");
-  if (error?.killed || message.includes("ETIMEDOUT")) {
-    return "项目生成时间过长，系统已停止处理。常见原因是依赖过多、上传了无关依赖目录，或项目配置异常。建议先在 AI 编程工具中生成 dist/build 后再上传。";
-  }
-  if (message.includes("scripts.build") || message.includes("未找到 scripts.build")) {
-    return "检测到 package.json，但未找到生成网页的 build 命令。请先在 AI 编程工具中生成可发布版本，或补充 build 命令后重新上传。";
-  }
-  if (message.includes("JSON")) {
-    return "package.json 解析失败，请检查项目配置文件格式是否正确。";
-  }
-  if (message.includes("npm") || message.includes("构建命令失败")) {
-    return "项目自动生成失败。常见原因是依赖安装失败、项目配置不完整，或源码需要本地特殊环境。建议先生成 dist/build 后再上传。";
-  }
-  return "项目自动生成失败，请检查项目配置，或先生成 dist/build 后重新上传。";
-}
-
-async function injectTrackingScript(targetDir, detectedType) {
-  const indexPath = path.join(targetDir, "index.html");
-  if (!await exists(indexPath)) return;
-
-  const script = [
-    "<script>",
-    "(function(){",
-    "var p=location.pathname.match(/\\/d\\/([^\\/]+)/);",
-    "if(!p)return;",
-    "var b=0;",
-    "try{b=performance.getEntriesByType('resource').reduce(function(s,r){return s+(r.transferSize||0);},0);}catch(e){}",
-    "var s=document.createElement('script');",
-    "s.src='/api/demo-track/'+encodeURIComponent(p[1])+'?bytes='+Math.max(0,Math.round(b));",
-    "s.async=true;",
-    "document.head.appendChild(s);",
-    "})();",
-    "</script>"
-  ].join("");
-  const html = await fs.readFile(indexPath, "utf8");
-  if (html.includes("/api/demo-track/")) return;
-  const updated = html.includes("</body>")
-    ? html.replace("</body>", `${script}\n</body>`)
-    : `${html}\n${script}`;
-  await fs.writeFile(indexPath, updated, "utf8");
-}
-
-const pendingUsage = new Map();
-
-function recordDemoVisit(slug, estimatedBytes, ip) {
-  const now = new Date().toISOString();
-  const current = pendingUsage.get(slug) || {
-    visits: 0,
-    estimatedBytes: 0,
-    uniqueIps: new Set(),
-    lastVisitedAt: now
-  };
-  current.visits += 1;
-  current.estimatedBytes += Math.max(0, Math.min(Number(estimatedBytes) || 0, 50 * 1024 * 1024));
-  if (ip) current.uniqueIps.add(ip);
-  current.lastVisitedAt = now;
-  pendingUsage.set(slug, current);
-}
-
-async function flushUsageStats() {
-  if (!pendingUsage.size) return;
-  const updates = Array.from(pendingUsage.entries());
-  pendingUsage.clear();
-
-  const demos = await readJson(demosFile, []);
-  let changed = false;
-  for (const [slug, usage] of updates) {
-    const demo = demos.find((item) => item.slug === slug);
-    if (!demo) continue;
-    const current = demo.usage || {};
-    demo.usage = {
-      visits: Number(current.visits || 0) + usage.visits,
-      estimatedBytes: Number(current.estimatedBytes || 0) + usage.estimatedBytes,
-      uniqueVisitorsEstimate: Number(current.uniqueVisitorsEstimate || 0) + usage.uniqueIps.size,
-      lastVisitedAt: usage.lastVisitedAt
-    };
-    changed = true;
-  }
-
-  if (changed) {
-    await writeJson(demosFile, demos);
-  }
-}
-
-function formatBytes(bytes) {
-  const value = Number(bytes || 0);
-  if (value >= 1024 * 1024 * 1024) return `${(value / 1024 / 1024 / 1024).toFixed(1)}GB`;
-  if (value >= 1024 * 1024) return `${(value / 1024 / 1024).toFixed(1)}MB`;
-  if (value >= 1024) return `${Math.round(value / 1024)}KB`;
-  return `${value}B`;
-}
-
-function stripBom(content) {
-  return String(content || "").replace(/^\uFEFF/, "");
-}

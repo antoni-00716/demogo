@@ -1,0 +1,6 @@
+{
+  "name": "Next.js 14 静态导出",
+  "description": "Next.js 14 App Router 静态导出示例项目",
+  "tags": ["Next.js", "React", "静态导出", "前端"],
+  "demoType": "frontend_build"
+}

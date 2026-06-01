@@ -1,4 +1,4 @@
-# 技术架构
+﻿# 技术架构
 
 ## 总体结构
 
@@ -35,7 +35,7 @@ server/src/
 │   ├── rate-limiter.js   API 限流
 │   ├── request-id.js     请求 ID 注入
 │   └── upload.js         文件上传处理
-├── routes/               10 个路由文件
+├── routes/               10 个路由文件（v0.9.6 已接入 7 个）
 ├── services/             15 个服务文件
 ├── lib/                  工具函数（密码、会话、限流、日志）
 ├── db/                   MySQL 存储层
@@ -50,3 +50,9 @@ server/src/
 - server/package.json
 - cli/package.json
 - mcp/package.json
+
+## 已知技术债
+
+- CLI (`cli/lib/core.js`) 与 MCP (`mcp/lib/core.js`) 存在 30 个完全相同的函数，需提取为共享模块
+- server.js 仍包含大量内联辅助函数（~6600 行），需逐步拆分到对应服务模块
+- 前端 UserDashboard (2582行) 和 AdminDashboard (1937行) 组件需拆分

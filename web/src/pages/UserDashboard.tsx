@@ -20,7 +20,6 @@ import {
   updateDemoSlug,
   type DeploymentJob
 } from "../api/demos";
-import { createFeedback } from "../api/feedback";
 import { createHostedForm, getForms, getHostedForm, type FormQuota } from "../api/forms";
 import { createPlanRequest, getPlanRequests } from "../api/planRequests";
 import { Badge } from "../components/Badge";
@@ -32,15 +31,25 @@ import { IcpLink } from "../components/IcpLink";
 import { MetricCard } from "../components/MetricCard";
 import { Toast } from "../components/Toast";
 import { planName, plans, planRank } from "../config/plans";
-import { demoStatusLabel, planRequestStatusLabel } from "../config/statuses";
-import type { AgentToken, Demo, DeployEvent, DeploymentStep, FailureDiagnosis, FormSubmission, HostedForm, PlanRequest, Quota, SubdomainRequest, User } from "../types";
+import { demoStatusLabel } from "../config/statuses";
+import type { AgentToken, Demo, DeployEvent, DeploymentStep, FormSubmission, HostedForm, PlanRequest, Quota, SubdomainRequest, User } from "../types";
 import { formatBytes, formatDate } from "../utils/format";
 import { createShareText, writeClipboardText } from "../utils/share";
 import type { Inspection } from "../api/demos";
 import { ApiError } from "../api/client";
 import { trackTrialEvent } from "../api/trialEvents";
-import { createAgentInstruction, createClientDeploymentSteps, createFailureInspection, createFormIntegrationInstruction, createGenericFixPrompt, deploymentStepLabel, getDemoGoApiBase, isSupportedArchive, markClientStepsFailed, stepStatusIcon, waitForDeploymentJob } from "./dashboard/utils";
+import { createAgentInstruction, createClientDeploymentSteps, createFailureInspection, createFormIntegrationInstruction, createGenericFixPrompt, getDemoGoApiBase, isSupportedArchive, markClientStepsFailed, waitForDeploymentJob } from "./dashboard/utils";
+import { QuickCreatePanel, DeploymentSteps, UpgradeBanner, SubdomainRequestStatus } from "../components/dashboard/DashPanels";
+import { FeedbackPanel } from "../components/dashboard/FeedbackPanel";
+import { FailureDiagnosisPanel } from "../components/dashboard/FailureDiagnosisPanel";
+import { PlanRequestsTable } from "../components/dashboard/PlanRequestsTable";
+import { DeployHistory } from "../components/dashboard/DeployHistory";
+import { ExpiryBadge } from "../components/dashboard/ExpiryBadge";
 
+import { DemoList } from "../components/dashboard/DemoList";
+import { PublishSuccess } from "../components/dashboard/PublishSuccess";
+import { ProjectProfilePanel } from "../components/dashboard/ProjectProfilePanel";
+import { ProjectAssessmentPanel } from "../components/dashboard/ProjectAssessmentPanel";
 export function UserDashboard() {
   const [activeView, setActiveView] = useState<DashboardView>(() => resolveInitialDashboardView());
   const user = useAppStore((s) => s.user);
@@ -68,8 +77,7 @@ export function UserDashboard() {
   const [selectedDemo, setSelectedDemo] = useState<Demo | null>(null);
   const [selectedInspection, setSelectedInspection] = useState<Inspection | null>(null);
   const [selectedSteps, setSelectedSteps] = useState<DeploymentStep[]>([]);
-  const [projectDetailOpen, setProjectDetailOpen] = useState(false);
-  // deployState.steps, deployState.latestDemo, deployState.deploying now in deployState
+  const [projectDetailOpen, setProjectDetailOpen] = useState(false);  // deployState.steps, deployState.latestDemo, deployState.deploying now in deployState
   const agentToken = useAppStore((s) => s.agentToken);
   const setAgentToken = useAppStore((s) => s.setAgentToken);
 
@@ -672,52 +680,6 @@ function dashboardViewSubtitle(view: DashboardView, user: User) {
   return "提交真实试用中遇到的问题，方便后续优化。";
 }
 
-function UpgradeBanner({
-  user,
-  requests,
-  quota,
-  setActiveView
-}: {
-  user: User;
-  requests: PlanRequest[];
-  quota: Quota | null;
-  setActiveView: (view: DashboardView) => void;
-}) {
-  const openRequest = requests.find((item) => item.status === "open");
-  const plan = quota?.plan;
-  if (user.plan === "pro") {
-    return (
-      <section className="upgrade-banner">
-        <div>
-          <strong>Pro 套餐使用中，当前不支持有效期内降级</strong>
-          <span>可同时保留 {plan?.maxOnlineDemos || 10} 个在线试用项目，每月 {plan?.monthlyDeployLimit || 60} 次生成/更新链接。套餐到期后可重新申请其他版本。</span>
-        </div>
-        <Badge tone="success">最高套餐</Badge>
-      </section>
-    );
-  }
-  if (openRequest) {
-    return (
-      <section className="upgrade-banner">
-        <div>
-          <strong>升级申请待处理</strong>
-          <span>你已申请 {openRequest.requestedPlanName || planName(openRequest.requestedPlan)}，管理员处理后会在套餐页展示结果和说明。</span>
-        </div>
-        <Button onClick={() => setActiveView("plan")}>查看申请记录</Button>
-      </section>
-    );
-  }
-  return (
-      <section className="upgrade-banner">
-        <div>
-        <strong>需要更多试用链接时，再申请升级套餐</strong>
-        <span>Free 用来跑通第一条链路；Lite 适合用户演示；Pro 适合持续验证多个 AI 产品原型。</span>
-        </div>
-      <Button variant="primary" onClick={() => setActiveView("plan")}>查看套餐详情</Button>
-      </section>
-  );
-}
-
 function OverviewView({
   user,
   demos,
@@ -785,18 +747,6 @@ function OverviewView({
         </div>
       </div>
     </div>
-  );
-}
-
-function QuickCreatePanel({ onCreate }: { onCreate: () => void }) {
-  return (
-    <Card className="panel quick-create-panel">
-      <div>
-        <h2>下一步做什么</h2>
-        <p>如果作品已经在 AI 工具里做好了，优先让 AI 直接发布；如果已经有文件包，就从这里上传。</p>
-      </div>
-      <Button variant="primary" onClick={onCreate}>开始上传</Button>
-    </Card>
   );
 }
 
@@ -1135,7 +1085,7 @@ function CompactDemoList({
             <strong>{demo.name || demo.slug}</strong>
             <small>{demo.publicUrl || "链接当前不可访问"}</small>
           </div>
-          <Badge tone={demo.status === "published" ? "success" : "neutral"}>{demoStatusLabel(demo.status)}</Badge>
+          <Badge tone={demo.status === "published" ? "success" : "neutral"}>{demoStatusLabel(demo.status)} {demo.expiresAt ? <ExpiryBadge expiresAt={demo.expiresAt} /> : null}</Badge>
           <div className="row-actions compact">
             <Button onClick={() => onCopyLink(demo.publicUrl)}>链接</Button>
             <Button onClick={() => onCopyShare(demo)}>文案</Button>
@@ -1143,90 +1093,6 @@ function CompactDemoList({
         </div>
       ))}
     </div>
-  );
-}
-
-function DemoList({
-  demos,
-  selectedDemoId,
-  onSelect,
-  onCopyLink,
-  onUpdate,
-  onCreate
-}: {
-  demos: Demo[];
-  selectedDemoId: string;
-  onSelect: (id: string) => void;
-  onCopyLink: (url?: string) => void;
-  onUpdate: (demo: Demo) => void;
-  onCreate: () => void;
-}) {
-  return (
-    <Card className="panel project-list-panel" id="demos">
-      <div className="panel-head">
-        <div>
-          <h2>我的作品</h2>
-          <p>每个项目都有一个试用链接。查看详情后可以复制、更新、下线、恢复、删除，也能看报名/留言和生成记录。</p>
-        </div>
-        <Button onClick={onCreate}>生成新链接</Button>
-      </div>
-      {!demos.length ? (
-        <div className="project-empty-grid">
-          <div className="first-run-guide">
-            <EmptyState title="还没有试用项目" description="先生成一个链接，再发给用户、同事或朋友试用。" />
-            <ol>
-              <li>如果你手里有项目包，点击“生成新链接”上传。</li>
-              <li>如果项目还在 Codex、Cursor、Claude Code 里，让 AI 直接执行 DemoGo 发布命令。</li>
-              <li>如果失败，DemoGo 会告诉你原因和下一步怎么改。</li>
-            </ol>
-          </div>
-          <button className="new-project-card" type="button" onClick={onCreate}>
-            <span>+</span>
-            <strong>生成新链接</strong>
-            <small>上传压缩包，生成试用链接</small>
-          </button>
-        </div>
-      ) : (
-        <div className="project-list-stack">
-          {demos.map((demo) => (
-            <article className={`project-row ${selectedDemoId === demo.id ? "is-selected" : ""}`} key={demo.id}>
-              <div className="project-main">
-                <span className="project-avatar">{(demo.name || demo.slug || "D").slice(0, 1).toUpperCase()}</span>
-                <span>
-                  <strong>{demo.name || demo.slug}</strong>
-                  <small>{demo.status === "published" ? demo.publicUrl : "链接当前不可访问"} · V{demo.version || 1}</small>
-                </span>
-              </div>
-              <div className="project-row-meta">
-                <div>
-                  <span>状态</span>
-                  <Badge tone={demo.status === "published" ? "success" : demo.status === "expired" ? "warning" : "neutral"}>{demoStatusLabel(demo.status)}</Badge>
-                </div>
-                <div>
-                  <span>访问</span>
-                  <strong>{demo.usage?.visits || 0} 次</strong>
-                </div>
-                <div>
-                  <span>最近更新</span>
-                  <strong>{formatDate(demo.updatedAt || demo.createdAt)}</strong>
-                </div>
-              </div>
-              <div className="row-actions compact">
-                {demo.status === "published" ? (
-                  <>
-                    <Button onClick={() => onCopyLink(demo.publicUrl)}>链接</Button>
-                    <Button onClick={() => onUpdate(demo)}>更新</Button>
-                    <Button onClick={() => onSelect(demo.id)}>查看详情</Button>
-                  </>
-                ) : (
-                  <Button onClick={() => onSelect(demo.id)}>查看详情</Button>
-                )}
-              </div>
-            </article>
-          ))}
-        </div>
-      )}
-    </Card>
   );
 }
 
@@ -1309,53 +1175,6 @@ function UploadPanel(props: {
       {props.latestDemo ? <PublishSuccess demo={props.latestDemo} onCopyShare={props.onCopyShare} onCopyLink={props.onCopyLink} /> : null}
       {props.inspection ? <InspectionPanel inspection={props.inspection} /> : null}
     </Card>
-  );
-}
-
-function DeploymentSteps({ steps }: { steps: DeploymentStep[] }) {
-  return (
-    <div className="deployment-steps">
-      <div className="section-mini-head">
-        <h3>生成过程</h3>
-        <span>{steps.filter((step) => step.status === "success").length} / {steps.length}</span>
-      </div>
-      <div className="step-list">
-        {steps.map((step) => (
-          <div className={`step-line step-${step.status}`} key={step.id || `${step.eventType}-${step.message}`}>
-            <span>{stepStatusIcon(step.status)}</span>
-            <div>
-              <strong>{deploymentStepLabel(step.eventType)}</strong>
-              <p>{step.message || step.status}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function PublishSuccess({
-  demo,
-  onCopyShare,
-  onCopyLink
-}: {
-  demo: Demo;
-  onCopyShare: (demo: Demo) => void;
-  onCopyLink: (url?: string) => void;
-}) {
-  return (
-    <div className="publish-success">
-      <div>
-        <Badge tone="success">链接已生成</Badge>
-        <h3>{demo.name || demo.slug}</h3>
-        <p>{demo.publicUrl}</p>
-      </div>
-      <div className="row-actions">
-        <Button onClick={() => onCopyLink(demo.publicUrl)}>复制链接</Button>
-        <Button onClick={() => onCopyShare(demo)}>复制转发文案</Button>
-        <LinkButton href={demo.publicUrl || "#"} target="_blank" rel="noreferrer" variant="primary">打开试用链接</LinkButton>
-      </div>
-    </div>
   );
 }
 
@@ -1495,7 +1314,7 @@ function ProjectDetail({
           <h2>{demo.name || demo.slug}</h2>
           <p>{demo.publicUrl || "当前没有可访问链接"}</p>
         </div>
-        <Badge tone={demo.status === "published" ? "success" : "neutral"}>{demoStatusLabel(demo.status)}</Badge>
+        <Badge tone={demo.status === "published" ? "success" : "neutral"}>{demoStatusLabel(demo.status)} {demo.expiresAt ? <ExpiryBadge expiresAt={demo.expiresAt} /> : null}</Badge>
       </div>
       <div className="row-actions compact project-actions">
         {demo.publicUrl ? <Button onClick={() => onCopyLink(demo.publicUrl)}>复制链接</Button> : null}
@@ -1642,20 +1461,6 @@ function LinkEntitlementPanel({
           {latestRequest ? <SubdomainRequestStatus request={latestRequest} /> : null}
         </div>
       </div>
-    </div>
-  );
-}
-
-function SubdomainRequestStatus({ request }: { request: SubdomainRequest }) {
-  const tone = request.status === "approved" ? "success" : request.status === "rejected" ? "warning" : "info";
-  return (
-    <div className="subdomain-request-status">
-      <div>
-        <Badge tone={tone}>{request.statusLabel || subdomainRequestStatusLabel(request.status)}</Badge>
-        <strong>{request.fullDomain || `${request.subdomain}.demogo.cn`}</strong>
-      </div>
-      <p>{subdomainRequestNextStep(request)}</p>
-      {request.adminNote ? <small>管理员说明：{request.adminNote}</small> : null}
     </div>
   );
 }
@@ -1925,50 +1730,6 @@ function DemoFailureDiagnosisPanel({
   );
 }
 
-function FailureDiagnosisPanel({ diagnosis }: { diagnosis: FailureDiagnosis }) {
-  const tone = diagnosis.severity === "blocked" ? "warning" : "info";
-  return (
-    <div className="failure-diagnosis">
-      <div className="section-mini-head">
-        <div>
-          <h3>{diagnosis.title || "失败诊断"}</h3>
-          <p>{diagnosis.summary || "这次没有完成发布，请根据诊断处理后重试。"}</p>
-        </div>
-        <Badge tone={tone}>{failureCategoryLabel(diagnosis.category)}</Badge>
-      </div>
-      {diagnosis.evidence?.length ? (
-        <div className="diagnosis-grid">
-          <div>
-            <strong>判断依据</strong>
-            <ul>{diagnosis.evidence.slice(0, 5).map((item) => <li key={item}>{item}</li>)}</ul>
-          </div>
-          {diagnosis.userActions?.length ? (
-            <div>
-              <strong>下一步</strong>
-              <ul>{diagnosis.userActions.slice(0, 5).map((item) => <li key={item}>{item}</li>)}</ul>
-            </div>
-          ) : null}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function failureCategoryLabel(category?: string) {
-  const labels: Record<string, string> = {
-    quota: "额度",
-    content: "内容",
-    package: "项目包",
-    unsupported: "暂不支持",
-    runtime_env: "运行配置",
-    dependency_install: "依赖",
-    build: "构建",
-    runtime_start: "启动",
-    database_init: "数据库"
-  };
-  return labels[category || ""] || "诊断";
-}
-
 function HostingArchitecturePanel({
   hosting,
   architecture,
@@ -2043,74 +1804,6 @@ function HostingArchitecturePanel({
   );
 }
 
-function ProjectProfilePanel({ profile }: { profile: NonNullable<Demo["projectProfile"]> }) {
-  const notes = profile.supportStatus === "unsupported" ? profile.unsupportedReasons || [] : profile.notes || [];
-  return (
-    <div className="project-profile-panel">
-      <div>
-        <strong>{profile.label || "项目类型"}</strong>
-        <span>{profile.summary || "DemoGo 已完成项目识别。"}</span>
-      </div>
-      <Badge tone={profile.supportStatus === "unsupported" ? "warning" : "success"}>{profile.supportLabel || (profile.supported ? "当前支持" : "暂不支持")}</Badge>
-      {notes.length ? (
-        <ul>
-          {notes.slice(0, 3).map((item) => <li key={item}>{item}</li>)}
-        </ul>
-      ) : null}
-    </div>
-  );
-}
-
-function ProjectAssessmentPanel({ assessment }: { assessment: NonNullable<NonNullable<Demo["projectProfile"]>["assessment"]> }) {
-  const frontend = assessment.frameworks?.frontend || [];
-  const backend = assessment.frameworks?.backend || [];
-  const database = assessment.frameworks?.database || [];
-  const envVars = assessment.environmentVariables?.required || [];
-  const missing = assessment.support?.missingRequirements || [];
-  const canPublish = Boolean(assessment.support?.canPublishNow);
-  const details = [
-    frontend.length ? `页面框架：${frontend.map((item) => item.label || item.code).join("、")}` : "",
-    backend.length ? `后端能力：${backend.map((item) => item.label || item.code).join("、")}` : "",
-    database.length ? `数据能力：${database.map((item) => item.label || item.code).join("、")}` : "",
-    envVars.length ? `运行配置：需要 ${envVars.slice(0, 4).join("、")}${envVars.length > 4 ? " 等" : ""}` : ""
-  ].filter(Boolean);
-
-  return (
-    <div className="project-profile-panel project-assessment-panel">
-      <div>
-        <strong>{assessment.projectKindLabel || "项目识别结果"}</strong>
-        <span>{assessment.support?.nextAction || "DemoGo 已完成项目结构识别。"}</span>
-      </div>
-      <Badge tone={canPublish ? "success" : "warning"}>
-        {canPublish ? "可以发布" : "先处理后发布"}
-      </Badge>
-      {details.length ? (
-        <ul>
-          {details.map((item) => <li key={item}>{item}</li>)}
-        </ul>
-      ) : null}
-      {missing.length ? (
-        <ul>
-          {missing.slice(0, 4).map((item) => <li key={item}>{missingRequirementLabel(item)}</li>)}
-        </ul>
-      ) : null}
-    </div>
-  );
-}
-
-function missingRequirementLabel(value: string) {
-  const labels: Record<string, string> = {
-    missing_build_script: "缺少网页生成命令",
-    missing_start_script: "缺少应用启动命令",
-    ssr_runtime_planned: "需要完整应用运行能力",
-    external_backend_config: "需要连接外部后端",
-    unsupported_database: "数据库连接能力还不完整",
-    environment_variables: "需要补充运行配置",
-    unsupported_runtime: "运行环境暂不支持"
-  };
-  return labels[value] || value;
-}
-
 function readinessCheckLabel(value?: string) {
   const labels: Record<string, string> = {
     ready: "已具备",
@@ -2151,19 +1844,6 @@ function createSupabaseFixPrompt(demo: Demo) {
     backend.missingEnv?.length ? `当前缺少：${backend.missingEnv.join("、")}。` : "",
     "DemoGo 不会自动创建 Supabase 项目，也不会自动执行外部数据库迁移；如需表结构，请在 Supabase 控制台处理。"
   ].filter(Boolean).join("\n\n");
-}
-
-function subdomainRequestStatusLabel(status?: string) {
-  if (status === "approved") return "已通过";
-  if (status === "rejected") return "已拒绝";
-  if (status === "canceled") return "已取消";
-  return "待处理";
-}
-
-function subdomainRequestNextStep(request: SubdomainRequest) {
-  if (request.status === "approved") return "申请已通过，等待平台完成解析和证书配置后即可使用。";
-  if (request.status === "rejected") return "申请未通过，请根据管理员说明调整后重新提交。";
-  return "申请已提交，管理员会确认是否可以使用这个二级域名。";
 }
 
 function ProjectDetailDrawer({
@@ -2442,140 +2122,6 @@ function PlanPanel({
       ) : (
         <p className="muted">当前已是最高套餐，暂不支持降级。</p>
       )}
-    </Card>
-  );
-}
-
-function PlanRequestsTable({ requests }: { requests: PlanRequest[] }) {
-  return (
-    <Card className="panel" id="requests">
-      <div className="panel-head">
-        <div>
-          <h2>我的升级申请</h2>
-          <p>待处理、已开通、已拒绝都会保留，方便查看管理员说明。</p>
-        </div>
-      </div>
-      {!requests.length ? (
-        <EmptyState title="暂无升级申请" description="需要更多在线项目或生成次数时，可以在套餐区提交申请。" />
-      ) : (
-        <div className="table-wrap">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>申请套餐</th>
-                <th>状态</th>
-                <th>提交时间</th>
-                <th>处理时间</th>
-                <th>管理员说明</th>
-              </tr>
-            </thead>
-            <tbody>
-              {requests.map((request) => (
-                <tr key={request.id}>
-                  <td>{request.requestedPlanName || planName(request.requestedPlan)}</td>
-                  <td>{planRequestStatusLabel(request.status)}</td>
-                  <td>{formatDate(request.createdAt)}</td>
-                  <td>{formatDate(request.handledAt)}</td>
-                  <td>{request.adminNote || (request.status === "approved" ? "已开通" : "-")}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </Card>
-  );
-}
-
-function DeployHistory({
-  events,
-  monthUsage,
-  compact = false
-}: {
-  events: DeployEvent[];
-  monthUsage: { used: number; limit: number } | null;
-  compact?: boolean;
-}) {
-  return (
-    <Card className={`panel ${compact ? "compact-panel" : ""}`} id="deployHistory">
-      <h2>本月生成记录</h2>
-      <p className="muted">本月已使用 {monthUsage?.used || 0} / {monthUsage?.limit || 0} 次生成/更新额度。</p>
-      {!events.length ? (
-        <EmptyState title="暂无生成记录" description="成功生成或更新试用链接后会显示在这里。" />
-      ) : (
-        <div className="table-wrap">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>时间</th>
-                <th>试用项目</th>
-                <th>操作</th>
-                <th>版本</th>
-              </tr>
-            </thead>
-            <tbody>
-              {events.slice(0, 8).map((event) => (
-                <tr key={event.id}>
-                  <td>{formatDate(event.at)}</td>
-                  <td>{event.demoName || event.demoSlug}</td>
-                  <td>{event.typeLabel}</td>
-                  <td>V{event.version || 1}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </Card>
-  );
-}
-
-function FeedbackPanel({ demos, show }: { demos: Demo[]; show: (text: string, tone?: "info" | "success" | "warning" | "danger") => void }) {
-  const [type, setType] = useState("suggestion");
-  const [demoId, setDemoId] = useState("");
-  const [feedbackMessage, setFeedbackMessage] = useState("");
-
-  async function submit() {
-    if (feedbackMessage.trim().length < 5) {
-      show("请至少填写 5 个字的问题描述。", "warning");
-      return;
-    }
-    try {
-      await createFeedback({ type, demoId, message: feedbackMessage });
-      setFeedbackMessage("");
-      show("已收到反馈，我们会优先查看真实试用中遇到的问题。", "success");
-    } catch (error) {
-      show(error instanceof Error ? error.message : "反馈提交失败。", "danger");
-    }
-  }
-
-  return (
-    <Card className="panel" id="feedback">
-      <h2>反馈问题</h2>
-      <div className="feedback-form">
-        <label className="form-field">
-          问题类型
-          <select className="select" value={type} onChange={(event) => setType(event.target.value)}>
-            <option value="deploy_failed">生成链接失败</option>
-            <option value="form_data">表单数据</option>
-            <option value="page_error">页面打不开</option>
-            <option value="suggestion">功能建议</option>
-            <option value="other">其他问题</option>
-          </select>
-        </label>
-        <label className="form-field">
-          关联试用项目
-          <select className="select" value={demoId} onChange={(event) => setDemoId(event.target.value)}>
-            <option value="">不关联试用项目</option>
-            {demos.map((demo) => <option key={demo.id} value={demo.id}>{demo.slug}</option>)}
-          </select>
-        </label>
-        <label className="form-field">
-          问题描述
-          <textarea className="textarea" value={feedbackMessage} onChange={(event) => setFeedbackMessage(event.target.value)} placeholder="请简单说明你遇到的问题。" />
-        </label>
-        <Button onClick={submit}>提交反馈</Button>
-      </div>
     </Card>
   );
 }

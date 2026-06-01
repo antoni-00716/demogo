@@ -1,0 +1,6 @@
+{
+  "name": "Express + MySQL 测试",
+  "description": "Express 配合 MySQL 数据库的服务测试",
+  "tags": ["Express", "MySQL", "数据库"],
+  "demoType": "node_service"
+}

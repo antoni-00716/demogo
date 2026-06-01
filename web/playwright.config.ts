@@ -34,6 +34,8 @@ export default defineConfig({
         DEMOGO_ADMIN_PASSWORD: 'admin-test-pass',
         DEMOGO_EMAIL_VERIFICATION_ENABLED: '0',
         DEMOGO_DEPLOY_RATE_LIMIT: '100',
+        DEMOGO_CSRF_DISABLED: '1',
+        DEMOGO_RATE_LIMIT_DISABLED: '1',
       },
       reuseExistingServer: !process.env.CI,
     },

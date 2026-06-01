@@ -1,0 +1,6 @@
+{
+  "name": "Express + Prisma + MySQL",
+  "description": "Express + Prisma + MySQL 完整用户管理 API 项目",
+  "tags": ["Express", "Prisma", "MySQL", "Node.js", "后端"],
+  "demoType": "node_service"
+}

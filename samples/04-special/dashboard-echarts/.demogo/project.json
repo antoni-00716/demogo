@@ -1,0 +1,6 @@
+{
+  "name": "ECharts 数据看板",
+  "description": "使用 ECharts 图表库的数据看板示例",
+  "tags": ["ECharts", "看板", "图表", "数据可视化"],
+  "demoType": "dashboard"
+}

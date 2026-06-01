@@ -1,0 +1,6 @@
+{
+  "name": "Astro 静态网站",
+  "description": "Astro 构建项目示例",
+  "tags": ["Astro", "静态网站"],
+  "demoType": "frontend_build"
+}

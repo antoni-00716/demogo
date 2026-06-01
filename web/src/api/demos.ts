@@ -203,3 +203,15 @@ export function resetDemoDatabase(id: string) {
 export function deleteDemo(id: string) {
   return api<{ demo: Demo; quota?: Quota }>(`/api/demos/${id}/delete`, { method: "POST" });
 }
+
+export async function getDemoAnalytics(demoId: string): Promise<{
+  demoId: string;
+  slug: string;
+  visits: number;
+  visitors: number;
+  estimatedBytes: number;
+  estimatedBytesLabel: string;
+  lastVisitedAt: string | null;
+}> {
+  return api(`/api/demos/${demoId}/analytics`);
+}

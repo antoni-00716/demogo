@@ -1,0 +1,6 @@
+{
+  "name": "Three.js 数字大屏",
+  "description": "数字孪生指挥中心演示",
+  "tags": ["Three.js", "数字大屏", "3D"],
+  "demoType": "big_screen"
+}
