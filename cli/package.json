@@ -1,6 +1,6 @@
 {
     "name":  "@demogo-cn/cli",
-    "version": "0.9.28",
+    "version": "0.9.29",
     "description":  "DemoGo CLI for generating shareable trial links from AI-built pages.",
     "type":  "module",
     "bin":  {

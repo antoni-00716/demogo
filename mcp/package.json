@@ -1,6 +1,6 @@
 {
     "name":  "demogo-mcp",
-    "version": "0.9.28",
+    "version": "0.9.29",
     "description":  "DemoGo MCP server for AI coding tools.",
     "type":  "module",
     "bin":  {
