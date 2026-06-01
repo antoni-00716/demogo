@@ -12,6 +12,7 @@ import { writeTrialEvent } from "../lib/trial-log.js";
 import { publicUserDemo, mergeRuntimeEnv, createRuntimeConfigStatus, publicRuntimeEnv, runtimeEnvForDemo } from "../lib/admin-helpers.js";
 import { createApplicationReadiness } from "../services/application-readiness-service.js";
 import { normalizeCustomSlug, canCustomizeSlug, isReservedSlug, isSlugClaimedByDemo, platformHost, isExpired } from "../lib/slug-utils.js";
+import { addDeploymentJob } from "../queue/queue.js";
 import { publicDemoDatabase, resetDemoDatabase } from "../services/demo-database-service.js";
 import { formatBytes } from "../services/build-service.js";
 import { hasSupabaseProject, createExternalBackendConfigWithConnection, publicExternalBackend } from "../services/external-backend-service.js";
@@ -656,7 +657,7 @@ app.get("/api/demos", async (req, res, next) => {
       }
     });
     res.status(202).json({ job: publicDeploymentJob(job) });
-    runDeploymentJob(job.id).catch((error) => {
+    addDeploymentJob({ jobId: job.id, action: job.action }).catch((error) => {
       logger.error({ err: error }, "Deployment job failed");
     });
   } catch (error) {

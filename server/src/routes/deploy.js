@@ -6,6 +6,7 @@ import { readJson } from "../lib/data-access.js";
 import { userDeployEvents } from "../services/deploy-event-service.js";
 // findDeploymentJob, createDeploymentJob, runDeploymentJob, publicDeploymentJob - passed via deps (server-local)
 // inspectProjectArchive - passed via deps (server-local)
+import { addDeploymentJob } from "../queue/queue.js";
 import { classifyFailureMessage } from "../services/trial-analytics-service.js";
 import { getClientIp } from "../lib/request-utils.js";
 import { writeTrialEvent } from "../lib/trial-log.js";
@@ -93,7 +94,7 @@ export function registerDeployRoutes(app, { requireUser, uploadProjectArchive, h
       }
     });
     res.status(202).json({ job: publicDeploymentJob(job) });
-    runDeploymentJob(job.id).catch((error) => {
+    addDeploymentJob({ jobId: job.id, action: job.action }).catch((error) => {
       logger.error({ err: error }, "Deployment job failed");
     });
   } catch (error) {
