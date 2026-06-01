@@ -270,3 +270,432 @@ function lastLines(value, count) {
     .slice(-count)
     .join("\n");
 }
+
+
+export function createRuleReport(context) {
+  const hasForms = context.formFields.length > 0;
+  const localApis = context.apiCalls.filter((item) => item.isLocal);
+  const risks = [];
+  const recommendations = [];
+  let projectCategory = context.projectProfile?.label || inspectionTypeLabel(context.detectedType);
+
+  if (context.projectProfile?.summary) {
+    recommendations.push(`项目类型：${context.projectProfile.summary}。`);
+  }
+
+  for (const reason of context.projectProfile?.unsupportedReasons || []) {
+    if (!risks.includes(reason)) risks.push(reason);
+  }
+
+  const autoHostableFields = filterAutoHostableFormFields(context.formFields);
+  if (autoHostableFields.length) {
+    projectCategory = inferProjectCategoryFromFields(context.formFields);
+    recommendations.push("页面可以生成试用链接；DemoGo 会在生成链接时自动识别并开启基础表单收集。");
+  } else if (hasForms) {
+    recommendations.push("页面可以生成试用链接；检测到的填写控件不像报名、预约或留言表单，DemoGo 不会自动收集这些内容。");
+  }
+
+  if (localApis.length) {
+    risks.push("这个项目里有提交或保存数据的功能，需要接入可用的收集入口。DemoGo 不会自动运行项目自带的后台接口。");
+    recommendations.push("如果是报名、预约或留言这类基础收集，DemoGo 会尝试自动接管；如果是完整业务后台、订单、支付或登录，当前暂不支持。");
+  }
+
+  if (context.hasPackageJson && !context.hasBuildScript && !context.entryFile && context.projectProfile?.type !== "node_service") {
+    risks.push("这个项目像是 AI 生成的网页源码，但缺少生成网页的命令。");
+    recommendations.push("请让 AI 编程工具补充生成命令，并确保生成可访问的网页文件。");
+  }
+
+  return {
+    projectCategory,
+    publishability: context.status === "blocked" ? "暂不支持" : (risks.length ? "页面支持，提交功能需要接入" : "支持"),
+    risks,
+    recommendations,
+    fixPrompt: createFixPrompt({ ...context, risks, recommendations })
+  };
+}
+
+
+export function inferProjectCategoryFromFields(fields) {
+  const names = fields.map((field) => `${field.name} ${field.label}`.toLowerCase()).join(" ");
+  if (names.includes("company") || names.includes("公司") || names.includes("phone") || names.includes("手机号")) return "报名/预约/留资页面";
+  if (names.includes("message") || names.includes("留言")) return "留言反馈页面";
+  return "包含表单的页面";
+}
+
+
+export function createFixPrompt(context) {
+  const parts = [];
+  const localApis = context.localApis || context.apiCalls?.filter((item) => item.isLocal) || [];
+  if (context.projectProfile?.type === "node_service") {
+    parts.push("请确认这是一个 Node.js 单服务项目：package.json 里需要有 scripts.start，服务必须监听 process.env.PORT，不要写死 3000/3001 端口；当前不要依赖 Redis、WebSocket 或多个服务同时运行。");
+    if (context.runtime?.unsupportedReasons?.length) {
+      parts.push(`当前检测到的阻塞点：${context.runtime.unsupportedReasons.join("；")}。请先改成无 Redis、无 WebSocket、无多服务的演示版本。`);
+    } else if (context.runtime?.requiresMysql) {
+      parts.push("项目可以使用 DemoGo 分配的 MySQL 试用数据库。请从环境变量读取 MYSQL_HOST、MYSQL_PORT、MYSQL_DATABASE、MYSQL_USER、MYSQL_PASSWORD 或 DATABASE_URL，不要写死数据库连接信息。");
+      parts.push("第一版只提供空库，不会自动建表或执行迁移。请在应用启动时自行建表，或让演示逻辑在表不存在时自动初始化。");
+    }
+    if (context.runtime?.hasStartProdScript) {
+      parts.push("运行器会优先使用 npm run start:prod，请确认这个命令可以在生产模式启动，并监听 process.env.PORT。");
+    } else if (context.runtime?.buildBeforeStart) {
+      parts.push("运行器会先执行 npm run build，再执行 npm start。请确认 build 能生成 start 需要的 dist/build 文件。");
+    }
+  }
+  if (["mini_program_source", "desktop_app_source", "mobile_native_source"].includes(context.projectProfile?.type)) {
+    parts.push("请导出一个可以在浏览器打开的 H5/Web 版本，再上传生成试用链接。当前不要上传小程序源码、桌面应用源码或 App 源码作为最终发布包。");
+  }
+  if (context.projectProfile?.type === "fullstack_framework") {
+    parts.push("请将 Next/Nuxt/Remix 等项目导出为静态网页产物后再上传，例如生成 out/dist/build 目录；当前不要依赖 SSR 服务端运行态。");
+  }
+  if (localApis.length) {
+    parts.push("请检查当前项目中的表单提交或数据保存逻辑。项目发布到 DemoGo 后，不会自动运行 /api/ 开头的自定义后台接口。基础报名、预约或留言表单可以由 DemoGo 自动接管；完整业务后台需要后续后端托管能力。");
+  }
+  if (context.hasPackageJson && !context.hasBuildScript && !context.entryFile && context.projectProfile?.type !== "node_service") {
+    parts.push("请把这个项目整理成可发布的网页版本：补充标准 npm run build 命令，并确保执行后生成 dist/index.html、build/index.html 或 out/index.html。");
+  }
+  if (context.formFields?.length) {
+    const autoHostableFields = filterAutoHostableFormFields(context.formFields);
+    if (autoHostableFields.length) {
+      parts.push(`项目中疑似报名/留言字段包括：${context.formFields.slice(0, 8).map((field) => field.name || field.label).join("、")}。请确认字段命名清晰，避免把报名、预约或留言表单做成必须依赖自定义后台接口才能提交。`);
+    } else {
+      parts.push(`项目中检测到填写控件：${context.formFields.slice(0, 8).map((field) => field.name || field.label).join("、")}。如果这些只是计算器、价格配置或开关控件，不需要改成提交表单；如果确实要收集报名/留言，请补充姓名、手机号、邮箱或留言字段。`);
+    }
+  }
+  if (!parts.length) {
+    parts.push("请把这个项目整理成 DemoGo 可发布的网页版本：确保压缩包内包含 index.html，或项目可以通过 npm run build 生成 dist/index.html、build/index.html 或 out/index.html。不要把 .env、node_modules、密钥文件打包进去。");
+  }
+  return parts.join("\n\n");
+}
+
+
+export function createInspectionSummary(analysis) {
+  const hasRootIndex = analysis.paths.includes("index.html");
+  const hasDistIndex = analysis.paths.includes("dist/index.html");
+  const hasBuildIndex = analysis.paths.includes("build/index.html");
+  const hasOutIndex = analysis.paths.includes("out/index.html");
+  const hasPublicIndex = analysis.paths.includes("public/index.html");
+  const hasPackageJson = analysis.hasPackageJson || analysis.paths.includes("package.json");
+  const hasBuildScript = Boolean(analysis.hasBuildScript);
+  const hasSourceIndicators = hasSourceProjectIndicators(analysis.paths || []);
+  const hasBackend = hasBackendIndicators(analysis.paths || [], analysis.packageScripts || {}) || hasNodeRuntimeDependency(analysis);
+  const hasSsr = hasSsrIndicators(analysis.paths || []);
+  const singleHtmlEntry = detectSingleHtmlEntry(analysis.paths || []);
+  const hasBuiltEntry = hasDistIndex || hasBuildIndex || hasOutIndex || hasPublicIndex;
+  const detectedType = detectInspectionType({ hasRootIndex, hasDistIndex, hasBuildIndex, hasOutIndex, hasPublicIndex, hasPackageJson, hasBuildScript, hasSourceIndicators, hasBackend, hasSsr, singleHtmlEntry });
+  const projectProfile = classifyProject(analysis, { detectedType, hasBackend, hasSsr, hasPackageJson, hasBuildScript });
+  const projectAssessment = projectProfile.assessment || null;
+  const runtime = detectRuntimeMetadata(analysis, { hasBackend, hasSsr });
+  const status = determineInspectionStatus(analysis, { hasRootIndex, hasDistIndex, hasBuildIndex, hasOutIndex, hasPublicIndex, hasPackageJson, hasBuildScript, hasBackend, hasSsr, singleHtmlEntry, detectedType, projectProfile, runtime });
+  const issues = [];
+  const suggestions = [];
+  const ignoredNames = analysis.ignoredFiles.slice(0, 5);
+  const entryFile = analysis.entryFile;
+  const formFields = analysis.formFields || [];
+  const apiCalls = analysis.apiCalls || [];
+
+  if (analysis.rawFileCount === 0) {
+    issues.push("压缩包为空，未找到可发布文件。");
+    suggestions.push("请重新打包项目，确保压缩包内包含 index.html 或 dist/build 目录。");
+  }
+
+  if (analysis.blockedFiles.length) {
+    issues.push(`项目包包含敏感或不支持发布的文件：${analysis.blockedFiles.slice(0, 3).join("、")}。`);
+    suggestions.push("请删除密钥、环境变量、脚本或可执行文件后重新上传。");
+  }
+
+  if (!hasRootIndex && !hasBuiltEntry && !hasPublicIndex && !singleHtmlEntry && !hasPackageJson && analysis.rawFileCount > 0) {
+    issues.push("未找到可访问的首页文件或可生成网页的项目配置。");
+    suggestions.push("请确认压缩包内包含 index.html、一个单独的 HTML 页面，或包含 dist/index.html、build/index.html、out/index.html。");
+  }
+
+  if (hasBackend && !hasBuiltEntry) {
+    if (projectProfile.type === "node_service") {
+      const runtime = detectRuntimeMetadata(analysis, { hasBackend, hasSsr });
+      suggestions.push("已识别为 Node.js 单服务项目。当前运行器要求项目提供 start 命令，并监听 process.env.PORT。");
+      if (runtime.framework) {
+        suggestions.push(`识别到 ${formatRuntimeFramework(runtime.framework)} 项目。`);
+      }
+      if (runtime.hasStartProdScript) {
+        suggestions.push("检测到 start:prod 命令，运行器会优先使用 npm run start:prod。");
+      } else if (runtime.buildBeforeStart) {
+        suggestions.push("检测到需要先构建再启动，运行器会先执行 npm run build，再执行 npm start。");
+      }
+      for (const warning of runtime.warnings || []) {
+        suggestions.push(warning);
+      }
+      for (const reason of runtime.unsupportedReasons || []) {
+        if (!issues.includes(reason)) issues.push(reason);
+      }
+      if (!analysis.packageScripts?.start) {
+        issues.push("检测到 Node.js 项目，但缺少 start 启动命令。");
+        suggestions.push("请让 AI 编程工具补充 start 命令，并确保服务监听 process.env.PORT。");
+      }
+    } else {
+      issues.push("检测到这个项目需要服务器长期运行，当前 DemoGo 暂不支持这类项目的完整功能。");
+      suggestions.push("请让 AI 编程工具导出一个纯网页演示版本，或等待后续后端托管能力。");
+    }
+  }
+
+  if ((hasSsr || projectProfile.type === "fullstack_framework") && !hasOutIndex && !hasDistIndex && !hasBuildIndex && !isSingleServiceSsrProfile(projectProfile)) {
+    issues.push("检测到这个项目可能需要服务端渲染，当前 DemoGo 暂不支持这类运行方式。");
+    suggestions.push("如果项目可以导出静态网页，请先生成 dist/build/out 后再上传。");
+  } else if ((hasSsr || projectProfile.type === "fullstack_framework") && isSingleServiceSsrProfile(projectProfile)) {
+    suggestions.push("已识别为可单服务运行的完整应用项目。运行器会先构建，再按 start 命令启动，并要求监听 process.env.PORT。");
+    if (!analysis.packageScripts?.start) {
+      issues.push("检测到完整应用项目，但缺少 start 启动命令。");
+      suggestions.push("请让 AI 编程工具补充 start 命令，并确保服务监听 process.env.PORT。");
+    }
+  }
+
+  if (hasPackageJson && !hasRootIndex && !hasBuiltEntry && !hasPublicIndex && !singleHtmlEntry && projectProfile.type !== "node_service") {
+    suggestions.push("已识别为 AI 生成的网页源码，DemoGo 会自动生成网页后发布。");
+  }
+
+  if (hasPackageJson && !hasBuildScript && !hasRootIndex && !hasBuiltEntry && !hasPublicIndex && !singleHtmlEntry && projectProfile.type !== "node_service") {
+    issues.push("检测到项目源码，但没有生成网页的命令。");
+    suggestions.push("请让 AI 编程工具补充生成命令，或先生成 dist/build/out 后重新上传。");
+  }
+
+  if (formFields.length) {
+    const autoHostableFields = filterAutoHostableFormFields(formFields);
+    suggestions.push(`${autoHostableFields.length ? "检测到疑似报名/留言字段" : "检测到页面填写控件"}：${formFields.slice(0, 5).map((field) => field.label || field.name).join("、")}。`);
+  }
+
+  if (apiCalls.some((item) => item.isLocal)) {
+    suggestions.push("检测到本地 API 调用。DemoGo 当前不托管自定义后端，发布后相关提交或数据保存功能可能不可用。");
+  }
+
+  if (analysis.publishableFileCount > maxExtractedFiles) {
+    issues.push(`需要发布的文件较多，当前最多支持 ${maxExtractedFiles} 个文件。`);
+    suggestions.push("请删除不必要的素材、缓存和历史产物后重新上传。");
+  }
+
+  if (analysis.publishableBytes > maxExtractedBytes) {
+    issues.push(`项目包体积过大，当前最多支持 ${formatBytes(maxExtractedBytes)}。`);
+    suggestions.push("请压缩大图片、视频或删除无关资源后重新上传。");
+  }
+
+  if (ignoredNames.length) {
+    suggestions.push(`系统已自动忽略无关文件：${ignoredNames.join("、")}${analysis.ignoredFiles.length > ignoredNames.length ? " 等" : ""}。`);
+  }
+
+  return {
+    status,
+    canPublish: status === "pass" || status === "warning",
+    detectedType,
+    projectProfile,
+    projectAssessment,
+    projectCategory: projectProfile.label,
+    label: inspectionTypeLabel(detectedType),
+    summary: inspectionSummary(status, detectedType),
+    issues,
+    suggestions,
+    rawFileCount: analysis.rawFileCount,
+    publishableFileCount: analysis.publishableFileCount,
+    rawBytes: analysis.rawBytes,
+    publishableBytes: analysis.publishableBytes,
+    ignoredFileCount: analysis.ignoredFiles.length,
+    ignoredFiles: analysis.ignoredFiles,
+    blockedFiles: analysis.blockedFiles,
+    rootEntries: analysis.rootEntries,
+    entryFile,
+    singleHtmlEntry,
+    projectTitle: analysis.projectTitle || "",
+    pageHeading: analysis.pageHeading || "",
+    hasPackageJson,
+    hasBuildScript,
+    hasBackend,
+    hasSsr,
+    formFields,
+    apiCalls,
+    runtime,
+    ruleReport: createRuleReport({
+      status,
+      detectedType,
+      projectProfile,
+      projectAssessment,
+      entryFile,
+      singleHtmlEntry,
+      hasPackageJson,
+      hasBuildScript,
+      hasSourceIndicators,
+      hasBackend,
+      hasSsr,
+      formFields,
+      apiCalls,
+      runtime,
+      issues
+    }),
+    ...createUserFacingInspection({
+      status,
+      detectedType,
+      projectProfile,
+      projectAssessment,
+      entryFile,
+      singleHtmlEntry,
+      hasPackageJson,
+      hasBuildScript,
+      hasBackend,
+      hasSsr,
+      formFields,
+      apiCalls,
+      runtime,
+      issues
+    })
+  };
+}
+
+
+export function determineInspectionStatus(analysis, flags) {
+  if (analysis.rawFileCount === 0 || analysis.blockedFiles.length > 0) return "blocked";
+  if (analysis.publishableFileCount > maxExtractedFiles || analysis.publishableBytes > maxExtractedBytes) return "blocked";
+  if (flags.projectProfile?.type === "node_service" && flags.runtime?.unsupportedReasons?.length) return "blocked";
+  const hasOutput = flags.hasDistIndex || flags.hasBuildIndex || flags.hasOutIndex || flags.hasPublicIndex;
+  if (flags.projectProfile?.type === "node_service" && !hasOutput) return "blocked";
+  if (flags.hasBackend && flags.projectProfile?.type !== "node_service" && !hasOutput) return "blocked";
+  if ((flags.hasSsr || flags.projectProfile?.type === "fullstack_framework") && !hasOutput) {
+    if (isSingleServiceSsrProfile(flags.projectProfile) && flags.runtime?.startCommand && !flags.runtime?.unsupportedReasons?.length) return "warning";
+    return "blocked";
+  }
+  if (flags.hasRootIndex || flags.hasDistIndex || flags.hasBuildIndex || flags.hasOutIndex || flags.hasPublicIndex || flags.singleHtmlEntry) return analysis.ignoredFiles.length ? "warning" : "pass";
+  if (flags.hasPackageJson && !flags.hasBuildScript) return "blocked";
+  if (flags.hasPackageJson) return "warning";
+  return "blocked";
+}
+
+
+
+export function inspectionTypeLabel(type) {
+  const labels = {
+    "static-root": "普通网页项目",
+    dist: "已生成的网页项目",
+    build: "已生成的网页项目",
+    out: "已生成的网页项目",
+    public: "普通网页项目",
+    "single-html": "单页网页项目",
+    source: "AI 生成的网页项目",
+    "built-dist": "AI 生成的网页项目",
+    "built-build": "AI 生成的网页项目",
+    "built-out": "AI 生成的网页项目",
+    "built-public": "AI 生成的网页项目",
+    backend: "需要服务器的项目",
+    runtime: "需要服务器的项目",
+    unknown: "暂未识别"
+  };
+  return labels[type] || labels.unknown;
+}
+
+
+export function inspectionSummary(status, type) {
+  if (status === "blocked") return "项目暂时无法发布，请根据提示调整后重新上传。";
+  if (type === "source") return "已识别为 AI 生成的网页项目，DemoGo 会自动生成网页后发布。";
+  if (type === "single-html") return "已识别为单个网页文件，DemoGo 会自动作为首页发布。";
+  if (status === "warning") return "项目可以发布，系统会自动忽略部分无关文件。";
+  return "项目检测通过，可以继续发布。";
+}
+
+
+export function createUserFacingInspection(context) {
+  const localApis = context.apiCalls.filter((item) => item.isLocal);
+  const unsupportedNotes = [];
+  const supportNotes = [];
+  let userLabel = context.projectProfile?.label || inspectionTypeLabel(context.detectedType);
+  let userSummary = "这个项目可以发布，别人能打开页面。";
+
+  if (context.projectProfile?.notes?.length) {
+    supportNotes.push(...context.projectProfile.notes);
+  }
+  if (context.projectProfile?.unsupportedReasons?.length) {
+    unsupportedNotes.push(...context.projectProfile.unsupportedReasons);
+  }
+  if (context.projectAssessment?.support?.nextAction && context.status !== "blocked") {
+    supportNotes.push(context.projectAssessment.support.nextAction);
+  }
+
+  if (context.projectProfile?.type === "node_service") {
+    userLabel = "Node.js 单服务应用";
+    userSummary = context.status === "blocked"
+      ? "这个项目需要 Node.js 运行环境，但还缺少启动命令或运行器未满足条件。"
+      : (context.runtime?.requiresMysql
+          ? "这个项目可以进入 Node.js 单服务试用环境，并会获得一个隔离的 MySQL 试用数据库。"
+          : "这个项目可以进入 Node.js 单服务试用环境，页面和接口会放在同一个试用链接下。");
+    supportNotes.push("支持单个 Node.js 服务");
+    if (context.projectProfile?.framework) {
+      supportNotes.push(`${formatRuntimeFramework(context.projectProfile.framework)} 项目`);
+    }
+    supportNotes.push("必须监听 PORT");
+    if (context.runtime?.requiresMysql) {
+      supportNotes.push("支持 MySQL 试用数据库");
+      supportNotes.push("数据库为空库，不自动建表");
+    }
+    if (context.runtime?.hasStartProdScript) supportNotes.push("优先使用 start:prod");
+    if (context.runtime?.buildBeforeStart) supportNotes.push("会先构建再启动");
+  } else if (context.projectAssessment?.support?.publishMode === "ssr_runtime_planned") {
+    userLabel = "全栈网页应用";
+    userSummary = "DemoGo 已识别出这个项目不只是静态网页，还需要服务器生成页面或处理运行逻辑。当前版本先给出诊断；如果项目能导出静态网页，可以先发布静态版本。";
+    unsupportedNotes.push("需要完整应用运行能力");
+  } else if (context.projectAssessment?.support?.publishMode === "full_app_planned") {
+    userLabel = "完整应用项目";
+    userSummary = "DemoGo 已识别出这个项目包含后端、运行配置或数据库能力。当前版本先给出诊断，完整应用发布能力会在后续增强。";
+    unsupportedNotes.push("需要后端、运行配置或数据库能力");
+  } else if (context.hasBackend && context.status === "blocked") {
+    userLabel = "需要服务器的项目";
+    userSummary = "这个项目不只是网页，还需要服务器长期运行。当前 DemoGo 暂不支持这类项目的完整发布。";
+    unsupportedNotes.push("需要服务器处理业务逻辑");
+  } else if (context.hasSsr && context.status === "blocked") {
+    userLabel = "需要服务器的项目";
+    userSummary = "这个项目需要服务器生成页面。当前 DemoGo 主要支持可直接打开的网页项目。";
+    unsupportedNotes.push("需要服务器生成页面");
+  } else if (context.detectedType === "source") {
+    userLabel = "AI 生成的网页项目";
+    userSummary = "这个项目可以发布。DemoGo 会先自动生成可访问网页，再生成试用链接。";
+    supportNotes.push("会自动生成网页");
+  } else if (["dist", "build", "out", "built-dist", "built-build", "built-out"].includes(context.detectedType)) {
+    userLabel = "已生成的网页项目";
+    supportNotes.push("已经包含可访问网页");
+  } else if (context.detectedType === "static-root") {
+    userLabel = "普通网页项目";
+    supportNotes.push("已经包含首页文件");
+  } else if (context.detectedType === "single-html") {
+    userLabel = "单页网页项目";
+    userSummary = "这个项目可以发布。DemoGo 会把这个 HTML 页面作为首页生成试用链接。";
+    supportNotes.push("单个 HTML 页面可直接发布");
+  } else if (context.detectedType === "public") {
+    userLabel = "普通网页项目";
+    supportNotes.push("已经包含可访问网页");
+  }
+
+  if (context.formFields.length) {
+    supportNotes.push("页面展示可以发布");
+    if (filterAutoHostableFormFields(context.formFields).length) {
+      supportNotes.push("发布时会自动开启基础表单收集");
+      userSummary = "这个页面可以发布，并检测到报名、预约或留言表单。DemoGo 会在发布时自动开启基础表单收集。";
+    } else {
+      userSummary = "这个页面可以发布。页面里有填写控件，但不像报名、预约或留言表单，DemoGo 不会自动收集这些内容。";
+    }
+  }
+
+  if (localApis.length) {
+    unsupportedNotes.push("项目自带后台接口不会自动运行");
+    userSummary = "这个页面可以发布，但项目自带后台接口不会自动运行。基础报名、预约或留言表单会尝试由 DemoGo 自动收集；完整业务后台暂不支持。";
+  }
+
+  if (context.status === "blocked" && !context.hasBackend && !context.hasSsr) {
+    userSummary = context.issues[0] || "这个项目当前暂不支持发布，请按提示调整后重新上传。";
+  }
+
+  if (context.status === "blocked" && context.projectAssessment?.support?.nextAction) {
+    unsupportedNotes.unshift(context.projectAssessment.support.nextAction);
+  }
+
+  return {
+    userLabel,
+    userSummary,
+    userStatus: context.status === "blocked" ? "unsupported" : "supported",
+    userStatusLabel: context.status === "blocked" ? "暂不支持" : "支持",
+    supportNotes: Array.from(new Set(supportNotes.filter(Boolean))),
+    unsupportedNotes: Array.from(new Set(unsupportedNotes.filter(Boolean))),
+    fixPrompt: context.projectAssessment?.aiFixPrompt || createFixPrompt(context)
+  };
+}
+
+

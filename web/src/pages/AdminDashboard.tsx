@@ -14,7 +14,6 @@ import {
   updateAdminContentReviewStatus,
   updateAdminFeedbackStatus,
   updateAdminPlanRequestStatus,
-  updateAdminSubdomainRequestStatus
 } from "../api/admin";
 import { Badge } from "../components/Badge";
 import { BrandLogo } from "../components/BrandLogo";

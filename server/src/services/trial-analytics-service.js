@@ -152,3 +152,40 @@ export function summarizeResponseLimits(quota) {
   };
 }
 
+
+export function attachErrorDiagnosis(error, context = {}) {
+  if (!error || typeof error !== "object") {
+    return createFailureDiagnosis({ message: "发布失败，请根据提示调整后重试。", ...context });
+  }
+  const diagnosis = createFailureDiagnosis({
+    message: error instanceof Error ? error.message : context.message,
+    statusCode: error.statusCode || context.statusCode,
+    inspection: error.inspection || context.inspection,
+    runtime: error.runtime || context.runtime || error.inspection?.runtime,
+    database: error.database || context.database,
+    contentReview: error.contentReview || context.contentReview,
+    externalBackend: error.externalBackend || context.externalBackend || error.inspection?.externalBackend,
+    logs: error.logs || error.buildLog || context.logs,
+    databaseError: error.databaseError || context.databaseError,
+    ...context
+  });
+  error.diagnosis = diagnosis;
+  if (error.inspection) {
+    error.inspection = attachDiagnosisToInspection(error.inspection, diagnosis);
+  }
+  return diagnosis;
+}
+
+export function attachDiagnosisToInspection(inspection, diagnosis) {
+  if (!inspection || !diagnosis) return inspection;
+  return {
+    ...inspection,
+    failureDiagnosis: diagnosis,
+    fixPrompt: inspection.fixPrompt || diagnosis.aiPrompt,
+    ruleReport: {
+      ...(inspection.ruleReport || {}),
+      fixPrompt: inspection.ruleReport?.fixPrompt || diagnosis.aiPrompt,
+      aiPrompt: inspection.ruleReport?.aiPrompt || diagnosis.aiPrompt
+    }
+  };
+}

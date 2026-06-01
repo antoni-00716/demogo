@@ -453,3 +453,248 @@ function extensionOf(filePath) {
   const index = lower.lastIndexOf(".");
   return index >= 0 ? lower.slice(index) : "";
 }
+
+
+export async function createAndPersistContentReview(context) {
+  const sourceReview = await reviewArchiveContent(context.analysis, {
+    mode: contentReviewMode,
+    maxTextBytes: contentReviewMaxTextBytes,
+    externalEndpoint: contentReviewExternalEndpoint,
+    externalToken: contentReviewExternalToken,
+    id: crypto.randomUUID(),
+    readText: readArchiveEntryText
+  });
+  const outputReview = context.targetDir
+    ? await reviewDirectoryContent(context.targetDir, {
+        mode: contentReviewMode,
+        maxTextBytes: contentReviewMaxTextBytes,
+        externalEndpoint: contentReviewExternalEndpoint,
+        externalToken: contentReviewExternalToken,
+        id: crypto.randomUUID()
+      })
+    : null;
+  const review = mergeContentReviews(sourceReview, outputReview);
+  const record = {
+    ...review,
+    id: review.id || crypto.randomUUID(),
+    userId: context.user?.id || context.demo?.userId || null,
+    userEmail: context.user?.email || context.demo?.userEmail || "",
+    demoId: context.demo?.id || null,
+    demoSlug: context.demo?.slug || "",
+    deploymentId: context.deploymentId || null,
+    action: context.action || "create",
+    actorType: context.actor || "user",
+    projectName: context.projectName || "",
+    fileName: context.fileName || "",
+    detectedType: context.inspection?.detectedType || "",
+    canPublishBeforeReview: Boolean(context.inspection?.canPublish),
+    resolutionStatus: defaultContentReviewResolutionStatus(review.status),
+    adminNote: "",
+    handledBy: "",
+    handledAt: null
+  };
+  await persistContentReview(record);
+  return record;
+}
+
+
+export async function persistPreflightContentReview(context) {
+  const review = context.inspection?.contentReview;
+  if (!review || !review.status || review.status === "passed") return null;
+  const record = {
+    ...review,
+    id: review.id || crypto.randomUUID(),
+    userId: context.user?.id || null,
+    userEmail: context.user?.email || "",
+    demoId: null,
+    demoSlug: "",
+    deploymentId: context.deploymentId || null,
+    action: context.action || "create",
+    actorType: context.actor || "user",
+    projectName: context.projectName || "",
+    fileName: context.fileName || "",
+    detectedType: context.inspection?.detectedType || "",
+    canPublishBeforeReview: false,
+    resolutionStatus: defaultContentReviewResolutionStatus(review.status),
+    adminNote: "",
+    handledBy: "",
+    handledAt: null,
+    createdAt: review.createdAt || new Date().toISOString()
+  };
+  await persistContentReview(record);
+  return record;
+}
+
+
+export function mergeContentReviews(sourceReview, outputReview) {
+  if (!outputReview) return { ...sourceReview, scope: "source_archive" };
+  const findings = [
+    ...(sourceReview.findings || []).map((item) => ({ ...item, scope: "source_archive" })),
+    ...(outputReview.findings || []).map((item) => ({ ...item, scope: "published_output" }))
+  ];
+  const status = findings.some((item) => item.severity === "block")
+    ? "blocked"
+    : findings.some((item) => item.severity === "review")
+      ? "review_required"
+      : "passed";
+  return {
+    ...sourceReview,
+    id: sourceReview.id || crypto.randomUUID(),
+    status,
+    summary: summarizeMergedContentReview(status, findings),
+    findings,
+    reviewedFiles: Array.from(new Set([...(sourceReview.reviewedFiles || []), ...(outputReview.reviewedFiles || [])])).slice(0, 120),
+    reviewedFileCount: Number(sourceReview.reviewedFileCount || 0) + Number(outputReview.reviewedFileCount || 0),
+    scannedTextBytes: Number(sourceReview.scannedTextBytes || 0) + Number(outputReview.scannedTextBytes || 0),
+    scope: "source_and_output"
+  };
+}
+
+
+export function summarizeMergedContentReview(status, findings) {
+  const categories = Array.from(new Set(findings.map((item) => item.category))).slice(0, 3).join("、");
+  if (status === "passed" && findings.length) return `内容检查通过，发现 ${categories || "一般提示"}，不影响生成试用链接。`;
+  if (status === "blocked") return `内容检查未通过，发现 ${categories || "高风险内容"}。`;
+  return `内容需要人工确认，发现 ${categories || "疑似风险内容"}。`;
+}
+
+
+export async function persistContentReview(record) {
+  const reviews = await readJson(contentReviewsFile, []);
+  reviews.unshift(record);
+  await writeJson(contentReviewsFile, reviews.slice(0, 5000));
+  if (record.status !== "passed") {
+    await writeAuditLog({
+      action: "content_review_blocked",
+      actorType: record.actorType || "system",
+      actorId: record.userId || null,
+      targetType: "content_review",
+      targetId: record.id,
+      metadata: {
+        status: record.status,
+        summary: record.summary,
+        demoId: record.demoId,
+        demoSlug: record.demoSlug,
+        projectName: record.projectName,
+        categories: Array.from(new Set((record.findings || []).map((item) => item.category))).slice(0, 5)
+      }
+    });
+  }
+}
+
+
+export function attachContentReviewToInspection(inspection, review) {
+  const publicReview = publicContentReview(review);
+  const blocked = review?.status === "blocked" || review?.status === "review_required" || review?.status === "failed";
+  const issues = [...(inspection.issues || [])];
+  const suggestions = [...(inspection.suggestions || [])];
+  if (blocked) {
+    issues.push(review.summary || "内容检查未通过。");
+    for (const finding of (review.findings || []).slice(0, 5)) {
+      if (finding.suggestion) suggestions.push(finding.suggestion);
+    }
+  }
+  return {
+    ...inspection,
+    status: blocked ? "blocked" : inspection.status,
+    canPublish: inspection.canPublish && !blocked,
+    summary: blocked ? (review.summary || "内容检查未通过。") : inspection.summary,
+    userStatus: blocked ? "unsupported" : inspection.userStatus,
+    userStatusLabel: blocked ? "暂不能发布" : inspection.userStatusLabel,
+    userSummary: blocked ? contentReviewUserSummary(review) : inspection.userSummary,
+    issues,
+    suggestions: Array.from(new Set(suggestions)),
+    contentReview: publicReview,
+    ruleReport: {
+      ...(inspection.ruleReport || {}),
+      risks: [
+        ...((inspection.ruleReport || {}).risks || []),
+        ...((blocked ? (review.findings || []).filter((finding) => finding.severity !== "notice") : []).slice(0, 5).map((finding) => `${finding.category}：${finding.snippet || finding.sourceFile || ""}`))
+      ],
+      recommendations: [
+        ...((inspection.ruleReport || {}).recommendations || []),
+        ...((blocked ? (review.findings || []).filter((finding) => finding.severity !== "notice") : []).slice(0, 5).map((finding) => finding.suggestion).filter(Boolean))
+      ],
+      fixPrompt: createContentReviewFixPrompt(review) || (inspection.ruleReport || {}).fixPrompt
+    }
+  };
+}
+
+
+export function createContentReviewFixPrompt(review) {
+  if (!review || review.status === "passed") return "";
+  const findings = (review.findings || []).slice(0, 5);
+  return [
+    "请帮我修改这个页面，使它适合公开分享和试用。",
+    "要求：删除或改写可能涉及诈骗、博彩、色情低俗、违法交易、恶意下载、高敏信息收集或真实支付风险的内容。正常报名、预约、咨询、姓名、手机号、邮箱等获客表单可以保留。",
+    findings.length ? `本次检查提示：${findings.map((item) => `${item.category}${item.sourceFile ? `（${item.sourceFile}）` : ""}`).join("、")}。` : "",
+    "修改后重新打包上传到 DemoGo。"
+  ].filter(Boolean).join("\n");
+}
+
+
+export function contentReviewUserSummary(review) {
+  if (review?.status === "review_required") {
+    return "这个页面包含需要平台确认的内容，暂时不能公开分享。请先按提示修改，或联系平台处理。";
+  }
+  if (review?.status === "failed") {
+    return "发布前内容检查没有完成，为避免风险，暂时不能生成公开链接。请稍后重试或联系平台处理。";
+  }
+  return "这个页面包含不适合公开分享的高风险内容，请先修改后再重新上传。";
+}
+
+
+export function defaultContentReviewResolutionStatus(status) {
+  return ["blocked", "review_required", "failed"].includes(String(status || "")) ? "pending_review" : "resolved";
+}
+
+
+export function publicAdminContentReview(review) {
+  return {
+    ...publicContentReview(review),
+    userId: review.userId || null,
+    userEmail: review.userEmail || "",
+    demoId: review.demoId || null,
+    demoSlug: review.demoSlug || "",
+    deploymentId: review.deploymentId || null,
+    action: review.action || "",
+    actorType: review.actorType || "",
+    projectName: review.projectName || "",
+    fileName: review.fileName || "",
+    detectedType: review.detectedType || "",
+    canPublishBeforeReview: Boolean(review.canPublishBeforeReview),
+    resolutionStatus: contentReviewResolutionStatus(review),
+    resolutionStatusLabel: contentReviewResolutionStatusLabel(contentReviewResolutionStatus(review)),
+    adminNote: review.adminNote || "",
+    handledBy: review.handledBy || "",
+    handledAt: review.handledAt || null
+  };
+}
+
+
+export function contentReviewResolutionStatus(review) {
+  if (review?.resolutionStatus) return normalizeContentReviewResolutionStatus(review.resolutionStatus) || "pending_review";
+  return ["blocked", "review_required", "failed"].includes(String(review?.status || "")) ? "pending" : "resolved";
+}
+
+
+export function normalizeContentReviewResolutionStatus(value) {
+  const status = String(value || "").trim();
+  return ["pending_review", "pending", "confirmed_violation", "false_positive", "resolved"].includes(status) ? status : "";
+}
+
+
+export function contentReviewResolutionStatusLabel(status) {
+  if (status === "pending_review") return "待处理";
+  if (status === "confirmed_violation") return "确认违规";
+  if (status === "false_positive") return "误判";
+  if (status === "resolved") return "已处理";
+  return "待处理";
+}
+
+
+export function createHttpError(message, statusCode = 400) {
+  const error = new Error(message);
+  error.statusCode = statusCode;
+  return error;
+}

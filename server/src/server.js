@@ -111,13 +111,6 @@ import { calculateQuota as calculateUserQuota, getDeployEvents } from "./service
 import { adminUserSummary, filterAdminUsers, publicUser } from "./services/user-service.js";
 import { publicUserDemo, createRuntimeConfigStatus, publicRuntimeEnv, runtimeEnvForDemo, mergeRuntimeEnv } from "./lib/admin-helpers.js";
 import {
-  contentReviewStatusLabel,
-  createContentReviewError,
-  publicContentReview,
-  reviewArchiveContent,
-  reviewDirectoryContent,
-} from "./services/content-review-service.js";
-import {
   createHostingCapabilities,
   createProjectArchitecture
 } from "./services/hosting-architecture-service.js";
@@ -235,6 +228,56 @@ import {
   createInvalidArchiveInspection,
   createProjectError
 } from "./lib/archive-analyzer.js";
+
+import { readJson, writeJson } from "./lib/data-access.js";
+import { getClientIp } from "./lib/request-utils.js";
+import { writeAuditLog } from "./lib/audit-log.js";
+import {
+  summarizeFailureReasons,
+  summarizeTrialFunnel,
+  summarizeDeploySources,
+  countBy,
+  normalizeTrialEventType,
+  writeTrialEvent,
+  sanitizeTrialMetadata,
+  classifyFailureMessage,
+  normalizeSubdomainRequestStatus,
+  subdomainRequestStatusLabel,
+  filterSubdomainRequests,
+  summarizeResponseLimits,
+  attachErrorDiagnosis,
+  attachDiagnosisToInspection,
+} from "./services/trial-analytics-service.js";
+import {
+  publicContentReview,
+  reviewArchiveContent,
+  attachContentReviewToInspection,
+  contentReviewUserSummary,
+  publicAdminContentReview,
+  createAndPersistContentReview,
+  persistPreflightContentReview,
+  mergeContentReviews,
+  summarizeMergedContentReview,
+  persistContentReview,
+  createContentReviewFixPrompt,
+  defaultContentReviewResolutionStatus,
+  contentReviewResolutionStatus,
+  normalizeContentReviewResolutionStatus,
+  contentReviewResolutionStatusLabel,
+  createHttpError,
+  contentReviewStatusLabel,
+  createContentReviewError,
+} from "./services/content-review-service.js";
+import {
+  createRuleReport,
+  inferProjectCategoryFromFields,
+  createFixPrompt,
+  createInspectionSummary,
+  determineInspectionStatus,
+  inspectionTypeLabel,
+  inspectionSummary,
+  createUserFacingInspection,
+} from "./services/failure-diagnosis-service.js";
 
 const app = express();
 
@@ -532,10 +575,7 @@ registerAdminRoutes(app, {
 });
 
 
-
-// ===== STATIC FILE SERVING =====
-
-// ===== HEALTH & CAPABILITIES =====
+// ===== STATIC FILE SERVING & HEALTH =====
 
 async function routeRuntimeDemo(req, res, next) {
   try {
@@ -595,36 +635,6 @@ app.get("/api/demo-track/:slug", async (req, res) => {
   }
 });
 
-
-// ===== AGENT TOKEN & PROJECT =====
-
-// ===== DEMOS CRUD =====
-
-// ===== DEPLOY EVENTS & JOBS =====
-
-// ===== FORMS =====
-
-// ===== PUBLIC FORM SUBMISSION =====
-
-// ===== ADMIN ROUTES =====
-
-// ===== FEEDBACK =====
-
-// ===== INSPECT & DEPLOY =====
-
-// ===== ADMIN CONTENT REVIEWS =====
-
-// ===== DEMO LIFECYCLE (offline/delete/slug/restore) =====
-
-// ===== SUBDOMAIN REQUESTS =====
-
-// ===== DEMO UPDATE =====
-
-// ===== DEPLOYMENT JOBS (async) =====
-
-// ===== RUNTIME MANAGEMENT =====
-
-// ===== RUNTIME ENV CONFIG =====
 
 // ===== USER DEPLOY =====
 
@@ -1555,228 +1565,6 @@ async function performUpdateDeployment({ demoId, uploadedFile, user, clientIp = 
   }
 }
 
-function summarizeFailureReasons(events, contentReviews) {
-  const counts = {
-    content: contentReviews.filter((item) => item.status === "blocked" || item.status === "review_required").length,
-    quota: 0,
-    unsupported: 0,
-    build: 0,
-    other: 0
-  };
-  for (const event of events || []) {
-    const text = `${event.message || ""} ${JSON.stringify(event.detail || {})}`;
-    if (/额度|套餐|次数|在线试用项目/.test(text)) counts.quota += 1;
-    else if (/暂不支持|后端|数据库|支付|登录|WebSocket|SSR|服务端/.test(text)) counts.unsupported += 1;
-    else if (/build|构建|生成命令|npm/.test(text)) counts.build += 1;
-    else if (/内容|风险|拦截|人工确认/.test(text)) counts.content += 1;
-    else counts.other += 1;
-  }
-  return counts;
-}
-
-function summarizeTrialFunnel(trialEvents = [], deploymentEvents = [], auditLogs = [], users = []) {
-  const eventCounts = countBy(trialEvents, (item) => item.eventType);
-  const deploySuccesses = deploymentEvents.filter((item) => item.eventType === "success" && item.status === "success").length;
-  const deployFailures = deploymentEvents.filter((item) => item.status === "failed").length;
-  return {
-    homeVisits: eventCounts.home_view || 0,
-    registerStarts: eventCounts.register_view || 0,
-    registerSuccesses: Math.max(eventCounts.register_success || 0, users.length),
-    uploadStarts: eventCounts.upload_view || 0,
-    inspectPassed: eventCounts.project_inspect_passed || 0,
-    inspectFailed: eventCounts.project_inspect_failed || 0,
-    deployStarts: eventCounts.deploy_upload_started || 0,
-    deploySuccesses: Math.max(eventCounts.deploy_success || 0, deploySuccesses),
-    deployFailures: Math.max(eventCounts.deploy_failed || 0, deployFailures),
-    aiPublishViews: eventCounts.ai_publish_view || 0,
-    aiDeploys: auditLogs.filter((item) => item.action === "agent_deploy_demo" || item.action === "agent_update_demo").length
-  };
-}
-
-function summarizeDeploySources(auditLogs = [], demos = []) {
-  const counts = {};
-  for (const demo of demos || []) {
-    const source = demo.deploySource || "web";
-    counts[source] = (counts[source] || 0) + 1;
-  }
-  for (const log of auditLogs || []) {
-    const source = log.metadata?.source;
-    if (!source || counts[source]) continue;
-    counts[source] = 0;
-  }
-  return counts;
-}
-
-function countBy(items, getter) {
-  return (Array.isArray(items) ? items : []).reduce((acc, item) => {
-    const key = getter(item);
-    if (!key) return acc;
-    acc[key] = (acc[key] || 0) + 1;
-    return acc;
-  }, {});
-}
-
-function normalizeTrialEventType(value) {
-  const eventType = String(value || "").trim().toLowerCase();
-  return new Set([
-    "home_view",
-    "register_view",
-    "register_success",
-    "upload_view",
-    "ai_publish_view",
-    "project_inspect_passed",
-    "project_inspect_failed",
-    "deploy_upload_started",
-    "deploy_success",
-    "deploy_failed"
-  ]).has(eventType) ? eventType : "";
-}
-
-async function writeTrialEvent(event) {
-  const eventType = normalizeTrialEventType(event?.eventType);
-  if (!eventType) return;
-  const events = await readJson(trialEventsFile, []);
-  events.unshift({
-    id: crypto.randomUUID(),
-    eventType,
-    userId: event.userId || null,
-    userEmail: event.userEmail || null,
-    source: String(event.source || "").slice(0, 64),
-    path: String(event.path || "").slice(0, 500),
-    ip: event.ip || "",
-    metadata: sanitizeTrialMetadata(event.metadata),
-    createdAt: new Date().toISOString()
-  });
-  await writeJson(trialEventsFile, events.slice(0, 5000));
-}
-
-function sanitizeTrialMetadata(value) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
-  const clean = {};
-  for (const [key, item] of Object.entries(value)) {
-    if (!/^[a-zA-Z0-9_:-]{1,48}$/.test(key)) continue;
-    if (typeof item === "string") clean[key] = item.slice(0, 500);
-    else if (typeof item === "number" || typeof item === "boolean" || item === null) clean[key] = item;
-  }
-  return clean;
-}
-
-function classifyFailureMessage(message = "") {
-  return classifyFailureCategory({ message });
-}
-
-function normalizeSubdomainRequestStatus(value) {
-  const status = String(value || "").trim().toLowerCase();
-  return ["open", "approved", "rejected", "canceled"].includes(status) ? status : "";
-}
-
-function subdomainRequestStatusLabel(status) {
-  return {
-    open: "待处理",
-    approved: "已通过",
-    rejected: "已拒绝",
-    canceled: "已取消"
-  }[status] || "待处理";
-}
-
-function filterSubdomainRequests(requests, filters = {}) {
-  const status = normalizeSubdomainRequestStatus(filters.status);
-  return (requests || [])
-    .filter((item) => !status || item.status === status)
-    .map((item) => ({
-      ...item,
-      statusLabel: subdomainRequestStatusLabel(item.status)
-    }));
-}
-
-function summarizeResponseLimits(quota) {
-  if (!quota) return null;
-  return {
-    plan: quota.plan?.name || quota.plan?.code || "",
-    onlineDemos: quota.onlineDemos || null,
-    monthlyDeploys: quota.monthlyDeploys || null
-  };
-}
-
-
-function attachErrorDiagnosis(error, context = {}) {
-  if (!error || typeof error !== "object") {
-    return createFailureDiagnosis({ message: "发布失败，请根据提示调整后重试。", ...context });
-  }
-  const diagnosis = createFailureDiagnosis({
-    message: error instanceof Error ? error.message : context.message,
-    statusCode: error.statusCode || context.statusCode,
-    inspection: error.inspection || context.inspection,
-    runtime: error.runtime || context.runtime || error.inspection?.runtime,
-    database: error.database || context.database,
-    contentReview: error.contentReview || context.contentReview,
-    externalBackend: error.externalBackend || context.externalBackend || error.inspection?.externalBackend,
-    logs: error.logs || error.buildLog || context.logs,
-    databaseError: error.databaseError || context.databaseError,
-    ...context
-  });
-  error.diagnosis = diagnosis;
-  if (error.inspection) {
-    error.inspection = attachDiagnosisToInspection(error.inspection, diagnosis);
-  }
-  return diagnosis;
-}
-
-function attachDiagnosisToInspection(inspection, diagnosis) {
-  if (!inspection || !diagnosis) return inspection;
-  return {
-    ...inspection,
-    failureDiagnosis: diagnosis,
-    fixPrompt: inspection.fixPrompt || diagnosis.aiPrompt,
-    ruleReport: {
-      ...(inspection.ruleReport || {}),
-      fixPrompt: inspection.ruleReport?.fixPrompt || diagnosis.aiPrompt,
-      aiPrompt: inspection.ruleReport?.aiPrompt || diagnosis.aiPrompt
-    }
-  };
-}
-
-function deploymentJobStatusLabel(status) {
-  if (status === "queued") return "等待开始";
-  if (status === "running") return "正在生成";
-  if (status === "success") return "已生成";
-  if (status === "failed") return "生成失败";
-  return "未知状态";
-}
-
-
-function createHttpError(message, statusCode = 400) {
-  const error = new Error(message);
-  error.statusCode = statusCode;
-  return error;
-}
-
-app.use("/d", express.static(demoRoot));
-
-app.use((error, _req, res, _next) => {
-  let message = error instanceof Error ? error.message : "发布失败";
-  let statusCode = error.statusCode || (message.includes("仅支持") || message.includes("不支持") || message.includes("超出") ? 400 : 500);
-  if (error instanceof multer.MulterError) {
-    statusCode = 400;
-    if (error.code === "LIMIT_UNEXPECTED_FILE") {
-      message = "上传字段不正确。请把项目包放在 project 字段中；为兼容 AI 工具，file 和 package 字段也可以使用。";
-    } else if (error.code === "LIMIT_FILE_SIZE") {
-      message = `项目包体积过大，当前最多支持 ${maxZipSizeMb}MB。`;
-    } else {
-      message = "项目包上传失败，请确认只上传一个 .zip、.tar.gz 或 .tgz 文件。";
-    }
-  }
-  const diagnosis = attachErrorDiagnosis(error, { message, statusCode });
-  res.status(statusCode).json({
-    error: message,
-    inspection: error.inspection,
-    contentReview: publicContentReview(error.contentReview),
-    diagnosis,
-    deploymentEvents: error.deploymentEvents || undefined
-  });
-});
-
-// Demo 到期提醒定时任务，每 6 小时执行一次
 async function runExpirationCheck() {
   try {
     const result = await checkAndRemindExpiringDemos({
@@ -1875,15 +1663,6 @@ function inferProjectDisplayName({ requestedName, uploadedFileName, inspection }
   return (strong || candidates[0] || "DemoGo 试用项目").slice(0, 80);
 }
 
-async function exists(filePath) {
-  try {
-    await fs.access(filePath);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 function readBearerToken(req) {
   const authorization = String(req.get("authorization") || "");
   const [scheme, token] = authorization.split(" ");
@@ -1960,231 +1739,6 @@ function maskSecretValue(value) {
   if (!text) return "";
   if (text.length <= 6) return "***";
   return `${text.slice(0, 3)}***${text.slice(-3)}`;
-}
-
-async function createAndPersistContentReview(context) {
-  const sourceReview = await reviewArchiveContent(context.analysis, {
-    mode: contentReviewMode,
-    maxTextBytes: contentReviewMaxTextBytes,
-    externalEndpoint: contentReviewExternalEndpoint,
-    externalToken: contentReviewExternalToken,
-    id: crypto.randomUUID(),
-    readText: readArchiveEntryText
-  });
-  const outputReview = context.targetDir
-    ? await reviewDirectoryContent(context.targetDir, {
-        mode: contentReviewMode,
-        maxTextBytes: contentReviewMaxTextBytes,
-        externalEndpoint: contentReviewExternalEndpoint,
-        externalToken: contentReviewExternalToken,
-        id: crypto.randomUUID()
-      })
-    : null;
-  const review = mergeContentReviews(sourceReview, outputReview);
-  const record = {
-    ...review,
-    id: review.id || crypto.randomUUID(),
-    userId: context.user?.id || context.demo?.userId || null,
-    userEmail: context.user?.email || context.demo?.userEmail || "",
-    demoId: context.demo?.id || null,
-    demoSlug: context.demo?.slug || "",
-    deploymentId: context.deploymentId || null,
-    action: context.action || "create",
-    actorType: context.actor || "user",
-    projectName: context.projectName || "",
-    fileName: context.fileName || "",
-    detectedType: context.inspection?.detectedType || "",
-    canPublishBeforeReview: Boolean(context.inspection?.canPublish),
-    resolutionStatus: defaultContentReviewResolutionStatus(review.status),
-    adminNote: "",
-    handledBy: "",
-    handledAt: null
-  };
-  await persistContentReview(record);
-  return record;
-}
-
-async function persistPreflightContentReview(context) {
-  const review = context.inspection?.contentReview;
-  if (!review || !review.status || review.status === "passed") return null;
-  const record = {
-    ...review,
-    id: review.id || crypto.randomUUID(),
-    userId: context.user?.id || null,
-    userEmail: context.user?.email || "",
-    demoId: null,
-    demoSlug: "",
-    deploymentId: context.deploymentId || null,
-    action: context.action || "create",
-    actorType: context.actor || "user",
-    projectName: context.projectName || "",
-    fileName: context.fileName || "",
-    detectedType: context.inspection?.detectedType || "",
-    canPublishBeforeReview: false,
-    resolutionStatus: defaultContentReviewResolutionStatus(review.status),
-    adminNote: "",
-    handledBy: "",
-    handledAt: null,
-    createdAt: review.createdAt || new Date().toISOString()
-  };
-  await persistContentReview(record);
-  return record;
-}
-
-function mergeContentReviews(sourceReview, outputReview) {
-  if (!outputReview) return { ...sourceReview, scope: "source_archive" };
-  const findings = [
-    ...(sourceReview.findings || []).map((item) => ({ ...item, scope: "source_archive" })),
-    ...(outputReview.findings || []).map((item) => ({ ...item, scope: "published_output" }))
-  ];
-  const status = findings.some((item) => item.severity === "block")
-    ? "blocked"
-    : findings.some((item) => item.severity === "review")
-      ? "review_required"
-      : "passed";
-  return {
-    ...sourceReview,
-    id: sourceReview.id || crypto.randomUUID(),
-    status,
-    summary: summarizeMergedContentReview(status, findings),
-    findings,
-    reviewedFiles: Array.from(new Set([...(sourceReview.reviewedFiles || []), ...(outputReview.reviewedFiles || [])])).slice(0, 120),
-    reviewedFileCount: Number(sourceReview.reviewedFileCount || 0) + Number(outputReview.reviewedFileCount || 0),
-    scannedTextBytes: Number(sourceReview.scannedTextBytes || 0) + Number(outputReview.scannedTextBytes || 0),
-    scope: "source_and_output"
-  };
-}
-
-function summarizeMergedContentReview(status, findings) {
-  const categories = Array.from(new Set(findings.map((item) => item.category))).slice(0, 3).join("、");
-  if (status === "passed" && findings.length) return `内容检查通过，发现 ${categories || "一般提示"}，不影响生成试用链接。`;
-  if (status === "blocked") return `内容检查未通过，发现 ${categories || "高风险内容"}。`;
-  return `内容需要人工确认，发现 ${categories || "疑似风险内容"}。`;
-}
-
-async function persistContentReview(record) {
-  const reviews = await readJson(contentReviewsFile, []);
-  reviews.unshift(record);
-  await writeJson(contentReviewsFile, reviews.slice(0, 5000));
-  if (record.status !== "passed") {
-    await writeAuditLog({
-      action: "content_review_blocked",
-      actorType: record.actorType || "system",
-      actorId: record.userId || null,
-      targetType: "content_review",
-      targetId: record.id,
-      metadata: {
-        status: record.status,
-        summary: record.summary,
-        demoId: record.demoId,
-        demoSlug: record.demoSlug,
-        projectName: record.projectName,
-        categories: Array.from(new Set((record.findings || []).map((item) => item.category))).slice(0, 5)
-      }
-    });
-  }
-}
-
-function attachContentReviewToInspection(inspection, review) {
-  const publicReview = publicContentReview(review);
-  const blocked = review?.status === "blocked" || review?.status === "review_required" || review?.status === "failed";
-  const issues = [...(inspection.issues || [])];
-  const suggestions = [...(inspection.suggestions || [])];
-  if (blocked) {
-    issues.push(review.summary || "内容检查未通过。");
-    for (const finding of (review.findings || []).slice(0, 5)) {
-      if (finding.suggestion) suggestions.push(finding.suggestion);
-    }
-  }
-  return {
-    ...inspection,
-    status: blocked ? "blocked" : inspection.status,
-    canPublish: inspection.canPublish && !blocked,
-    summary: blocked ? (review.summary || "内容检查未通过。") : inspection.summary,
-    userStatus: blocked ? "unsupported" : inspection.userStatus,
-    userStatusLabel: blocked ? "暂不能发布" : inspection.userStatusLabel,
-    userSummary: blocked ? contentReviewUserSummary(review) : inspection.userSummary,
-    issues,
-    suggestions: Array.from(new Set(suggestions)),
-    contentReview: publicReview,
-    ruleReport: {
-      ...(inspection.ruleReport || {}),
-      risks: [
-        ...((inspection.ruleReport || {}).risks || []),
-        ...((blocked ? (review.findings || []).filter((finding) => finding.severity !== "notice") : []).slice(0, 5).map((finding) => `${finding.category}：${finding.snippet || finding.sourceFile || ""}`))
-      ],
-      recommendations: [
-        ...((inspection.ruleReport || {}).recommendations || []),
-        ...((blocked ? (review.findings || []).filter((finding) => finding.severity !== "notice") : []).slice(0, 5).map((finding) => finding.suggestion).filter(Boolean))
-      ],
-      fixPrompt: createContentReviewFixPrompt(review) || (inspection.ruleReport || {}).fixPrompt
-    }
-  };
-}
-
-function createContentReviewFixPrompt(review) {
-  if (!review || review.status === "passed") return "";
-  const findings = (review.findings || []).slice(0, 5);
-  return [
-    "请帮我修改这个页面，使它适合公开分享和试用。",
-    "要求：删除或改写可能涉及诈骗、博彩、色情低俗、违法交易、恶意下载、高敏信息收集或真实支付风险的内容。正常报名、预约、咨询、姓名、手机号、邮箱等获客表单可以保留。",
-    findings.length ? `本次检查提示：${findings.map((item) => `${item.category}${item.sourceFile ? `（${item.sourceFile}）` : ""}`).join("、")}。` : "",
-    "修改后重新打包上传到 DemoGo。"
-  ].filter(Boolean).join("\n");
-}
-
-function contentReviewUserSummary(review) {
-  if (review?.status === "review_required") {
-    return "这个页面包含需要平台确认的内容，暂时不能公开分享。请先按提示修改，或联系平台处理。";
-  }
-  if (review?.status === "failed") {
-    return "发布前内容检查没有完成，为避免风险，暂时不能生成公开链接。请稍后重试或联系平台处理。";
-  }
-  return "这个页面包含不适合公开分享的高风险内容，请先修改后再重新上传。";
-}
-
-function defaultContentReviewResolutionStatus(status) {
-  return ["blocked", "review_required", "failed"].includes(String(status || "")) ? "pending_review" : "resolved";
-}
-
-function publicAdminContentReview(review) {
-  return {
-    ...publicContentReview(review),
-    userId: review.userId || null,
-    userEmail: review.userEmail || "",
-    demoId: review.demoId || null,
-    demoSlug: review.demoSlug || "",
-    deploymentId: review.deploymentId || null,
-    action: review.action || "",
-    actorType: review.actorType || "",
-    projectName: review.projectName || "",
-    fileName: review.fileName || "",
-    detectedType: review.detectedType || "",
-    canPublishBeforeReview: Boolean(review.canPublishBeforeReview),
-    resolutionStatus: contentReviewResolutionStatus(review),
-    resolutionStatusLabel: contentReviewResolutionStatusLabel(contentReviewResolutionStatus(review)),
-    adminNote: review.adminNote || "",
-    handledBy: review.handledBy || "",
-    handledAt: review.handledAt || null
-  };
-}
-
-function contentReviewResolutionStatus(review) {
-  if (review?.resolutionStatus) return normalizeContentReviewResolutionStatus(review.resolutionStatus) || "pending_review";
-  return ["blocked", "review_required", "failed"].includes(String(review?.status || "")) ? "pending" : "resolved";
-}
-
-function normalizeContentReviewResolutionStatus(value) {
-  const status = String(value || "").trim();
-  return ["pending_review", "pending", "confirmed_violation", "false_positive", "resolved"].includes(status) ? status : "";
-}
-
-function contentReviewResolutionStatusLabel(status) {
-  if (status === "pending_review") return "待处理";
-  if (status === "confirmed_violation") return "确认违规";
-  if (status === "false_positive") return "误判";
-  if (status === "resolved") return "已处理";
-  return "待处理";
 }
 
 function calculateQuota(user, allDemos) {
@@ -2414,16 +1968,6 @@ function getArchivedDemoDir(slug) {
   return path.join(dataDir, "offline-demos", slug);
 }
 
-async function writeAuditLog(log) {
-  const logs = await readJson(auditLogsFile, []);
-  logs.unshift({
-    id: crypto.randomUUID(),
-    createdAt: new Date().toISOString(),
-    ...log
-  });
-  await writeJson(auditLogsFile, logs.slice(0, 1000));
-}
-
 async function appendDeploymentEvents(events) {
   const items = Array.isArray(events) ? events.filter(Boolean) : [];
   if (!items.length) return;
@@ -2499,58 +2043,6 @@ function failedDeploymentSteps(error, steps = [], context = {}) {
       createdAt: new Date().toISOString()
     }])
   ];
-}
-
-function getClientIp(req) {
-  return String(req.get("x-forwarded-for") || req.socket.remoteAddress || "")
-    .split(",")[0]
-    .trim();
-}
-
-function extractEmailAddress(value) {
-  const match = String(value || "").match(/<([^>]+)>/);
-  return (match ? match[1] : String(value || "")).trim();
-}
-
-async function readJson(filePath, fallback) {
-  if (isMysqlConfigured()) {
-    return readDataFile(filePath, fallback);
-  }
-
-  try {
-    const content = await fs.readFile(filePath, "utf8");
-    return JSON.parse(stripBom(content));
-  } catch (error) {
-    if (error.code === "ENOENT") return fallback;
-    throw error;
-  }
-}
-
-async function writeJson(filePath, value) {
-  if (isMysqlConfigured()) {
-    const handled = await writeDataFile(filePath, value);
-    if (handled) return;
-  }
-
-  const tempFile = `${filePath}.${crypto.randomBytes(4).toString("hex")}.tmp`;
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  await fs.writeFile(tempFile, JSON.stringify(value, null, 2), "utf8");
-  await renameWithRetry(tempFile, filePath);
-}
-
-async function renameWithRetry(source, target, attempts = 5) {
-  let lastError = null;
-  for (let index = 0; index < attempts; index += 1) {
-    try {
-      await fs.rename(source, target);
-      return;
-    } catch (error) {
-      lastError = error;
-      if (!["EPERM", "EBUSY"].includes(error?.code) || index === attempts - 1) break;
-      await new Promise((resolve) => setTimeout(resolve, 50 * (index + 1)));
-    }
-  }
-  throw lastError;
 }
 
 async function inspectProjectArchive(archivePath, fileName = "") {
@@ -3048,467 +2540,6 @@ async function extractRuntimeDemo(archivePath, targetDir, options = {}) {
   } finally {
     await cleanupArchiveAnalysis(analysis);
   }
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-function createRuleReport(context) {
-  const hasForms = context.formFields.length > 0;
-  const localApis = context.apiCalls.filter((item) => item.isLocal);
-  const risks = [];
-  const recommendations = [];
-  let projectCategory = context.projectProfile?.label || inspectionTypeLabel(context.detectedType);
-
-  if (context.projectProfile?.summary) {
-    recommendations.push(`项目类型：${context.projectProfile.summary}。`);
-  }
-
-  for (const reason of context.projectProfile?.unsupportedReasons || []) {
-    if (!risks.includes(reason)) risks.push(reason);
-  }
-
-  const autoHostableFields = filterAutoHostableFormFields(context.formFields);
-  if (autoHostableFields.length) {
-    projectCategory = inferProjectCategoryFromFields(context.formFields);
-    recommendations.push("页面可以生成试用链接；DemoGo 会在生成链接时自动识别并开启基础表单收集。");
-  } else if (hasForms) {
-    recommendations.push("页面可以生成试用链接；检测到的填写控件不像报名、预约或留言表单，DemoGo 不会自动收集这些内容。");
-  }
-
-  if (localApis.length) {
-    risks.push("这个项目里有提交或保存数据的功能，需要接入可用的收集入口。DemoGo 不会自动运行项目自带的后台接口。");
-    recommendations.push("如果是报名、预约或留言这类基础收集，DemoGo 会尝试自动接管；如果是完整业务后台、订单、支付或登录，当前暂不支持。");
-  }
-
-  if (context.hasPackageJson && !context.hasBuildScript && !context.entryFile && context.projectProfile?.type !== "node_service") {
-    risks.push("这个项目像是 AI 生成的网页源码，但缺少生成网页的命令。");
-    recommendations.push("请让 AI 编程工具补充生成命令，并确保生成可访问的网页文件。");
-  }
-
-  return {
-    projectCategory,
-    publishability: context.status === "blocked" ? "暂不支持" : (risks.length ? "页面支持，提交功能需要接入" : "支持"),
-    risks,
-    recommendations,
-    fixPrompt: createFixPrompt({ ...context, risks, recommendations })
-  };
-}
-
-function inferProjectCategoryFromFields(fields) {
-  const names = fields.map((field) => `${field.name} ${field.label}`.toLowerCase()).join(" ");
-  if (names.includes("company") || names.includes("公司") || names.includes("phone") || names.includes("手机号")) return "报名/预约/留资页面";
-  if (names.includes("message") || names.includes("留言")) return "留言反馈页面";
-  return "包含表单的页面";
-}
-
-function createFixPrompt(context) {
-  const parts = [];
-  const localApis = context.localApis || context.apiCalls?.filter((item) => item.isLocal) || [];
-  if (context.projectProfile?.type === "node_service") {
-    parts.push("请确认这是一个 Node.js 单服务项目：package.json 里需要有 scripts.start，服务必须监听 process.env.PORT，不要写死 3000/3001 端口；当前不要依赖 Redis、WebSocket 或多个服务同时运行。");
-    if (context.runtime?.unsupportedReasons?.length) {
-      parts.push(`当前检测到的阻塞点：${context.runtime.unsupportedReasons.join("；")}。请先改成无 Redis、无 WebSocket、无多服务的演示版本。`);
-    } else if (context.runtime?.requiresMysql) {
-      parts.push("项目可以使用 DemoGo 分配的 MySQL 试用数据库。请从环境变量读取 MYSQL_HOST、MYSQL_PORT、MYSQL_DATABASE、MYSQL_USER、MYSQL_PASSWORD 或 DATABASE_URL，不要写死数据库连接信息。");
-      parts.push("第一版只提供空库，不会自动建表或执行迁移。请在应用启动时自行建表，或让演示逻辑在表不存在时自动初始化。");
-    }
-    if (context.runtime?.hasStartProdScript) {
-      parts.push("运行器会优先使用 npm run start:prod，请确认这个命令可以在生产模式启动，并监听 process.env.PORT。");
-    } else if (context.runtime?.buildBeforeStart) {
-      parts.push("运行器会先执行 npm run build，再执行 npm start。请确认 build 能生成 start 需要的 dist/build 文件。");
-    }
-  }
-  if (["mini_program_source", "desktop_app_source", "mobile_native_source"].includes(context.projectProfile?.type)) {
-    parts.push("请导出一个可以在浏览器打开的 H5/Web 版本，再上传生成试用链接。当前不要上传小程序源码、桌面应用源码或 App 源码作为最终发布包。");
-  }
-  if (context.projectProfile?.type === "fullstack_framework") {
-    parts.push("请将 Next/Nuxt/Remix 等项目导出为静态网页产物后再上传，例如生成 out/dist/build 目录；当前不要依赖 SSR 服务端运行态。");
-  }
-  if (localApis.length) {
-    parts.push("请检查当前项目中的表单提交或数据保存逻辑。项目发布到 DemoGo 后，不会自动运行 /api/ 开头的自定义后台接口。基础报名、预约或留言表单可以由 DemoGo 自动接管；完整业务后台需要后续后端托管能力。");
-  }
-  if (context.hasPackageJson && !context.hasBuildScript && !context.entryFile && context.projectProfile?.type !== "node_service") {
-    parts.push("请把这个项目整理成可发布的网页版本：补充标准 npm run build 命令，并确保执行后生成 dist/index.html、build/index.html 或 out/index.html。");
-  }
-  if (context.formFields?.length) {
-    const autoHostableFields = filterAutoHostableFormFields(context.formFields);
-    if (autoHostableFields.length) {
-      parts.push(`项目中疑似报名/留言字段包括：${context.formFields.slice(0, 8).map((field) => field.name || field.label).join("、")}。请确认字段命名清晰，避免把报名、预约或留言表单做成必须依赖自定义后台接口才能提交。`);
-    } else {
-      parts.push(`项目中检测到填写控件：${context.formFields.slice(0, 8).map((field) => field.name || field.label).join("、")}。如果这些只是计算器、价格配置或开关控件，不需要改成提交表单；如果确实要收集报名/留言，请补充姓名、手机号、邮箱或留言字段。`);
-    }
-  }
-  if (!parts.length) {
-    parts.push("请把这个项目整理成 DemoGo 可发布的网页版本：确保压缩包内包含 index.html，或项目可以通过 npm run build 生成 dist/index.html、build/index.html 或 out/index.html。不要把 .env、node_modules、密钥文件打包进去。");
-  }
-  return parts.join("\n\n");
-}
-
-function createInspectionSummary(analysis) {
-  const hasRootIndex = analysis.paths.includes("index.html");
-  const hasDistIndex = analysis.paths.includes("dist/index.html");
-  const hasBuildIndex = analysis.paths.includes("build/index.html");
-  const hasOutIndex = analysis.paths.includes("out/index.html");
-  const hasPublicIndex = analysis.paths.includes("public/index.html");
-  const hasPackageJson = analysis.hasPackageJson || analysis.paths.includes("package.json");
-  const hasBuildScript = Boolean(analysis.hasBuildScript);
-  const hasSourceIndicators = hasSourceProjectIndicators(analysis.paths || []);
-  const hasBackend = hasBackendIndicators(analysis.paths || [], analysis.packageScripts || {}) || hasNodeRuntimeDependency(analysis);
-  const hasSsr = hasSsrIndicators(analysis.paths || []);
-  const singleHtmlEntry = detectSingleHtmlEntry(analysis.paths || []);
-  const hasBuiltEntry = hasDistIndex || hasBuildIndex || hasOutIndex || hasPublicIndex;
-  const detectedType = detectInspectionType({ hasRootIndex, hasDistIndex, hasBuildIndex, hasOutIndex, hasPublicIndex, hasPackageJson, hasBuildScript, hasSourceIndicators, hasBackend, hasSsr, singleHtmlEntry });
-  const projectProfile = classifyProject(analysis, { detectedType, hasBackend, hasSsr, hasPackageJson, hasBuildScript });
-  const projectAssessment = projectProfile.assessment || null;
-  const runtime = detectRuntimeMetadata(analysis, { hasBackend, hasSsr });
-  const status = determineInspectionStatus(analysis, { hasRootIndex, hasDistIndex, hasBuildIndex, hasOutIndex, hasPublicIndex, hasPackageJson, hasBuildScript, hasBackend, hasSsr, singleHtmlEntry, detectedType, projectProfile, runtime });
-  const issues = [];
-  const suggestions = [];
-  const ignoredNames = analysis.ignoredFiles.slice(0, 5);
-  const entryFile = analysis.entryFile;
-  const formFields = analysis.formFields || [];
-  const apiCalls = analysis.apiCalls || [];
-
-  if (analysis.rawFileCount === 0) {
-    issues.push("压缩包为空，未找到可发布文件。");
-    suggestions.push("请重新打包项目，确保压缩包内包含 index.html 或 dist/build 目录。");
-  }
-
-  if (analysis.blockedFiles.length) {
-    issues.push(`项目包包含敏感或不支持发布的文件：${analysis.blockedFiles.slice(0, 3).join("、")}。`);
-    suggestions.push("请删除密钥、环境变量、脚本或可执行文件后重新上传。");
-  }
-
-  if (!hasRootIndex && !hasBuiltEntry && !hasPublicIndex && !singleHtmlEntry && !hasPackageJson && analysis.rawFileCount > 0) {
-    issues.push("未找到可访问的首页文件或可生成网页的项目配置。");
-    suggestions.push("请确认压缩包内包含 index.html、一个单独的 HTML 页面，或包含 dist/index.html、build/index.html、out/index.html。");
-  }
-
-  if (hasBackend && !hasBuiltEntry) {
-    if (projectProfile.type === "node_service") {
-      const runtime = detectRuntimeMetadata(analysis, { hasBackend, hasSsr });
-      suggestions.push("已识别为 Node.js 单服务项目。当前运行器要求项目提供 start 命令，并监听 process.env.PORT。");
-      if (runtime.framework) {
-        suggestions.push(`识别到 ${formatRuntimeFramework(runtime.framework)} 项目。`);
-      }
-      if (runtime.hasStartProdScript) {
-        suggestions.push("检测到 start:prod 命令，运行器会优先使用 npm run start:prod。");
-      } else if (runtime.buildBeforeStart) {
-        suggestions.push("检测到需要先构建再启动，运行器会先执行 npm run build，再执行 npm start。");
-      }
-      for (const warning of runtime.warnings || []) {
-        suggestions.push(warning);
-      }
-      for (const reason of runtime.unsupportedReasons || []) {
-        if (!issues.includes(reason)) issues.push(reason);
-      }
-      if (!analysis.packageScripts?.start) {
-        issues.push("检测到 Node.js 项目，但缺少 start 启动命令。");
-        suggestions.push("请让 AI 编程工具补充 start 命令，并确保服务监听 process.env.PORT。");
-      }
-    } else {
-      issues.push("检测到这个项目需要服务器长期运行，当前 DemoGo 暂不支持这类项目的完整功能。");
-      suggestions.push("请让 AI 编程工具导出一个纯网页演示版本，或等待后续后端托管能力。");
-    }
-  }
-
-  if ((hasSsr || projectProfile.type === "fullstack_framework") && !hasOutIndex && !hasDistIndex && !hasBuildIndex && !isSingleServiceSsrProfile(projectProfile)) {
-    issues.push("检测到这个项目可能需要服务端渲染，当前 DemoGo 暂不支持这类运行方式。");
-    suggestions.push("如果项目可以导出静态网页，请先生成 dist/build/out 后再上传。");
-  } else if ((hasSsr || projectProfile.type === "fullstack_framework") && isSingleServiceSsrProfile(projectProfile)) {
-    suggestions.push("已识别为可单服务运行的完整应用项目。运行器会先构建，再按 start 命令启动，并要求监听 process.env.PORT。");
-    if (!analysis.packageScripts?.start) {
-      issues.push("检测到完整应用项目，但缺少 start 启动命令。");
-      suggestions.push("请让 AI 编程工具补充 start 命令，并确保服务监听 process.env.PORT。");
-    }
-  }
-
-  if (hasPackageJson && !hasRootIndex && !hasBuiltEntry && !hasPublicIndex && !singleHtmlEntry && projectProfile.type !== "node_service") {
-    suggestions.push("已识别为 AI 生成的网页源码，DemoGo 会自动生成网页后发布。");
-  }
-
-  if (hasPackageJson && !hasBuildScript && !hasRootIndex && !hasBuiltEntry && !hasPublicIndex && !singleHtmlEntry && projectProfile.type !== "node_service") {
-    issues.push("检测到项目源码，但没有生成网页的命令。");
-    suggestions.push("请让 AI 编程工具补充生成命令，或先生成 dist/build/out 后重新上传。");
-  }
-
-  if (formFields.length) {
-    const autoHostableFields = filterAutoHostableFormFields(formFields);
-    suggestions.push(`${autoHostableFields.length ? "检测到疑似报名/留言字段" : "检测到页面填写控件"}：${formFields.slice(0, 5).map((field) => field.label || field.name).join("、")}。`);
-  }
-
-  if (apiCalls.some((item) => item.isLocal)) {
-    suggestions.push("检测到本地 API 调用。DemoGo 当前不托管自定义后端，发布后相关提交或数据保存功能可能不可用。");
-  }
-
-  if (analysis.publishableFileCount > maxExtractedFiles) {
-    issues.push(`需要发布的文件较多，当前最多支持 ${maxExtractedFiles} 个文件。`);
-    suggestions.push("请删除不必要的素材、缓存和历史产物后重新上传。");
-  }
-
-  if (analysis.publishableBytes > maxExtractedBytes) {
-    issues.push(`项目包体积过大，当前最多支持 ${formatBytes(maxExtractedBytes)}。`);
-    suggestions.push("请压缩大图片、视频或删除无关资源后重新上传。");
-  }
-
-  if (ignoredNames.length) {
-    suggestions.push(`系统已自动忽略无关文件：${ignoredNames.join("、")}${analysis.ignoredFiles.length > ignoredNames.length ? " 等" : ""}。`);
-  }
-
-  return {
-    status,
-    canPublish: status === "pass" || status === "warning",
-    detectedType,
-    projectProfile,
-    projectAssessment,
-    projectCategory: projectProfile.label,
-    label: inspectionTypeLabel(detectedType),
-    summary: inspectionSummary(status, detectedType),
-    issues,
-    suggestions,
-    rawFileCount: analysis.rawFileCount,
-    publishableFileCount: analysis.publishableFileCount,
-    rawBytes: analysis.rawBytes,
-    publishableBytes: analysis.publishableBytes,
-    ignoredFileCount: analysis.ignoredFiles.length,
-    ignoredFiles: analysis.ignoredFiles,
-    blockedFiles: analysis.blockedFiles,
-    rootEntries: analysis.rootEntries,
-    entryFile,
-    singleHtmlEntry,
-    projectTitle: analysis.projectTitle || "",
-    pageHeading: analysis.pageHeading || "",
-    hasPackageJson,
-    hasBuildScript,
-    hasBackend,
-    hasSsr,
-    formFields,
-    apiCalls,
-    runtime,
-    ruleReport: createRuleReport({
-      status,
-      detectedType,
-      projectProfile,
-      projectAssessment,
-      entryFile,
-      singleHtmlEntry,
-      hasPackageJson,
-      hasBuildScript,
-      hasSourceIndicators,
-      hasBackend,
-      hasSsr,
-      formFields,
-      apiCalls,
-      runtime,
-      issues
-    }),
-    ...createUserFacingInspection({
-      status,
-      detectedType,
-      projectProfile,
-      projectAssessment,
-      entryFile,
-      singleHtmlEntry,
-      hasPackageJson,
-      hasBuildScript,
-      hasBackend,
-      hasSsr,
-      formFields,
-      apiCalls,
-      runtime,
-      issues
-    })
-  };
-}
-
-function determineInspectionStatus(analysis, flags) {
-  if (analysis.rawFileCount === 0 || analysis.blockedFiles.length > 0) return "blocked";
-  if (analysis.publishableFileCount > maxExtractedFiles || analysis.publishableBytes > maxExtractedBytes) return "blocked";
-  if (flags.projectProfile?.type === "node_service" && flags.runtime?.unsupportedReasons?.length) return "blocked";
-  const hasOutput = flags.hasDistIndex || flags.hasBuildIndex || flags.hasOutIndex || flags.hasPublicIndex;
-  if (flags.projectProfile?.type === "node_service" && !hasOutput) return "blocked";
-  if (flags.hasBackend && flags.projectProfile?.type !== "node_service" && !hasOutput) return "blocked";
-  if ((flags.hasSsr || flags.projectProfile?.type === "fullstack_framework") && !hasOutput) {
-    if (isSingleServiceSsrProfile(flags.projectProfile) && flags.runtime?.startCommand && !flags.runtime?.unsupportedReasons?.length) return "warning";
-    return "blocked";
-  }
-  if (flags.hasRootIndex || flags.hasDistIndex || flags.hasBuildIndex || flags.hasOutIndex || flags.hasPublicIndex || flags.singleHtmlEntry) return analysis.ignoredFiles.length ? "warning" : "pass";
-  if (flags.hasPackageJson && !flags.hasBuildScript) return "blocked";
-  if (flags.hasPackageJson) return "warning";
-  return "blocked";
-}
-
-
-
-function inspectionTypeLabel(type) {
-  const labels = {
-    "static-root": "普通网页项目",
-    dist: "已生成的网页项目",
-    build: "已生成的网页项目",
-    out: "已生成的网页项目",
-    public: "普通网页项目",
-    "single-html": "单页网页项目",
-    source: "AI 生成的网页项目",
-    "built-dist": "AI 生成的网页项目",
-    "built-build": "AI 生成的网页项目",
-    "built-out": "AI 生成的网页项目",
-    "built-public": "AI 生成的网页项目",
-    backend: "需要服务器的项目",
-    runtime: "需要服务器的项目",
-    unknown: "暂未识别"
-  };
-  return labels[type] || labels.unknown;
-}
-
-function inspectionSummary(status, type) {
-  if (status === "blocked") return "项目暂时无法发布，请根据提示调整后重新上传。";
-  if (type === "source") return "已识别为 AI 生成的网页项目，DemoGo 会自动生成网页后发布。";
-  if (type === "single-html") return "已识别为单个网页文件，DemoGo 会自动作为首页发布。";
-  if (status === "warning") return "项目可以发布，系统会自动忽略部分无关文件。";
-  return "项目检测通过，可以继续发布。";
-}
-
-function createUserFacingInspection(context) {
-  const localApis = context.apiCalls.filter((item) => item.isLocal);
-  const unsupportedNotes = [];
-  const supportNotes = [];
-  let userLabel = context.projectProfile?.label || inspectionTypeLabel(context.detectedType);
-  let userSummary = "这个项目可以发布，别人能打开页面。";
-
-  if (context.projectProfile?.notes?.length) {
-    supportNotes.push(...context.projectProfile.notes);
-  }
-  if (context.projectProfile?.unsupportedReasons?.length) {
-    unsupportedNotes.push(...context.projectProfile.unsupportedReasons);
-  }
-  if (context.projectAssessment?.support?.nextAction && context.status !== "blocked") {
-    supportNotes.push(context.projectAssessment.support.nextAction);
-  }
-
-  if (context.projectProfile?.type === "node_service") {
-    userLabel = "Node.js 单服务应用";
-    userSummary = context.status === "blocked"
-      ? "这个项目需要 Node.js 运行环境，但还缺少启动命令或运行器未满足条件。"
-      : (context.runtime?.requiresMysql
-          ? "这个项目可以进入 Node.js 单服务试用环境，并会获得一个隔离的 MySQL 试用数据库。"
-          : "这个项目可以进入 Node.js 单服务试用环境，页面和接口会放在同一个试用链接下。");
-    supportNotes.push("支持单个 Node.js 服务");
-    if (context.projectProfile?.framework) {
-      supportNotes.push(`${formatRuntimeFramework(context.projectProfile.framework)} 项目`);
-    }
-    supportNotes.push("必须监听 PORT");
-    if (context.runtime?.requiresMysql) {
-      supportNotes.push("支持 MySQL 试用数据库");
-      supportNotes.push("数据库为空库，不自动建表");
-    }
-    if (context.runtime?.hasStartProdScript) supportNotes.push("优先使用 start:prod");
-    if (context.runtime?.buildBeforeStart) supportNotes.push("会先构建再启动");
-  } else if (context.projectAssessment?.support?.publishMode === "ssr_runtime_planned") {
-    userLabel = "全栈网页应用";
-    userSummary = "DemoGo 已识别出这个项目不只是静态网页，还需要服务器生成页面或处理运行逻辑。当前版本先给出诊断；如果项目能导出静态网页，可以先发布静态版本。";
-    unsupportedNotes.push("需要完整应用运行能力");
-  } else if (context.projectAssessment?.support?.publishMode === "full_app_planned") {
-    userLabel = "完整应用项目";
-    userSummary = "DemoGo 已识别出这个项目包含后端、运行配置或数据库能力。当前版本先给出诊断，完整应用发布能力会在后续增强。";
-    unsupportedNotes.push("需要后端、运行配置或数据库能力");
-  } else if (context.hasBackend && context.status === "blocked") {
-    userLabel = "需要服务器的项目";
-    userSummary = "这个项目不只是网页，还需要服务器长期运行。当前 DemoGo 暂不支持这类项目的完整发布。";
-    unsupportedNotes.push("需要服务器处理业务逻辑");
-  } else if (context.hasSsr && context.status === "blocked") {
-    userLabel = "需要服务器的项目";
-    userSummary = "这个项目需要服务器生成页面。当前 DemoGo 主要支持可直接打开的网页项目。";
-    unsupportedNotes.push("需要服务器生成页面");
-  } else if (context.detectedType === "source") {
-    userLabel = "AI 生成的网页项目";
-    userSummary = "这个项目可以发布。DemoGo 会先自动生成可访问网页，再生成试用链接。";
-    supportNotes.push("会自动生成网页");
-  } else if (["dist", "build", "out", "built-dist", "built-build", "built-out"].includes(context.detectedType)) {
-    userLabel = "已生成的网页项目";
-    supportNotes.push("已经包含可访问网页");
-  } else if (context.detectedType === "static-root") {
-    userLabel = "普通网页项目";
-    supportNotes.push("已经包含首页文件");
-  } else if (context.detectedType === "single-html") {
-    userLabel = "单页网页项目";
-    userSummary = "这个项目可以发布。DemoGo 会把这个 HTML 页面作为首页生成试用链接。";
-    supportNotes.push("单个 HTML 页面可直接发布");
-  } else if (context.detectedType === "public") {
-    userLabel = "普通网页项目";
-    supportNotes.push("已经包含可访问网页");
-  }
-
-  if (context.formFields.length) {
-    supportNotes.push("页面展示可以发布");
-    if (filterAutoHostableFormFields(context.formFields).length) {
-      supportNotes.push("发布时会自动开启基础表单收集");
-      userSummary = "这个页面可以发布，并检测到报名、预约或留言表单。DemoGo 会在发布时自动开启基础表单收集。";
-    } else {
-      userSummary = "这个页面可以发布。页面里有填写控件，但不像报名、预约或留言表单，DemoGo 不会自动收集这些内容。";
-    }
-  }
-
-  if (localApis.length) {
-    unsupportedNotes.push("项目自带后台接口不会自动运行");
-    userSummary = "这个页面可以发布，但项目自带后台接口不会自动运行。基础报名、预约或留言表单会尝试由 DemoGo 自动收集；完整业务后台暂不支持。";
-  }
-
-  if (context.status === "blocked" && !context.hasBackend && !context.hasSsr) {
-    userSummary = context.issues[0] || "这个项目当前暂不支持发布，请按提示调整后重新上传。";
-  }
-
-  if (context.status === "blocked" && context.projectAssessment?.support?.nextAction) {
-    unsupportedNotes.unshift(context.projectAssessment.support.nextAction);
-  }
-
-  return {
-    userLabel,
-    userSummary,
-    userStatus: context.status === "blocked" ? "unsupported" : "supported",
-    userStatusLabel: context.status === "blocked" ? "暂不支持" : "支持",
-    supportNotes: Array.from(new Set(supportNotes.filter(Boolean))),
-    unsupportedNotes: Array.from(new Set(unsupportedNotes.filter(Boolean))),
-    fixPrompt: context.projectAssessment?.aiFixPrompt || createFixPrompt(context)
-  };
 }
 
 
