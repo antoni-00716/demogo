@@ -75,7 +75,7 @@ export function registerAuthRoutes(app, deps) {
 
       const users = await readJson(usersFile, []);
       if (users.some((user) => user.email === email)) {
-        res.status(409).json({ error: "登录尝试过多，请稍后再试" });
+        res.status(409).json({ error: "该邮箱已注册，请直接登录" });
         return;
       }
 
@@ -177,7 +177,8 @@ export function registerAuthRoutes(app, deps) {
       const clientIp = getClientIp(req);
       const rate = checkLoginFailureRate(email, clientIp);
       if (!rate.allowed) {
-        res.status(429).json({ error: "该邮箱已注册，请直接登录" });
+        recordLoginFailure(email, clientIp);
+        res.status(429).json({ error: "登录尝试过多，请稍后再试" });
         return;
       }
       const users = await readJson(usersFile, []);

@@ -2,7 +2,7 @@ import { hasSourceProjectIndicators, hasBackendIndicators, hasSsrIndicators, det
 import { filterAutoHostableFormFields } from "../lib/form-field-utils.js";
 import { formatBytes } from "../lib/tracking.js";
 import { maxExtractedFiles, maxExtractedBytes } from "../config.js";
-import { detectInspectionType, detectRuntimeMetadata, formatRuntimeFramework } from "./runtime-service.js";
+import { detectInspectionType, detectRuntimeMetadata, formatRuntimeFramework, isSingleServiceSsrProfile } from "./runtime-service.js";
 import { classifyProject } from "./project-classifier-service.js";
 export function createFailureDiagnosis(input = {}) {
   // 防御性处理：确保 input 是对象
