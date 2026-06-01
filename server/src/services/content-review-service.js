@@ -1,5 +1,11 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import crypto from "node:crypto";
+import { contentReviewMode, contentReviewMaxTextBytes, contentReviewExternalEndpoint, contentReviewExternalToken, dataDir } from "../config.js";
+import { readArchiveEntryText } from "../lib/archive-utils.js";
+import { readJson, writeJson } from "../lib/data-access.js";
+import { writeAuditLog } from "../lib/audit-log.js";
+
 
 const TEXT_EXTENSIONS = new Set([
   ".html",
@@ -560,7 +566,7 @@ export function summarizeMergedContentReview(status, findings) {
 
 
 export async function persistContentReview(record) {
-  const reviews = await readJson(contentReviewsFile, []);
+  const reviews = await readJson(path.join(dataDir, "content-reviews.json"), []);
   reviews.unshift(record);
   await writeJson(contentReviewsFile, reviews.slice(0, 5000));
   if (record.status !== "passed") {

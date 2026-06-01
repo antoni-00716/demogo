@@ -2,7 +2,7 @@
 import { join as pathJoin } from "node:path";
 import { dataDir } from "../config.js";
 import { readDataFile, writeDataFile } from "../db/mysql-store.js";
-import { classifyFailureCategory } from "./failure-diagnosis-service.js";
+import { classifyFailureCategory, createFailureDiagnosis } from "./failure-diagnosis-service.js";
 import crypto from "node:crypto";
 
 const trialEventsFile = pathJoin(dataDir, "trial-events.json");
