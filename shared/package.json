@@ -1,0 +1,11 @@
+﻿{
+    "version":  "0.9.31",
+    "name":  "@demogo-cn/shared",
+    "main":  "./lib/core.js",
+    "description":  "DemoGo shared core module for CLI and MCP",
+    "exports":  {
+                    ".":  "./lib/core.js"
+                },
+    "type":  "module",
+    "private":  true
+}

@@ -1,0 +1,12 @@
+{
+  "name": "test-05-fastify",
+  "version": "1.0.0",
+  "description": "DemoGo Fastify 单服务测试",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "fastify": "^4.21.0"
+  }
+}

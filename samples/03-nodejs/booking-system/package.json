@@ -1,0 +1,14 @@
+{
+  "name": "booking-system",
+  "version": "1.0.0",
+  "description": "DemoGo 预约系统验收样本",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "build": "echo 'static site, no build needed'"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "mysql2": "^3.6.0"
+  }
+}

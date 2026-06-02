@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>预约系统</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; min-height: 100vh; }
+    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+    h1 { text-align: center; margin-bottom: 30px; color: #333; }
+    .card { background: white; border-radius: 12px; padding: 24px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    .card h2 { margin-bottom: 16px; color: #444; font-size: 18px; }
+    .form-group { margin-bottom: 16px; }
+    label { display: block; margin-bottom: 6px; color: #555; font-size: 14px; }
+    input, select, textarea { width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; }
+    input:focus, select:focus, textarea:focus { outline: none; border-color: #4a90d9; }
+    textarea { height: 80px; resize: vertical; }
+    button { width: 100%; padding: 12px; background: #4a90d9; color: white; border: none; border-radius: 8px; font-size: 16px; cursor: pointer; }
+    button:hover { background: #3a7bc8; }
+    button:disabled { background: #ccc; cursor: not-allowed; }
+    .msg { padding: 12px; border-radius: 8px; margin-bottom: 16px; display: none; }
+    .msg.ok { display: block; background: #e8f5e9; color: #2e7d32; }
+    .msg.err { display: block; background: #ffebee; color: #c62828; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { padding: 8px 6px; text-align: left; border-bottom: 1px solid #eee; }
+    th { color: #666; font-weight: 600; }
+    .empty { text-align: center; color: #999; padding: 20px; }
+    .health { position: fixed; top: 10px; right: 10px; padding: 6px 12px; border-radius: 20px; font-size: 12px; }
+    .health.ok { background: #e8f5e9; color: #2e7d32; }
+    .health.err { background: #ffebee; color: #c62828; }
+  </style>
+</head>
+<body>
+  <div id="health" class="health">检查中...</div>
+  <div class="container">
+    <h1>预约系统</h1>
+    <div class="card">
+      <h2>提交预约</h2>
+      <div id="msg" class="msg"></div>
+      <form id="form">
+        <div class="form-group">
+          <label>姓名 *</label>
+          <input type="text" name="name" required placeholder="请输入姓名">
+        </div>
+        <div class="form-group">
+          <label>手机号 *</label>
+          <input type="tel" name="phone" required placeholder="请输入手机号">
+        </div>
+        <div class="form-group">
+          <label>日期 *</label>
+          <input type="date" name="date" required>
+        </div>
+        <div class="form-group">
+          <label>时段 *</label>
+          <select name="time_slot" required>
+            <option value="">请选择时段</option>
+            <option value="09:00-10:00">09:00-10:00</option>
+            <option value="10:00-11:00">10:00-11:00</option>
+            <option value="14:00-15:00">14:00-15:00</option>
+            <option value="15:00-16:00">15:00-16:00</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>备注</label>
+          <textarea name="note" placeholder="可选填写"></textarea>
+        </div>
+        <button type="submit" id="submitBtn">提交预约</button>
+      </form>
+    </div>
+    <div class="card">
+      <h2>预约记录</h2>
+      <div id="list"><p class="empty">加载中...</p></div>
+    </div>
+  </div>
+  <script>
+    const form = document.getElementById('form');
+    const msg = document.getElementById('msg');
+    const list = document.getElementById('list');
+    const btn = document.getElementById('submitBtn');
+    const health = document.getElementById('health');
+
+    async function checkHealth() {
+      try {
+        const r = await fetch('/api/health');
+        const d = await r.json();
+        health.textContent = d.db ? '数据库正常' : '数据库未连接';
+        health.className = 'health ' + (d.db ? 'ok' : 'err');
+      } catch (e) {
+        health.textContent = '服务异常';
+        health.className = 'health err';
+      }
+    }
+
+    async function loadBookings() {
+      try {
+        const r = await fetch('/api/bookings');
+        const data = await r.json();
+        if (!data.length) { list.innerHTML = '<p class="empty">暂无预约</p>'; return; }
+        list.innerHTML = '<table><tr><th>姓名</th><th>日期</th><th>时段</th></tr>' +
+          data.map(b => '<tr><td>'+b.name+'</td><td>'+b.date+'</td><td>'+b.time_slot+'</td></tr>').join('') +
+          '</table>';
+      } catch (e) {
+        list.innerHTML = '<p class="empty">加载失败</p>';
+      }
+    }
+
+    form.onsubmit = async (e) => {
+      e.preventDefault();
+      btn.disabled = true;
+      msg.className = 'msg';
+      const fd = new FormData(form);
+      const body = Object.fromEntries(fd);
+      try {
+        const r = await fetch('/api/bookings', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+        const d = await r.json();
+        if (d.ok) {
+          msg.className = 'msg ok'; msg.textContent = '预约成功！';
+          form.reset(); loadBookings();
+        } else {
+          msg.className = 'msg err'; msg.textContent = d.error || '提交失败';
+        }
+      } catch (e) {
+        msg.className = 'msg err'; msg.textContent = '网络错误';
+      }
+      btn.disabled = false;
+    };
+
+    checkHealth();
+    loadBookings();
+  </script>
+</body>
+</html>

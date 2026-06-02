@@ -1,0 +1,476 @@
+{
+  "meta": {
+    "deck": "DemoGo OPC 比赛 PPT",
+    "total_pages": 17,
+    "rendering_target": "HTML PPT (guizang-ppt-skill / html-ppt / frontend-slides)",
+    "video_principle": "动效服务于叙事，不做无意义动画。优先使用 CSS 动画，视频仅在需要展示产品操作流程时使用。",
+    "fallback_strategy": "所有视频位必须有静态截图 fallback，确保离线/低网速环境下核心信息不丢失。"
+  },
+  "transitions": [
+    {
+      "id": "TR-01",
+      "from_page": 1,
+      "to_page": 2,
+      "type": "fade-to-black",
+      "duration_ms": 400,
+      "purpose": "封面到目录的沉稳过渡",
+      "notes": "封面光效消散后黑场 0.2s，再亮场进入目录"
+    },
+    {
+      "id": "TR-02",
+      "from_page": 2,
+      "to_page": 3,
+      "type": "push-left",
+      "duration_ms": 500,
+      "purpose": "目录到背景的叙事启动",
+      "notes": "章节卡片向左推出，新页面从右侧滑入。暗示'正式进入故事'"
+    },
+    {
+      "id": "TR-03",
+      "from_page": 7,
+      "to_page": 8,
+      "type": "dissolve",
+      "duration_ms": 600,
+      "purpose": "技术深度页到产品验证页的情绪切换",
+      "notes": "从深色技术卡片溶解到明亮的验证数据页，暗示'从理论到实践'"
+    },
+    {
+      "id": "TR-04",
+      "from_page": 8,
+      "to_page": 9,
+      "type": "zoom-out",
+      "duration_ms": 500,
+      "purpose": "从产品验证拉远到市场全景",
+      "notes": "当前页面缩小拉远，市场大数据从背景浮现。暗示'从产品到赛道'"
+    },
+    {
+      "id": "TR-05",
+      "from_page": 16,
+      "to_page": 17,
+      "type": "fade-to-dark",
+      "duration_ms": 800,
+      "purpose": "资质页到结束页的仪式感收束",
+      "notes": "资质卡片逐个暗淡，深蓝背景渐深，结束页核心文案从中心浮现"
+    }
+  ],
+  "page_animations": [
+    {
+      "page_id": 1,
+      "slug": "cover",
+      "animations": [
+        {
+          "id": "PA-01-01",
+          "target": "标题 DemoGo",
+          "type": "text-reveal",
+          "trigger": "page-enter",
+          "duration_ms": 800,
+          "easing": "ease-out",
+          "description": "标题字符逐字浮现，从模糊到清晰"
+        },
+        {
+          "id": "PA-01-02",
+          "target": "背景光效",
+          "type": "glow-sweep",
+          "trigger": "page-enter",
+          "duration_ms": 1500,
+          "easing": "ease-in-out",
+          "description": "青色光效从左到右扫过背景一次"
+        }
+      ]
+    },
+    {
+      "page_id": 2,
+      "slug": "toc",
+      "animations": [
+        {
+          "id": "PA-02-01",
+          "target": "章节卡片 × 5",
+          "type": "stagger-fade-in",
+          "trigger": "page-enter",
+          "duration_ms": 750,
+          "stagger_ms": 150,
+          "easing": "ease-out",
+          "description": "五张章节卡片依次淡入，每张间隔 150ms"
+        }
+      ]
+    },
+    {
+      "page_id": 3,
+      "slug": "background",
+      "animations": [
+        {
+          "id": "PA-03-01",
+          "target": "漏斗图",
+          "type": "draw-svg",
+          "trigger": "page-enter",
+          "duration_ms": 1000,
+          "description": "漏斗图从顶部向下绘制"
+        },
+        {
+          "id": "PA-03-02",
+          "target": "漏斗瓶颈处",
+          "type": "pulse-glow",
+          "trigger": "after PA-03-01",
+          "duration_ms": 600,
+          "repeat": 2,
+          "description": "漏斗收窄处青色脉冲高亮，强调'瓶颈'"
+        }
+      ]
+    },
+    {
+      "page_id": 4,
+      "slug": "pain-points",
+      "animations": [
+        {
+          "id": "PA-04-01",
+          "target": "痛点卡片 × 4",
+          "type": "pop-in-sequence",
+          "trigger": "page-enter",
+          "duration_ms": 1200,
+          "stagger_ms": 250,
+          "description": "四张痛点卡片依次弹出，每张弹出时伴随一个痛点统计数字浮现"
+        }
+      ]
+    },
+    {
+      "page_id": 5,
+      "slug": "solution",
+      "animations": [
+        {
+          "id": "PA-05-01",
+          "target": "能力卡片 × 5",
+          "type": "slide-in-left",
+          "trigger": "page-enter",
+          "duration_ms": 1250,
+          "stagger_ms": 200,
+          "description": "五张能力卡片从左到右依次滑入"
+        },
+        {
+          "id": "PA-05-02",
+          "target": "痛点映射连线",
+          "type": "draw-connection",
+          "trigger": "after PA-05-01",
+          "duration_ms": 500,
+          "description": "从能力卡片向 P4 痛点绘制连接线，形成映射关系（可选，用于答辩深讲场景）"
+        }
+      ]
+    },
+    {
+      "page_id": 6,
+      "slug": "architecture",
+      "animations": [
+        {
+          "id": "PA-06-01",
+          "target": "架构分层",
+          "type": "build-up",
+          "trigger": "page-enter",
+          "duration_ms": 2000,
+          "description": "架构从底层到顶层逐层构建，每层 400ms。基础设施→数据层→托管层→识别层→接入层→三端"
+        }
+      ]
+    },
+    {
+      "page_id": 7,
+      "slug": "tech-innovation",
+      "animations": [
+        {
+          "id": "PA-07-01",
+          "target": "技术卡片 × 4",
+          "type": "spiral-reveal",
+          "trigger": "page-enter",
+          "duration_ms": 1200,
+          "stagger_ms": 200,
+          "description": "四张技术卡片以螺旋顺序展开：左上→右上→右下→左下"
+        },
+        {
+          "id": "PA-07-02",
+          "target": "代码装饰片段",
+          "type": "typewriter",
+          "trigger": "after PA-07-01",
+          "duration_ms": 600,
+          "description": "卡片内代码片段打字机效果逐字符显示（装饰性）"
+        }
+      ]
+    },
+    {
+      "page_id": 8,
+      "slug": "validation",
+      "animations": [
+        {
+          "id": "PA-08-01",
+          "target": "时间线节点",
+          "type": "light-up-sequence",
+          "trigger": "page-enter",
+          "duration_ms": 1000,
+          "description": "版本迭代时间线节点从左到右依次点亮",
+          "stagger_ms": 250
+        },
+        {
+          "id": "PA-08-02",
+          "target": "关键数据卡片",
+          "type": "counter-up",
+          "trigger": "after PA-08-01",
+          "duration_ms": 800,
+          "description": "数据数字从 0 递增滚动到目标值"
+        }
+      ]
+    },
+    {
+      "page_id": 9,
+      "slug": "market",
+      "animations": [
+        {
+          "id": "PA-09-01",
+          "target": "大字数据",
+          "type": "counter-up",
+          "trigger": "page-enter",
+          "duration_ms": 1000,
+          "stagger_ms": 300,
+          "description": "三个大数据依次递增滚动：2000万 → 25亿 → 第一"
+        },
+        {
+          "id": "PA-09-02",
+          "target": "窗口期提示",
+          "type": "pulse",
+          "trigger": "after PA-09-01",
+          "duration_ms": 500,
+          "repeat": 1,
+          "description": "窗口期文字闪烁强调"
+        }
+      ]
+    },
+    {
+      "page_id": 10,
+      "slug": "competition",
+      "animations": [
+        {
+          "id": "PA-10-01",
+          "target": "对比表格行",
+          "type": "row-reveal",
+          "trigger": "page-enter",
+          "duration_ms": 1500,
+          "stagger_ms": 250,
+          "description": "竞品对比表格逐行展示，DemoGo 列最后高亮"
+        }
+      ]
+    },
+    {
+      "page_id": 11,
+      "slug": "ip",
+      "animations": [
+        {
+          "id": "PA-11-01",
+          "target": "技术模块卡片",
+          "type": "flip-card",
+          "trigger": "page-enter",
+          "duration_ms": 800,
+          "stagger_ms": 200,
+          "description": "4 张技术模块卡片逐个翻转展示"
+        }
+      ]
+    },
+    {
+      "page_id": 12,
+      "slug": "business-model",
+      "animations": [
+        {
+          "id": "PA-12-01",
+          "target": "定价金字塔",
+          "type": "build-up",
+          "trigger": "page-enter",
+          "duration_ms": 1200,
+          "description": "金字塔从底部 Free 向上构建到 Pro，每层站定后显示对应价格"
+        },
+        {
+          "id": "PA-12-02",
+          "target": "生态飞轮",
+          "type": "rotate-slow",
+          "trigger": "after PA-12-01",
+          "duration_ms": 2000,
+          "description": "生态增值飞轮缓慢旋转展示"
+        }
+      ]
+    },
+    {
+      "page_id": 13,
+      "slug": "financials",
+      "animations": [
+        {
+          "id": "PA-13-01",
+          "target": "柱状图柱子",
+          "type": "grow-up",
+          "trigger": "page-enter",
+          "duration_ms": 1000,
+          "stagger_ms": 350,
+          "description": "三根柱子依次从 0 增长到目标值"
+        }
+      ]
+    },
+    {
+      "page_id": 14,
+      "slug": "funding",
+      "animations": [
+        {
+          "id": "PA-14-01",
+          "target": "饼图扇区",
+          "type": "sector-draw",
+          "trigger": "page-enter",
+          "duration_ms": 1000,
+          "description": "饼图各扇区依次展开"
+        },
+        {
+          "id": "PA-14-02",
+          "target": "里程碑时间线",
+          "type": "scroll-reveal",
+          "trigger": "after PA-14-01",
+          "duration_ms": 1000,
+          "description": "12 个月时间线从顶部向下滚动揭示"
+        }
+      ]
+    },
+    {
+      "page_id": 15,
+      "slug": "team",
+      "animations": [
+        {
+          "id": "PA-15-01",
+          "target": "头像",
+          "type": "scale-in",
+          "trigger": "page-enter",
+          "duration_ms": 500,
+          "description": "头像从中心缩放出现"
+        },
+        {
+          "id": "PA-15-02",
+          "target": "能力标签",
+          "type": "pop-stagger",
+          "trigger": "after PA-15-01",
+          "duration_ms": 800,
+          "stagger_ms": 150,
+          "description": "能力标签逐个弹出"
+        },
+        {
+          "id": "PA-15-03",
+          "target": "能力雷达图",
+          "type": "radar-draw",
+          "trigger": "after PA-15-02",
+          "duration_ms": 800,
+          "description": "能力雷达图展开绘制"
+        }
+      ]
+    },
+    {
+      "page_id": 16,
+      "slug": "credentials",
+      "animations": [
+        {
+          "id": "PA-16-01",
+          "target": "资质卡片 × 6",
+          "type": "radial-expand",
+          "trigger": "page-enter",
+          "duration_ms": 900,
+          "stagger_ms": 120,
+          "description": "6 个资质卡片从中心向外扩散排列"
+        }
+      ]
+    },
+    {
+      "page_id": 17,
+      "slug": "closing",
+      "animations": [
+        {
+          "id": "PA-17-01",
+          "target": "核心文案",
+          "type": "focus-in",
+          "trigger": "page-enter",
+          "duration_ms": 1200,
+          "description": "文字从模糊到清晰，模拟焦点对准"
+        },
+        {
+          "id": "PA-17-02",
+          "target": "域名",
+          "type": "line-converge",
+          "trigger": "after PA-17-01",
+          "duration_ms": 600,
+          "description": "多条青色光线汇聚到域名 demogo.cn，形成视觉焦点"
+        }
+      ]
+    }
+  ],
+  "video_slots": [
+    {
+      "id": "VS-01",
+      "page_id": 5,
+      "slug": "solution",
+      "type": "screen-recording",
+      "duration_s": 8,
+      "purpose": "展示从 AI 生成代码到 DemoGo 一键发布的完整流程",
+      "description": "分屏录制：左侧 AI 编程工具生成代码，右侧 DemoGo CLI 一键发布，浏览器自动打开已部署页面",
+      "resolution": "1920×1080",
+      "fallback": "三帧关键截图（代码→CLI发布→浏览器结果）横向排列",
+      "trigger": "演讲者手动触发或自动播放",
+      "loop": false
+    },
+    {
+      "id": "VS-02",
+      "page_id": 8,
+      "slug": "validation",
+      "type": "screen-recording",
+      "duration_s": 6,
+      "purpose": "快速展示 demogo.cn 在线注册和使用流程",
+      "description": "从 demogo.cn 首页 → 注册 → 创建项目 → 发布成功 的快速走马灯",
+      "resolution": "1920×1080",
+      "fallback": "demogo.cn 首页静态截图 + 三步走示意箭头",
+      "trigger": "自动循环播放",
+      "loop": true
+    }
+  ],
+  "background_ambient": [
+    {
+      "id": "BG-01",
+      "pages": [1, 17],
+      "type": "css-particles",
+      "description": "深蓝背景 + 缓慢浮动的青色微粒子，营造科技感氛围",
+      "intensity": "subtle"
+    },
+    {
+      "id": "BG-02",
+      "pages": [3, 4, 7],
+      "type": "css-grid-lines",
+      "description": "深蓝背景 + 微弱网格线，增强技术/工程感",
+      "intensity": "very-subtle"
+    },
+    {
+      "id": "BG-03",
+      "pages": [9],
+      "type": "css-data-stream",
+      "description": "页面边缘微弱的数据流动线条，暗示数据/市场主题",
+      "intensity": "subtle"
+    }
+  ],
+  "audio_hints": {
+    "note": "音频不在 PPT 范围内，但为演讲者提供建议",
+    "suggestions": [
+      {
+        "page_id": 1,
+        "suggestion": "无背景音，或极轻的环境音入场"
+      },
+      {
+        "page_id": 7,
+        "suggestion": "此处演讲语气加重，无需任何背景音干扰"
+      },
+      {
+        "page_id": 17,
+        "suggestion": "可考虑使用 1-2 秒的轻收束音效（非必须）"
+      }
+    ]
+  },
+  "performance_notes": {
+    "total_animation_weight": "light-to-medium",
+    "estimated_css_only_percentage": "95%",
+    "video_segments": 2,
+    "total_video_duration_s": 14,
+    "browser_compatibility": "现代浏览器（Chrome/Edge/Safari/Firefox 近两个大版本）",
+    "offline_mode": "所有视频位都有静态 fallback，离线投屏不影响核心信息传达"
+  }
+}

@@ -1,0 +1,3 @@
+display_name: DemoGo
+short_description: Publish projects as shareable trial links.
+default_prompt: Publish this project to DemoGo.

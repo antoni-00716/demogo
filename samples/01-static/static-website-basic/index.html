@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>基础静态网站 - DemoGo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 60px 40px;
+            text-align: center;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 500px;
+            margin: 20px;
+        }
+        h1 {
+            color: #333;
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            color: #666;
+            font-size: 1.1rem;
+            margin-bottom: 30px;
+        }
+        .tag {
+            display: inline-block;
+            background: #e0e7ff;
+            color: #4f46e5;
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            margin: 5px;
+        }
+        .info {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f8fafc;
+            border-radius: 10px;
+            text-align: left;
+        }
+        .info h3 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .info p {
+            color: #666;
+            line-height: 1.6;
+            font-size: 0.95rem;
+        }
+        .status {
+            margin-top: 20px;
+            padding: 15px;
+            background: #dcfce7;
+            border: 1px solid #22c55e;
+            border-radius: 8px;
+            color: #166534;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎉 Hello, DemoGo!</h1>
+        <p class="subtitle">基础静态网站示例</p>
+        
+        <div>
+            <span class="tag">静态网站</span>
+            <span class="tag">HTML/CSS</span>
+            <span class="tag">无需构建</span>
+        </div>
+
+        <div class="info">
+            <h3>📋 项目说明</h3>
+            <p>这是一个最简单的静态网站项目，只包含 HTML 和 CSS，无需任何构建工具即可部署。</p>
+            <p style="margin-top: 10px;">DemoGo 可以直接托管这类项目！</p>
+        </div>
+
+        <div class="status">
+            ✅ 部署成功！正在运行中...
+        </div>
+
+        <p style="margin-top: 30px; color: #999; font-size: 0.85rem;">
+            由 DemoGo 自动部署
+        </p>
+    </div>
+</body>
+</html>

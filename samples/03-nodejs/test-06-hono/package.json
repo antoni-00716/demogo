@@ -1,0 +1,13 @@
+{
+  "name": "test-06-hono",
+  "version": "1.0.0",
+  "description": "DemoGo Hono 单服务测试",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "hono": "^3.3.0",
+    "@hono/node-server": "^1.1.0"
+  }
+}

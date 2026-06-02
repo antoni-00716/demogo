@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "demogo": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "demogo-mcp@latest"
+      ],
+      "env": {
+        "DEMOGO_API_BASE": "https://demogo.cn"
+      }
+    }
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "name": "demogo",
+  "version": "0.9.0",
+  "description": "Publish projects from Claude Code to DemoGo and return shareable trial links.",
+  "author": {
+    "name": "DemoGo",
+    "email": "antoni16@163.com",
+    "url": "https://demogo.cn"
+  },
+  "homepage": "https://demogo.cn",
+  "license": "UNLICENSED"
+}
