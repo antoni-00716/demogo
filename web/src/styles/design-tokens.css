@@ -153,6 +153,10 @@
   --amber-600: #d97706;
   --amber-700: #b45309;
 
+  /* Warm accent -- used for badges, highlights, friendly touches */
+  --warm-accent:         var(--amber-500);
+  --warm-accent-subtle:  var(--amber-50);
+
   --red-50:   #fef2f2;
   --red-100:  #fee2e2;
   --red-500:  #ef4444;
