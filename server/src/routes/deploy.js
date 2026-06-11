@@ -106,9 +106,17 @@ export function registerDeployRoutes(app, { requireUser, uploadProjectArchive, h
         }
       });
       res.status(202).json({ job: publicDeploymentJob(job) });
-      addDeploymentJob({ jobId: job.id, action: job.action }).catch((error) => {
-        logger.error({ err: error }, "Deployment job failed");
-      });
+      if (process.env.DEMOGO_DEPLOYMENT_SYNC_MODE === "1") {
+        try {
+          await runDeploymentJob(job.id);
+        } catch (error) {
+          logger.error({ err: error }, "Sync deployment job failed");
+        }
+      } else {
+        addDeploymentJob({ jobId: job.id, action: job.action }).catch((error) => {
+          logger.error({ err: error }, "Deployment job failed");
+        });
+      }
     } catch (error) {
       next(error);
     }
