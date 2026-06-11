@@ -487,7 +487,7 @@ const pipelineService = createDeploymentPipelineService({
   startNodeRuntime, stopRuntime,
   writeAuditLog, writeTrialEvent, summarizeResponseLimits,
 });
-const { removeDemoFiles, expireDemoFiles, deleteDemoFiles } = pipelineService;
+const { removeDemoFiles, expireDemoFiles, deleteDemoFiles, restartDemoRuntime } = pipelineService;
 
 // --- Agent route module ---
 app.use(requestIdMiddleware);
@@ -1748,112 +1748,6 @@ async function expireDemos() {
 
   if (changed) {
     await writeJson(demosFile, demos);
-  }
-}
-
-async function restartDemoRuntime(demo) {
-  if (!demo || demo.status !== "published" || demo.hostingMode !== "node_runtime") {
-    const error = "这个项目不是在线 Node.js 试用项目。";
-    return { demo, runtime: null, error, diagnosis: createFailureDiagnosis({ message: error, inspection: demo?.inspection, runtime: demo?.runtime, database: demo?.database }) };
-  }
-  const liveDir = path.join(demoRoot, demo.slug);
-  if (!await exists(liveDir)) {
-    const error = "项目文件不存在，无法启动运行环境。";
-    return { demo, runtime: null, error, diagnosis: createFailureDiagnosis({ message: error, category: "package", inspection: demo.inspection, runtime: demo.runtime, database: demo.database }) };
-  }
-  try {
-    const runtimeConfigStatus = createRuntimeConfigStatus(demo.inspection || {}, demo.runtimeEnv, demo.database);
-    if (runtimeConfigStatus.missing.length) {
-      const diagnosis = createFailureDiagnosis({
-        message: runtimeConfigStatus.nextAction || "请先补充运行配置。",
-        category: "runtime_env",
-        inspection: demo.inspection,
-        runtime: demo.runtime,
-        database: demo.database
-      });
-      const runtime = createConfigRequiredRuntime(demo.runtime, runtimeConfigStatus, diagnosis);
-      return {
-        demo: {
-          ...demo,
-          runtime,
-          failureDiagnosis: diagnosis,
-          runtimeConfig: runtimeConfigStatus,
-          updatedAt: new Date().toISOString()
-        },
-        runtime: null,
-        error: runtimeConfigStatus.nextAction || "请先补充运行配置。",
-        diagnosis
-      };
-    }
-    const runtime = await startNodeRuntime({
-      slug: demo.slug,
-      projectDir: liveDir,
-      inspection: demo.inspection || {},
-      config: hostingConfig(),
-      env: runtimeEnvForDemo(demo)
-    });
-    const nextHosting = {
-      ...(demo.hosting || {}),
-      runtime: {
-        ...(demo.hosting?.runtime || {}),
-        ...runtime
-      }
-    };
-    const nextInspection = {
-      ...(demo.inspection || {}),
-      runtime: {
-        ...(demo.inspection?.runtime || {}),
-        ...runtime
-      },
-      hosting: nextHosting
-    };
-    return {
-      demo: {
-        ...demo,
-        runtime: {
-          ...(demo.runtime || {}),
-          ...runtime
-        },
-        hosting: nextHosting,
-        inspection: nextInspection,
-        runtimeConfig: runtimeConfigStatus,
-        updatedAt: new Date().toISOString()
-      },
-      runtime,
-      error: ""
-    };
-  } catch (error) {
-    const diagnosis = createFailureDiagnosis({
-      message: error instanceof Error ? error.message : "运行环境启动失败。",
-      inspection: demo.inspection,
-      runtime: demo.runtime,
-      database: demo.database,
-      logs: error?.logs || error?.message || ""
-    });
-    const failedRuntime = {
-      ...(demo.runtime || {}),
-      status: "failed",
-      statusLabel: "启动失败",
-      logSummary: diagnosis.evidence?.find((item) => item.startsWith("日志摘要："))?.replace("日志摘要：", "") || demo.runtime?.logSummary || "",
-      failureDiagnosis: diagnosis,
-      lifecycle: {
-        ...(demo.runtime?.lifecycle || {}),
-        stage: "failed",
-        stageLabel: "启动失败",
-        stoppedAt: new Date().toISOString()
-      }
-    };
-    return {
-      demo: {
-        ...demo,
-        runtime: failedRuntime,
-        failureDiagnosis: diagnosis,
-        updatedAt: new Date().toISOString()
-      },
-      runtime: null,
-      error: error instanceof Error ? error.message : "运行环境启动失败。",
-      diagnosis
-    };
   }
 }
 
