@@ -1,12 +1,12 @@
 #!/bin/bash
-# DemoGo v0.9.37 server rollback script
+# DemoGo v0.9.34 server rollback script
 set -e
 
 DEPLOY_ROOT="/opt/demogo"
 SERVER_DIR="$DEPLOY_ROOT/server"
 SITE_ROOT="/var/www/demogo-preview"
 
-TARGET_VERSION="0.9.37"
+TARGET_VERSION="0.9.34"
 
 echo "=== DemoGo Rollback to v${TARGET_VERSION} ==="
 echo "$(date): Starting rollback"
