@@ -1,5 +1,12 @@
 // DemoGo v0.9.3 - Slug & plan utility functions (extracted from server.js)
 
+import path from "node:path";
+import { dataDir, publicBaseUrl } from "../config.js";
+
+export function getArchivedDemoDir(slug) {
+  return path.join(dataDir, "offline-demos", slug);
+}
+
 export function isSlugClaimedByDemo(slug, demos = [], ignoreDemoId = "") {
   return demos.some((demo) => {
     if (ignoreDemoId && demo.id === ignoreDemoId) return false;
