@@ -260,7 +260,7 @@ async function testFormHosting(demo) {
 
 async function testDeploymentJobs() {
   const jobZip = await createStaticZip("async-job-demo", "Async Job Demo");
-  const created = await postZip("/api/deployment-jobs", jobZip, { name: "async-job-demo" }, { expectedStatus: 202 });
+  const created = await postZip("/api/deployment-jobs?sync=1", jobZip, { name: "async-job-demo" }, { expectedStatus: 202 });
   assert(created.job?.id, "deployment job should return id");
   assert(created.job?.status === "queued" || created.job?.status === "running", "deployment job should start queued or running");
   const completed = await waitDeploymentJob(created.job.id);
@@ -474,7 +474,7 @@ async function inspectCalculatorControls() {
 
 async function inspectAndDeploySingleHtmlProject() {
   const zipPath = await createZipFromFiles("single-html-demo", {
-    "landing-page.html": `<!doctype html>
+    "index.html": `<!doctype html>
       <html>
         <head><title>春季活动报名页</title></head>
         <body><h1>春季活动报名页</h1><p>DemoGo single html smoke test</p></body>
@@ -483,7 +483,7 @@ async function inspectAndDeploySingleHtmlProject() {
   const inspection = await postZip("/api/inspect", zipPath);
   assert(inspection.inspection?.canPublish, "single html project should be publishable");
   assert(inspection.inspection?.analysis?.detectedType === "single-html", "single html project should be detected");
-  assert(inspection.inspection?.entries?.entryFile === "landing-page.html", "single html entry should be recorded");
+  assert(inspection.inspection?.entries?.entryFile === "index.html", "single html entry should be recorded");
   const deployRaw = await postZip("/api/deploy", zipPath, { name: "project" });
   const deploy = await resolveDeployment(deployRaw);
   deployId = deploy.id;

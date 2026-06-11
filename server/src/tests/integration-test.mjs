@@ -427,7 +427,7 @@ try {
     proSlug = proJob.result?.slug;
     customDomainEligible = proJob.result?.customDomainEligible || false;
   } else {
-    proId = proId;
+    proId = proDeploy.data.id;
     proSlug = proDeploy.data.slug;
     customDomainEligible = proDeploy.data.customDomainEligible || false;
   }
@@ -462,7 +462,7 @@ try {
   // === 测试13: 部署任务 ===
   console.log("=== Testing deployment jobs...");
   const jobZip = await createStaticZip("Job Demo", "Job Integration Demo");
-  const createdJob = await postZip("/api/deployment-jobs", jobZip, { name: "Job Demo" }, { Cookie: cookie });
+  const createdJob = await postZip("/api/deployment-jobs?sync=1", jobZip, { name: "Job Demo" }, { Cookie: cookie });
   assert.ok(createdJob.status === 202, "job should be accepted");
   assert.ok(createdJob.data.job?.id, "job should have id");
   

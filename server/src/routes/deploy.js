@@ -105,13 +105,12 @@ export function registerDeployRoutes(app, { requireUser, uploadProjectArchive, h
           fileName: uploadedFile.originalname
         }
       });
+      const useSync = process.env.DEMOGO_DEPLOYMENT_SYNC_MODE === "1" || req.query?.sync === "1" || req.body?.sync === "1";
       res.status(202).json({ job: publicDeploymentJob(job) });
-      if (process.env.DEMOGO_DEPLOYMENT_SYNC_MODE === "1") {
-        try {
-          await runDeploymentJob(job.id);
-        } catch (error) {
+      if (useSync) {
+        await runDeploymentJob(job.id).catch((error) => {
           logger.error({ err: error }, "Sync deployment job failed");
-        }
+        });
       } else {
         addDeploymentJob({ jobId: job.id, action: job.action }).catch((error) => {
           logger.error({ err: error }, "Deployment job failed");

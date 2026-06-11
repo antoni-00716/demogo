@@ -814,7 +814,8 @@ app.get("/api/demos", async (req, res, next) => {
       }
     });
     res.status(202).json({ job: publicDeploymentJob(job) });
-    if (process.env.DEMOGO_DEPLOYMENT_SYNC_MODE === "1") {
+    const useSync = process.env.DEMOGO_DEPLOYMENT_SYNC_MODE === "1" || req.query?.sync === "1" || req.body?.sync === "1";
+    if (useSync) {
       try {
         await runDeploymentJob(job.id);
       } catch (error) {
