@@ -240,6 +240,8 @@ import {
   platformHost,
   isExpired,
   getArchivedDemoDir,
+  demoSlug,
+  extractDemoSlug,
 } from "./lib/slug-utils.js";
 import {
   createDeploymentSteps,
@@ -247,6 +249,7 @@ import {
   completeDeploymentSteps,
   failedDeploymentSteps,
 } from "./lib/deployment-steps.js";
+import { removePath, copyDemoArchive, shouldCopyDemoArchivePath } from "./lib/file-utils.js";
 import { getClientIp } from "./lib/request-utils.js";
 import { writeAuditLog } from "./lib/audit-log.js";
 import {
@@ -340,10 +343,6 @@ const ignoredExactNames = new Set([
 const ignoredExtensions = new Set([
   ".log",
   ".tmp"
-]);
-
-const archiveIgnoredPathParts = new Set([
-  "node_modules"
 ]);
 
 const blockedExtensions = new Set([
@@ -1707,36 +1706,6 @@ async function resolveAgentUpdateDemoId({ user, demoRef }) {
   return demo.id;
 }
 
-function extractDemoSlug(value) {
-  const ref = String(value || "").trim();
-  if (!ref) return "";
-  try {
-    const url = new URL(ref);
-    const parts = url.pathname.split("/").filter(Boolean);
-    const demoIndex = parts.indexOf("d");
-    return slugify(demoIndex >= 0 ? parts[demoIndex + 1] || "" : parts.at(-1) || "");
-  } catch {
-    const cleaned = ref.replace(/^\/?d\//i, "").split(/[/?#]/)[0];
-    return slugify(cleaned);
-  }
-}
-
-function normalizeEnvKey(value) {
-  const key = String(value || "").trim().toUpperCase();
-  return /^[A-Z_][A-Z0-9_]*$/.test(key) ? key : "";
-}
-
-function isPlatformEnvKey(key) {
-  return ["PORT", "NODE_ENV"].includes(String(key || "").toUpperCase());
-}
-
-function maskSecretValue(value) {
-  const text = String(value || "");
-  if (!text) return "";
-  if (text.length <= 6) return "***";
-  return `${text.slice(0, 3)}***${text.slice(-3)}`;
-}
-
 function calculateQuota(user, allDemos) {
   return calculateUserQuota(user, allDemos, isExpired);
 }
@@ -1877,10 +1846,6 @@ async function restartDemoRuntime(demo) {
   }
 }
 
-function demoSlug(value) {
-  return typeof value === "string" ? value : value?.slug;
-}
-
 async function removeDemoFiles(value) {
   const slug = demoSlug(value);
   if (!slug) return;
@@ -1915,35 +1880,6 @@ async function deleteDemoFiles(value) {
   if (typeof value === "object") {
     await deleteDemoDatabase(value.database, hostingConfig()).catch(() => null);
   }
-}
-
-async function removePath(targetPath) {
-  if (process.platform === "win32") {
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-  }
-  await fs.rm(targetPath, {
-    recursive: true,
-    force: true,
-    maxRetries: 20,
-    retryDelay: 1000
-  });
-}
-
-async function copyDemoArchive(sourceDir, targetDir) {
-  const rootDir = path.resolve(sourceDir);
-  await fs.cp(sourceDir, targetDir, {
-    recursive: true,
-    filter: (sourcePath) => shouldCopyDemoArchivePath(sourcePath, rootDir)
-  });
-}
-
-function shouldCopyDemoArchivePath(sourcePath, rootDir) {
-  const relativePath = path.relative(rootDir, path.resolve(sourcePath));
-  if (!relativePath) return true;
-  return !relativePath
-    .split(path.sep)
-    .filter(Boolean)
-    .some((part) => archiveIgnoredPathParts.has(part));
 }
 
 async function redirectDemoAlias(req, res) {

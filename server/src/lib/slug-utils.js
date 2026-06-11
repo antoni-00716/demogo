@@ -2,6 +2,7 @@
 
 import path from "node:path";
 import { dataDir, publicBaseUrl } from "../config.js";
+import { slugify } from "./project-utils.js";
 
 export function getArchivedDemoDir(slug) {
   return path.join(dataDir, "offline-demos", slug);
@@ -51,8 +52,25 @@ export function isExpired(demo) {
   return new Date(demo.expiresAt) <= new Date();
 }
 
-export function demoSlug(demoId) {
-  return String(demoId || "");
+export function demoSlug(value) {
+  return typeof value === "string" ? value : value?.slug;
+}
+
+/**
+ * Extract slug from a URL or slug string.
+ */
+export function extractDemoSlug(value) {
+  const ref = String(value || "").trim();
+  if (!ref) return "";
+  try {
+    const url = new URL(ref);
+    const parts = url.pathname.split("/").filter(Boolean);
+    const demoIndex = parts.indexOf("d");
+    return slugify(demoIndex >= 0 ? parts[demoIndex + 1] || "" : parts.at(-1) || "");
+  } catch {
+    const cleaned = ref.replace(/^\/?d\//i, "").split(/[/?#]/)[0];
+    return slugify(cleaned);
+  }
 }
 
 export function platformHost() {
