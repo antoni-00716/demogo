@@ -102,6 +102,7 @@ import {
   publicRuntimeEnv,
 } from "../lib/admin-helpers.js";
 import { exists } from "../lib/utils.js";
+import logger from "../lib/logger.js";
 import { isSlugClaimedByDemo, canUseCustomDomain, isExpired, getArchivedDemoDir, demoSlug } from "../lib/slug-utils.js";
 import { copyDemoArchive, removePath } from "../lib/file-utils.js";
 import { purgeCache } from "../lib/cdn.js";
