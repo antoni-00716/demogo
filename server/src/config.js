@@ -81,6 +81,7 @@ export const plans = {
     monthlyDeployLimit: 3,
     demoRetentionDays: 7,
     maxZipSizeMb,
+    maxStorageMB: 200,
     maxForms: 1,
     maxFormSubmissions: 100
   },
@@ -91,6 +92,7 @@ export const plans = {
     monthlyDeployLimit: 20,
     demoRetentionDays: 30,
     maxZipSizeMb,
+    maxStorageMB: 500,
     maxForms: 3,
     maxFormSubmissions: 1000
   },
@@ -101,6 +103,7 @@ export const plans = {
     monthlyDeployLimit: 60,
     demoRetentionDays: 30,
     maxZipSizeMb,
+    maxStorageMB: 2000,
     maxForms: 10,
     maxFormSubmissions: 10000
   }

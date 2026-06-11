@@ -1,0 +1,18 @@
+[Unit]
+Description=DemoGo Deployment Worker
+After=network.target redis.service mysql.service
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/demogo/current
+ExecStart=/usr/bin/node src/queue/worker.js
+Restart=always
+RestartSec=5
+User=root
+Environment=NODE_ENV=production
+EnvironmentFile=/root/demogo-db.env
+EnvironmentFile=/etc/systemd/system/demogo-server.service.d/redis.conf
+
+[Install]
+WantedBy=multi-user.target
+

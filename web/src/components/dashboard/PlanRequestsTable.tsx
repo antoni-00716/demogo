@@ -1,4 +1,4 @@
-// DemoGo v0.9.14 - Plan requests table (extracted from UserDashboard)
+// DemoGo v0.9.14 - Plan requests table
 import { Card } from "../Card";
 import { EmptyState } from "../EmptyState";
 import { planName } from "../../config/plans";
@@ -12,7 +12,7 @@ export function PlanRequestsTable({ requests }: { requests: PlanRequest[] }) {
       <div className="panel-head">
         <div>
           <h2>升级申请记录</h2>
-          <p>这现显示你提交的所有升级申请和处理结果。</p>
+          <p>这里显示你提交的所有升级申请和处理结果。</p>
         </div>
       </div>
       {!requests.length ? (
@@ -26,16 +26,16 @@ export function PlanRequestsTable({ requests }: { requests: PlanRequest[] }) {
                 <th>当前套餐</th>
                 <th>申请套餐</th>
                 <th>状态</th>
-                <th>处理系明</th>
+                <th>处理说明</th>
               </tr>
             </thead>
             <tbody>
               {requests.map((request) => (
                 <tr key={request.id}>
+                  <td>{formatDate(request.createdAt)}</td>
+                  <td>{request.currentPlanName || planName(request.currentPlan)}</td>
                   <td>{request.requestedPlanName || planName(request.requestedPlan)}</td>
                   <td>{planRequestStatusLabel(request.status)}</td>
-                  <td>{formatDate(request.createdAt)}</td>
-                  <td>{formatDate(request.handledAt)}</td>
                   <td>{request.adminNote || (request.status === "approved" ? "已开通" : "-")}</td>
                 </tr>
               ))}

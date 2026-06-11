@@ -13,6 +13,7 @@ export function registerPlanUpgradeRoutes(app, { requireUser }) {
     try {
       const requests = await readJson(planRequestsFile, []);
       res.json({
+        contact: { qq: "304598006", email: "hello@demogo.cn" },
         requests: requests
           .filter((item) => item.userId === req.user.id)
           .slice(0, 20)
@@ -30,34 +31,34 @@ export function registerPlanUpgradeRoutes(app, { requireUser }) {
     const currentPlan = req.user.plan || "free";
 
     if (!requestedPlan) {
-      res.status(400).json({ error: "请选择 Lite 或 Pro 套餐" });
+      res.status(400).json({ error: "??? Lite ? Pro ??" });
       return;
     }
 
     if (requestedPlan === currentPlan) {
-      res.status(400).json({ error: "你已经是当前套餐，无需重复申请" });
+      res.status(400).json({ error: "???????????????" });
       return;
     }
 
     if (!canUpgradePlan(currentPlan, requestedPlan)) {
-      res.status(400).json({ error: "当前套餐有效期间暂不支持降级或重复申请低等级套餐" });
+      res.status(400).json({ error: "????????????????????????" });
       return;
     }
 
     if (contact.length > 120) {
-      res.status(400).json({ error: "联系方式过长，请控制在 120 字以内" });
+      res.status(400).json({ error: "??????????? 120 ???" });
       return;
     }
 
     if (message.length > 500) {
-      res.status(400).json({ error: "申请说明过长，请控制在 500 字以内" });
+      res.status(400).json({ error: "??????????? 500 ???" });
       return;
     }
 
     const requests = await readJson(planRequestsFile, []);
     const existingOpen = requests.find((item) => item.userId === req.user.id && item.status === "open");
     if (existingOpen) {
-      res.status(409).json({ error: "你已有一个待处理的升级申请，请等待管理员处理" });
+      res.status(409).json({ error: "??????????????????????" });
       return;
     }
 
@@ -84,14 +85,10 @@ export function registerPlanUpgradeRoutes(app, { requireUser }) {
       targetType: "plan_upgrade_request",
       targetId: item.id,
       ip: getClientIp(req),
-      metadata: {
-        currentPlan,
-        requestedPlan,
-        userEmail: req.user.email
-      }
+      metadata: { currentPlan, requestedPlan, userEmail: req.user.email }
     });
 
-    res.json({ request: publicPlanRequest(item) });
+    res.json({ request: publicPlanRequest(item), contact: { qq: "304598006", email: "hello@demogo.cn" } });
   } catch (error) {
     next(error);
   }

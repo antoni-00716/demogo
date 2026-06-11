@@ -9,7 +9,8 @@ $packages = @(
     "server\package.json",
     "web\package.json",
     "cli\package.json",
-    "mcp\package.json"
+    "mcp\package.json",
+    "shared\package.json"
 )
 
 $updated = 0

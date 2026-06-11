@@ -17,9 +17,9 @@ export function createSessionStore({ readJson, writeJson, sessionsFile }) {
   return { createSession };
 }
 
-export function setSessionCookie(res, token) {
+export function setSessionCookie(res, token, req) {
   const baseUrl = String(process.env.PUBLIC_BASE_URL || "");
-  const secure = baseUrl.startsWith("https://");
+  const secure = req?.secure || req?.headers?.["x-forwarded-proto"] === "https" ;
   res.cookie("demogo_session", token, {
     httpOnly: true,
     sameSite: "lax",

@@ -1,5 +1,5 @@
-import { api } from "./client";
-import type { Demo, DeployEvent, DeploymentStep, FailureDiagnosis, ProjectAssessment, Quota, SubdomainRequest } from "../types";
+﻿import { api } from "./client";
+import type { Demo, DeployEvent, DeploymentStep, FailureDiagnosis, FormSubmission, HostedForm, ProjectAssessment, Quota, SubdomainRequest } from "../types";
 
 export type Inspection = {
   canPublish?: boolean;
@@ -217,4 +217,40 @@ export async function getDemoAnalytics(demoId: string): Promise<{
   conversionRate: string;
 }> {
   return api(`/api/demos/${demoId}/analytics`);
+}
+
+export type DatabaseTable = {
+  name: string;
+  rowCount: number;
+  createdAt: string;
+  comment: string;
+  columns: Array<{
+    name: string;
+    type: string;
+    nullable: boolean;
+    isPrimaryKey: boolean;
+    comment: string;
+  }>;
+};
+
+export type DatabaseRow = Record<string, unknown>;
+
+export function getDemoDatabaseTables(id: string) {
+  return api<{ tables: DatabaseTable[] }>(`/api/demos/${id}/database/tables`);
+}
+
+export function getDemoDatabaseRows(id: string, tableName: string) {
+  return api<{ tableName: string; rows: DatabaseRow[] }>(`/api/demos/${id}/database/tables/${encodeURIComponent(tableName)}/rows`);
+}
+
+export function getDemoForms(id: string) {
+  return api<{ forms: HostedForm[]; submissions: FormSubmission[] }>(`/api/demos/${id}/forms`);
+}
+
+export function exportDemoTableCsv(id: string, tableName: string) {
+  return `/api/demos/${id}/database/tables/${encodeURIComponent(tableName)}/export`;
+}
+
+export function exportDemoFormsCsv(id: string) {
+  return `/api/demos/${id}/forms/export`;
 }

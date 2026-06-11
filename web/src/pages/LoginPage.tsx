@@ -1,4 +1,5 @@
 ﻿import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { Eye, EyeOff, CheckCircle } from "lucide-react";
 import { getRegisterOptions, login, register, sendVerificationCode } from "../api/auth";
 import { BrandLogo } from "../components/BrandLogo";
 import { Button, LinkButton } from "../components/Button";
@@ -111,16 +112,16 @@ export function LoginPage() {
           </a>
           {succeeded ? (
             <div className="login-success-state">
-              <div className="login-success-icon">✅</div>
+              <CheckCircle size={48} className="login-success-icon-svg" />
               <h1>{mode === "login" ? "登录成功！" : "注册成功！"}</h1>
               <p>正在跳转到工作台...</p>
             </div>
           ) : (
             <>
               <div>
-                <p className="login-kicker">{mode === "login" ? "欢迎回来 👋" : "开始使用 DemoGo"}</p>
+                <p className="login-kicker">{mode === "login" ? "欢迎回来" : "开始使用 DemoGo"}</p>
                 <h1>{mode === "login" ? "继续管理你的作品" : "免费注册，生成第一个链接"}</h1>
-                <p>{mode === "login" ? "查看你的作品、分享记录和反馈信息" : "注册后上传作品，立刻生成可以发给任何人的链接"}</p>
+                <p>{mode === "login" ? "查看你的作品、分享记录和反馈信息" : "做完作品，直接发出去，立刻生成链接"}</p>
               </div>
               <div className="login-mode-tabs">
                 <button className={mode === "login" ? "is-active" : ""} type="button" onClick={() => setMode("login")}>登录</button>
@@ -157,7 +158,7 @@ export function LoginPage() {
                       autoComplete={mode === "login" ? "current-password" : "new-password"}
                     />
                     <button type="button" className="password-toggle" onClick={() => setShowPassword(!showPassword)} tabIndex={-1} aria-label={showPassword ? "隐藏密码" : "显示密码"}>
-                      {showPassword ? "👁‍🗨" : "👁"}
+                      {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                     </button>
                   </div>
                   {passwordError ? <span className="field-error">{passwordError}</span> : null}
@@ -179,7 +180,7 @@ export function LoginPage() {
                 {message ? <Toast message={message} tone="danger" /> : null}
                 {successMessage ? <Toast message={successMessage} tone="success" /> : null}
                 <Button className="login-primary-action" variant="primary" disabled={loading || (mode === "register" && registerOptions?.canRegister === false) || !canSubmit} loading={loading} type="submit">
-                  {mode === "login" ? "登录我的工作台" : "免费注册并进入工作台"}
+                  {mode === "login" ? "进入工作台" : "免费注册并进入工作台"}
                 </Button>
               </form>
               <button className="login-switch" type="button" onClick={switchMode}>

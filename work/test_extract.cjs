@@ -1,0 +1,1 @@
+const fs = require('fs'); const unzipper = require('unzipper'); fs.mkdirSync('/tmp/test_extract', {recursive: true}); fs.createReadStream('/tmp/test.zip').pipe(unzipper.Extract({path:'/tmp/test_extract'})).on('close', function(){console.log('SUCCESS')}).on('error', function(e){console.log('ERROR:', e.message)});

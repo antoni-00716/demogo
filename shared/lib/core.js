@@ -289,7 +289,21 @@ async function parseDeploymentResponse(response) {
   return payload;
 }
 
-export async function getProjectDetails(apiBase, token, demoId, userAgent = `demogo-cli/${VERSION}
+export async function getProjectDetails(apiBase, token, demoId, userAgent = ua()) {
+  let response;
+  try {
+    response = await fetch(`${normalizeApiBase(apiBase)}/api/agent/project/${encodeURIComponent(demoId)}`, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "User-Agent": userAgent
+      }
+    });
+  } catch {
+    throw new Error(`无法连接 DemoGo：${normalizeApiBase(apiBase)}。请检查 API 地址是否正确，或稍后再试。`);
+  }
+  return parseDeploymentResponse(response);
+}
 
 export function normalizeApiBase(value) {
   return String(value || "").trim().replace(/\/+$/, "");

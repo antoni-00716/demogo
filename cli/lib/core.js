@@ -25,10 +25,10 @@ export {
   normalizeApiBase,
   safeArchiveName,
   formatBytes,
-} from "../../shared/lib/core.js";
+} from "@demogo-cn/shared";
 
 // Import configureShared to configure it
-import { configureShared } from "../../shared/lib/core.js";
+import { configureShared } from "@demogo-cn/shared";
 
 // Read local version
 function readVersion() {

@@ -158,19 +158,10 @@ async function createTarGzFromFiles(name, files, extension = ".tar.gz") {
     await fs.writeFile(targetPath, content, "utf8");
   }
 
-  const shell = spawn("tar", ["-czf", archivePath, "-C", sourceDir, "."]);
-  await waitProcess(shell);
+  // Use tar npm package instead of system tar (Windows compat)
+  const tar = await import("tar");
+  await tar.c({ gzip: true, file: archivePath, cwd: sourceDir }, ["."]);
   return archivePath;
-}
-
-function waitProcess(proc) {
-  return new Promise((resolve, reject) => {
-    proc.on("exit", (code) => {
-      if (code === 0) resolve();
-      else reject(new Error(`process exited with code ${code}`));
-    });
-    proc.on("error", reject);
-  });
 }
 
 async function postZip(endpoint, zipPath, fields = {}, extraHeaders = {}) {

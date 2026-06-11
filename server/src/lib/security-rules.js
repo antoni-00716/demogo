@@ -53,5 +53,12 @@ export const blockedExtensions = new Set([
   ".sh",
   ".bat",
   ".cmd",
-  ".ps1"
+  ".ps1",
+  ".py",
+  ".jar",
+  ".rb",
+  ".php",
+  ".vbs",
+  ".jsp",
+  ".war"
 ]);

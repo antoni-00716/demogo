@@ -13,6 +13,8 @@ export function calculateQuota(user, allDemos, _isExpired) {
     return count + getDeployEvents(demo).filter((event) => new Date(event.at) >= monthStart).length;
   }, 0);
 
+  const storageBytes = userDemos.reduce((sum, d) => sum + (d.storageBytes || 0), 0);
+
   return {
     plan,
     onlineDemos: {
@@ -22,6 +24,12 @@ export function calculateQuota(user, allDemos, _isExpired) {
     monthlyDeploys: {
       used: monthlyDeploys,
       limit: plan.monthlyDeployLimit
+    },
+    storage: {
+      usedBytes: storageBytes,
+      usedMB: Math.round(storageBytes / (1024 * 1024) * 10) / 10,
+      limitMB: plan.maxStorageMB || 200,
+      limitBytes: (plan.maxStorageMB || 200) * 1024 * 1024
     },
     retentionDays: plan.demoRetentionDays
   };

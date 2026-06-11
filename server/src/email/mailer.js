@@ -23,7 +23,9 @@ export async function sendVerificationEmail(to, code, { sendSmtpMail }) {
 }
 
 export function createSmtpMailer(config) {
-  async function sendSmtpMail({ to, subject, text, html }) {
+  const MAX_RETRIES = 3;
+
+  async function sendSmtpMailWithRetry({ to, subject, text, html }, attempt = 1) {
     let socket = config.smtpSecure
       ? tls.connect({ host: config.smtpHost, port: config.smtpPort, servername: config.smtpHost })
       : net.connect({ host: config.smtpHost, port: config.smtpPort });
@@ -119,9 +121,16 @@ export function createSmtpMailer(config) {
       cleanup();
     } catch (error) {
       cleanup();
+      if (attempt < MAX_RETRIES) {
+        const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
+        await new Promise((r) => setTimeout(r, delay));
+        return sendSmtpMailWithRetry({ to, subject, text, html }, attempt + 1);
+      }
       throw error;
     }
   }
+
+  const sendSmtpMail = (opts) => sendSmtpMailWithRetry(opts, 1);
 
   return { sendSmtpMail };
 }

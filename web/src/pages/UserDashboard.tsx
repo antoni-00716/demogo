@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useReducer, useState, type DragEvent, type FormEvent } from "react";
+import { useCallback, useEffect, useReducer, useState } from "react";
 import { useAppStore } from "../stores/appStore";
 import { deployReducer, createInitialDeployState } from "./dashboard/deployReducer";
 import { getAgentToken, getMe, logout, resetAgentToken } from "../api/auth";
@@ -34,22 +34,17 @@ import { trackTrialEvent } from "../api/trialEvents";
 import { createShareText, writeClipboardText } from "../utils/share";
 import type { Inspection } from "../api/demos";
 import { ApiError } from "../api/client";
-import { createAgentInstruction, createClientDeploymentSteps, createFailureInspection, createGenericFixPrompt, isSupportedArchive, markClientStepsFailed, waitForDeploymentJob } from "./dashboard/utils";
-import { DeploymentSteps } from "../components/dashboard/DashPanels";
+import { createClientDeploymentSteps, createFailureInspection, markClientStepsFailed, waitForDeploymentJob } from "./dashboard/utils";
 import { FeedbackPanel } from "../components/dashboard/FeedbackPanel";
 import { Sidebar } from "./dashboard/Sidebar";
 import { OverviewView } from "./dashboard/OverviewView";
 import { AgentPublishPanel } from "./dashboard/AgentPublishPanel";
+import { UploadPanel } from "./dashboard/UploadPanel";
 import { ProjectsView } from "./dashboard/ProjectsView";
-import { HostingArchitecturePanel } from "./dashboard/HostingArchitecturePanel";
 
-import { FailureDiagnosisPanel } from "../components/dashboard/FailureDiagnosisPanel";
 import { PlanRequestsTable } from "../components/dashboard/PlanRequestsTable";
 import { DeployHistory } from "../components/dashboard/DeployHistory";
 
-import { PublishSuccess } from "../components/dashboard/PublishSuccess";
-import { ProjectProfilePanel } from "../components/dashboard/ProjectProfilePanel";
-import { ProjectAssessmentPanel } from "../components/dashboard/ProjectAssessmentPanel";
 export function UserDashboard() {
   const [activeView, setActiveView] = useState<DashboardView>(() => resolveInitialDashboardView());
   const user = useAppStore((s) => s.user);
@@ -197,9 +192,16 @@ export function UserDashboard() {
   }
 
   async function loadPlanRequests() {
-    const payload = await getPlanRequests();
-    setRequests(payload.requests || []);
-  }
+      const [payload, mePayload] = await Promise.all([
+        getPlanRequests(),
+        getMe()
+      ]);
+      setRequests(payload.requests || []);
+      if (mePayload.user) {
+        setUser(mePayload.user);
+        setQuota(mePayload.quota || null);
+      }
+    }
 
   async function loadSubdomainRequests() {
     const payload = await getSubdomainRequests();
@@ -248,6 +250,13 @@ export function UserDashboard() {
     if (!options.keepUpdateTarget) deployDispatch({ type: "RESET" });
   }
 
+  async function handleSelectDemoFromOverview(id: string) {
+    setSelectedDemoId(id);
+    await loadDemoDetail(id);
+    setProjectDetailOpen(true);
+    setActiveView("projects");
+  }
+
   function startCreateProject() {
     resetUploadState();
     setProjectDetailOpen(false);
@@ -281,77 +290,72 @@ export function UserDashboard() {
     setActiveView(view);
   }
 
-  async function handleInspect() {
+  /** Merged inspect + deploy — single button flow */
+  async function handlePublish() {
     if (!deployState.file) {
       show("请先选择 .zip、.tar.gz 或 .tgz 项目包。", "warning");
       return;
     }
     try {
-      show("正在检测项目结构，请稍等。");
-      const payload = await inspectProject(deployState.file);
-      deployDispatch({ type: "SET_INSPECTION", inspection: payload.inspection });
-      show(
-        payload.inspection?.canPublish ? "项目检测和内容检查完成，当前版本可以生成试用链接。" : "这个项目当前暂不能生成试用链接，请按提示调整。",
-        payload.inspection?.canPublish ? "success" : "warning"
-      );
-    } catch (error) {
-      const payload = error instanceof ApiError ? error.payload as { inspection?: Inspection } | null : null;
-      if (payload?.inspection) deployDispatch({ type: "SET_INSPECTION", inspection: payload.inspection });
-      show(error instanceof Error ? error.message : "项目检测失败。", "danger");
-    }
-  }
-
-  async function handleDeploy(event: FormEvent) {
-    event.preventDefault();
-    if (!deployState.file) {
-      show("请先选择 .zip、.tar.gz 或 .tgz 项目包。", "warning");
-      return;
-    }
-    try {
+      /* Phase 1: Inspect */
       deployDispatch({ type: "SET_DEPLOYING", deploying: true });
-      deployDispatch({ type: "SET_STEPS", steps: createClientDeploymentSteps() });
+      deployDispatch({ type: "SET_STEPS", steps: [] });
       deployDispatch({ type: "SET_LATEST_DEMO", demo: null });
-      show(deployState.updateTarget ? "已开始更新，DemoGo 会持续显示处理进度。" : "已开始生成链接，DemoGo 会持续显示处理进度。");
+      show("正在检查项目...");
+
+      const inspectionPayload = await inspectProject(deployState.file);
+      deployDispatch({ type: "SET_INSPECTION", inspection: inspectionPayload.inspection });
+
+      if (!inspectionPayload.inspection?.canPublish) {
+        deployDispatch({ type: "SET_DEPLOYING", deploying: false });
+        deployDispatch({ type: "SET_STEPS", steps: [] });
+        show(inspectionPayload.inspection?.userSummary || inspectionPayload.inspection?.summary || "项目检查不通过，请按提示调整后重试。", "warning");
+        return;
+      }
+
+      /* Phase 2: Deploy */
+      show("检查通过，正在部署...");
+      deployDispatch({ type: "SET_STEPS", steps: createClientDeploymentSteps() });
+
       const started = deployState.updateTarget
         ? await createUpdateDeploymentJob(deployState.updateTarget.id, deployState.file)
         : await createDeploymentJob(deployState.file, { name: deployState.name });
+
       deployDispatch({ type: "SET_STEPS", steps: started.job.steps || createClientDeploymentSteps() });
+
       const completedJob = await waitForDeploymentJob(started.job.id, (job) => {
         if (job.steps?.length) deployDispatch({ type: "SET_STEPS", steps: job.steps });
         if (job.inspection) deployDispatch({ type: "SET_INSPECTION", inspection: job.inspection });
       });
+
       if (completedJob.status === "failed") {
-        const message = completedJob.error?.message || completedJob.message || "生成失败，请根据提示调整后重试。";
-        const diagnosis = completedJob.diagnosis || completedJob.error?.diagnosis || null;
-        deployDispatch({ type: "SET_INSPECTION", inspection: completedJob.inspection || createFailureInspection(message, completedJob.error?.statusCode, diagnosis) });
-        const failure = new Error(message);
-        (failure as Error & { job?: DeploymentJob }).job = completedJob;
-        throw failure;
+        const message = completedJob.error?.message || completedJob.message || "发布失败，请根据提示调整后重试。";
+        deployDispatch({ type: "SET_INSPECTION", inspection: completedJob.inspection || createFailureInspection(message, completedJob.error?.statusCode, completedJob.diagnosis || completedJob.error?.diagnosis || null) });
+        throw new Error(message);
       }
+
       const payload = completedJob.result;
-      if (!payload) throw new Error("生成任务已完成，但没有返回试用链接，请刷新后查看项目列表。");
+      if (!payload) throw new Error("发布完成但没有返回链接，请刷新后查看项目列表。");
       if (payload.inspection) deployDispatch({ type: "SET_INSPECTION", inspection: payload.inspection });
       deployDispatch({ type: "SET_STEPS", steps: completedJob.steps || payload.deploymentEvents || createClientDeploymentSteps("success") });
       deployDispatch({ type: "SET_LATEST_DEMO", demo: payload });
-      show(deployState.updateTarget ? "试用项目已更新。" : "试用链接已生成。", "success");
-      deployDispatch({ type: "SET_FILE", file: null });
-      deployDispatch({ type: "SET_NAME", name: "" });
-      deployDispatch({ type: "RESET" });
+      show(deployState.updateTarget ? "项目已更新。" : "发布成功！", "success");
       await refreshDemos(payload.id);
     } catch (error) {
-      const payload = error instanceof ApiError ? error.payload as { inspection?: Inspection; deploymentEvents?: DeploymentStep[] } | null : null;
-      if (payload?.inspection) deployDispatch({ type: "SET_INSPECTION", inspection: payload.inspection });
-      if (payload?.deploymentEvents?.length) deployDispatch({ type: "SET_STEPS", steps: payload.deploymentEvents });
+      const pl = error instanceof ApiError ? error.payload as { inspection?: Inspection; deploymentEvents?: DeploymentStep[] } | null : null;
+      if (pl?.inspection) deployDispatch({ type: "SET_INSPECTION", inspection: pl.inspection });
+      if (pl?.deploymentEvents?.length) deployDispatch({ type: "SET_STEPS", steps: pl.deploymentEvents });
       const job = (error as Error & { job?: DeploymentJob })?.job;
       if (job?.inspection) deployDispatch({ type: "SET_INSPECTION", inspection: job.inspection });
-      else if (job?.error?.message) deployDispatch({ type: "SET_INSPECTION", inspection: createFailureInspection(job.error.message, job.error.statusCode, job.diagnosis || job.error.diagnosis || null) });
       if (job?.steps?.length) deployDispatch({ type: "SET_STEPS", steps: job.steps });
       else deployDispatch({ type: "SET_STEPS", steps: [] });
-      show(error instanceof Error ? error.message : "生成失败，请根据提示调整后重试。", "danger");
+      show(error instanceof Error ? error.message : "发布失败，请根据提示调整后重试。", "danger");
     } finally {
       deployDispatch({ type: "SET_DEPLOYING", deploying: false });
     }
   }
+
+
 
   async function handleDemoAction(action: "offline" | "restore" | "delete", demo: Demo) {
     const labels = { offline: "下线", restore: "恢复上线", delete: "删除" };
@@ -448,18 +452,6 @@ export function UserDashboard() {
     }
   }
 
-  async function handleCopyAgentInstruction() {
-    const instruction = createAgentInstruction(agentToken);
-    if (!instruction) {
-      show("请先生成一次 AI 发布口令。生成后可长期复用，不需要每次重置。", "warning");
-      return;
-    }
-    if (await writeClipboardText(instruction)) {
-      show("给 AI 工具的生成链接指令已复制。", "success");
-    } else {
-      show("当前浏览器限制了一键复制，请手动复制给 AI 工具的指令。", "warning");
-    }
-  }
 
   async function handleCreateForm(demo: Demo, fields: HostedForm["fields"] = []) {
     try {
@@ -515,7 +507,6 @@ export function UserDashboard() {
             <p>{dashboardViewSubtitle(activeView, user)}</p>
           </div>
           <div className="nav-actions">
-            <Button variant="primary" onClick={startCreateProject}>生成新链接</Button>
             <Button onClick={handleLogout}>退出</Button>
           </div>
         </div>
@@ -525,13 +516,12 @@ export function UserDashboard() {
             user={user}
             demos={demos}
             quota={quota}
-            requests={requests}
-            events={events}
             monthUsage={monthUsage}
             setActiveView={setActiveView}
             onCreate={startCreateProject}
             onCopyLink={handleCopyLink}
             onCopyShare={handleCopyShare}
+            onSelectDemo={handleSelectDemoFromOverview}
           />
         ) : null}
         {activeView === "projects" ? (
@@ -565,6 +555,7 @@ export function UserDashboard() {
             onUpdateSlug={handleUpdateDemoSlug}
             onCreateSubdomainRequest={handleCreateSubdomainRequest}
             subdomainRequests={subdomainRequests}
+            setActiveView={setActiveView}
           />
         ) : null}
         {activeView === "upload" ? (
@@ -579,8 +570,7 @@ export function UserDashboard() {
             steps={deployState.steps}
             latestDemo={deployState.latestDemo}
             deploying={deployState.deploying}
-            onInspect={handleInspect}
-            onSubmit={handleDeploy}
+            onPublish={handlePublish}
             onCopyShare={handleCopyShare}
             onFileRejected={(name) => show(`${name} 格式不支持，请上传 .zip、.tar.gz 或 .tgz 项目包。`, "warning")}
             onCopyLink={handleCopyLink}
@@ -590,8 +580,6 @@ export function UserDashboard() {
           <AgentPublishPanel
             token={agentToken}
             onResetToken={handleResetAgentToken}
-            onCopyInstruction={handleCopyAgentInstruction}
-            onCopyText={handleCopyText}
           />
         ) : null}
         {activeView === "plan" ? (
@@ -626,7 +614,7 @@ function resolveInitialDashboardView(): DashboardView {
 }
 
 function dashboardViewTitle(view: DashboardView) {
-  if (view === "agent") return "让 AI 帮我";
+  if (view === "agent") return "AI 发布";
   const titles: Record<Exclude<DashboardView, "agent">, string> = {
     overview: "工作台",
     upload: "生成新链接",
@@ -639,11 +627,11 @@ function dashboardViewTitle(view: DashboardView) {
 }
 
 function dashboardViewSubtitle(view: DashboardView, user: User) {
-  if (view === "agent") return "复制一句话给 Codex、Cursor 或其他 AI 工具，让它们帮你生成试用链接。";
+  if (view === "agent") return "选择发布方式，生成指令，复制给 AI 工具即可发布";
   if (view === "overview") return `${user.email} · 当前套餐 ${user.planName || planName(user.plan)}`;
   if (view === "projects") return "查看链接、访问、报名/留言、发布记录和项目操作。";
   if (view === "upload") return "上传项目包，DemoGo 先检查，再生成可分享的试用链接。";
-  if (view === "plan") return "查看额度使用情况，申请 Lite 或 Pro。";
+  if (view === "plan") return "查看额度使用情况，申请升级套餐。客服QQ：304598006 · 邮箱：hello@demogo.cn";
   if (view === "history") return "查看本月生成和更新记录，理解额度使用情况。";
   return "提交真实试用中遇到的问题，方便后续优化。";
 }
@@ -698,163 +686,6 @@ function Overview({
   );
 }
 
-function UploadPanel(props: {
-  file: File | null;
-  setFile: (file: File | null) => void;
-  name: string;
-  setDemoName: (value: string) => void;
-  updateTarget: Demo | null;
-  onCancelUpdate: () => void;
-  inspection: Inspection | null;
-  steps: DeploymentStep[];
-  latestDemo: Demo | null;
-  deploying: boolean;
-  onInspect: () => void;
-  onSubmit: (event: FormEvent) => void;
-  onCopyShare: (demo: Demo) => void;
-  onCopyLink: (url?: string) => void;
-  onFileRejected: (name: string) => void;
-}) {
-  function handleFile(file: File | null) {
-    if (!file) {
-      props.setFile(null);
-      return;
-    }
-    if (!isSupportedArchive(file.name)) {
-      props.setFile(null);
-      props.onFileRejected(file.name);
-      return;
-    }
-    props.setFile(file);
-  }
-
-  function handleDrop(event: DragEvent<HTMLLabelElement>) {
-    event.preventDefault();
-    handleFile(event.dataTransfer.files?.[0] || null);
-  }
-
-  return (
-    <Card className="panel" id="upload">
-      <div className="panel-head">
-        <div>
-          <h2>{props.updateTarget ? `更新 ${props.updateTarget.name || props.updateTarget.slug}` : "生成试用链接"}</h2>
-          <p>上传后先检查，再生成链接。首次链接由系统随机分配；Lite 和 Pro 用户可以在项目详情里修改链接。</p>
-        </div>
-        {props.updateTarget ? <Button onClick={props.onCancelUpdate}>取消更新</Button> : null}
-      </div>
-      <form className="upload-form" onSubmit={props.onSubmit}>
-        {!props.updateTarget ? (
-          <label className="form-field">
-            项目名称
-            <input className="input" value={props.name} onChange={(event) => props.setDemoName(event.target.value)} placeholder="可留空，DemoGo 会自动识别页面标题" />
-          </label>
-        ) : null}
-        <label className="drop-zone" onDragOver={(event) => event.preventDefault()} onDrop={handleDrop}>
-          <input type="file" accept=".zip,.tar.gz,.tgz,application/zip,application/gzip" onChange={(event) => handleFile(event.target.files?.[0] || null)} />
-          <strong>{props.file ? props.file.name : "拖拽 ZIP / TAR.GZ 项目包到这里上传"}</strong>
-          <span>或点击选择文件 · 支持 .zip、.tar.gz、.tgz · 最大 50MB</span>
-        </label>
-        <div className="upload-helper-grid">
-          <div>
-            <strong>静态网页</strong>
-            <span>HTML、H5、活动页、报名页、作品集，以及已经生成好的 dist/build/out 目录。</span>
-          </div>
-          <div>
-            <strong>前端源码</strong>
-            <span>React、Vue、Vite 等能生成网页产物的项目，会先构建再生成试用链接。</span>
-          </div>
-          <div>
-            <strong>Node 单服务</strong>
-            <span>支持 Express、Koa、Fastify 等单服务试用；MySQL 项目可分配空试用库，暂不支持多服务、Redis、WebSocket 和 SSR。</span>
-          </div>
-        </div>
-        <div className="row-actions">
-          <Button onClick={props.onInspect} disabled={!props.file || props.deploying}>检查项目</Button>
-          <Button variant="primary" type="submit" disabled={!props.file || props.deploying}>{props.updateTarget ? "开始更新" : "生成试用链接"}</Button>
-        </div>
-      </form>
-      {props.steps.length ? <DeploymentSteps steps={props.steps} /> : null}
-      {props.latestDemo ? <PublishSuccess demo={props.latestDemo} onCopyShare={props.onCopyShare} onCopyLink={props.onCopyLink} /> : null}
-      {props.inspection ? <InspectionPanel inspection={props.inspection} /> : null}
-    </Card>
-  );
-}
-
-function InspectionPanel({ inspection }: { inspection: Inspection }) {
-  const fields = inspection.formFields || [];
-  const apis = inspection.apiCalls || [];
-  const supportNotes = inspection.supportNotes || [];
-  const unsupportedNotes = inspection.unsupportedNotes || [];
-  const contentReview = inspection.contentReview;
-  const fixPrompt = inspection.fixPrompt || inspection.ruleReport?.fixPrompt || inspection.ruleReport?.aiPrompt || "";
-  return (
-    <div className={`inspection-box ${inspection.canPublish ? "can-publish" : "blocked"}`}>
-      <div className="inspection-title-row">
-        <h3>{inspection.userLabel || inspection.label || (inspection.canPublish ? "可以生成试用链接" : "暂时无法生成试用链接")}</h3>
-        <Badge tone={inspection.canPublish ? "success" : "warning"}>{inspection.userStatusLabel || (inspection.canPublish ? "支持" : "暂不支持")}</Badge>
-      </div>
-      <p>{inspection.userSummary || inspection.summary || "项目检测完成。"}</p>
-      {inspection.projectProfile ? <ProjectProfilePanel profile={inspection.projectProfile} /> : null}
-      {inspection.projectAssessment ? <ProjectAssessmentPanel assessment={inspection.projectAssessment} /> : null}
-      {inspection.failureDiagnosis ? <FailureDiagnosisPanel diagnosis={inspection.failureDiagnosis} /> : null}
-      <HostingArchitecturePanel hosting={inspection.hosting} architecture={inspection.projectArchitecture} runtime={inspection.runtime} compact />
-      {contentReview ? (
-        <div className={`content-review-note review-${contentReview.status || "unknown"}`}>
-          <strong>发布前内容检查：{contentReview.statusLabel || "已检查"}</strong>
-          <span>{contentReview.summary || "DemoGo 会在生成链接前检查页面内容。正常报名、预约、咨询和获客留资可以发布；违法违规、诈骗、赌博、色情和高敏信息收集会被拦截。"}</span>
-          {contentReview.nextStep ? <span>{contentReview.nextStep}</span> : null}
-          {contentReview.findings?.length ? (
-            <ul>
-              {contentReview.findings.slice(0, 3).map((finding) => (
-                <li key={finding.id || `${finding.category}-${finding.sourceFile}`}>
-                  {finding.category}{finding.sourceFile ? ` · ${finding.sourceFile}` : ""}
-                </li>
-              ))}
-            </ul>
-          ) : null}
-        </div>
-      ) : null}
-      {(supportNotes.length || unsupportedNotes.length) ? (
-        <div className="inspection-note-grid">
-          {supportNotes.length ? (
-            <div>
-              <strong>当前支持</strong>
-              <ul>{supportNotes.map((item) => <li key={item}>{item}</li>)}</ul>
-            </div>
-          ) : null}
-          {unsupportedNotes.length ? (
-            <div>
-              <strong>暂不支持</strong>
-              <ul>{unsupportedNotes.map((item) => <li key={item}>{item}</li>)}</ul>
-            </div>
-          ) : null}
-        </div>
-      ) : null}
-      <div className="inspection-grid">
-        <span>页面入口：{inspection.entryFile || "待生成"}</span>
-        <span>项目类型：{inspection.projectProfile?.summary || inspection.projectCategory || inspection.userLabel || inspection.label || "-"}</span>
-        <span>表单：{fields.length ? `发现 ${fields.length} 个字段` : "未发现"}</span>
-        <span>数据提交：{apis.filter((item) => item.isLocal).length ? "需要后续接入" : "未发现额外接口"}</span>
-      </div>
-      {inspection.ruleReport?.risks?.length ? (
-        <ul>
-          {inspection.ruleReport.risks.map((risk) => <li key={risk}>{risk}</li>)}
-        </ul>
-      ) : null}
-      {fixPrompt ? (
-        <div className="fix-prompt-box">
-          <strong>给 AI 编程工具的修改说明</strong>
-          <p>{fixPrompt}</p>
-        </div>
-      ) : !inspection.canPublish ? (
-        <div className="fix-prompt-box">
-          <strong>建议复制给 AI 的说明</strong>
-          <p>{createGenericFixPrompt(inspection)}</p>
-        </div>
-      ) : null}
-    </div>
-  );
-}
 
 function PlanPanel({
   user,
@@ -899,11 +730,15 @@ function PlanPanel({
       <div className="panel-head">
         <div>
           <h2>套餐与额度</h2>
-          <p>当前套餐：{user.planName || planName(user.plan)}。套餐名称统一为 Free、Lite、Pro。</p>
+          <p>当前套餐：{user.planName || planName(user.plan)}。如需升级，提交申请后等待管理员开通。</p>
         </div>
         <Badge tone="info">人工审核开通</Badge>
       </div>
-      <div className="plan-options">
+      <div className="plan-pricing-note">
+          <strong>?? Lite / Pro 套餐正在内测中</strong>
+          <span>升级费用请咨询客服：QQ <strong>304598006</strong> · 邮箱 <strong>hello@demogo.cn</strong>，客服会协助你完成开通和付费。</span>
+        </div>
+        <div className="plan-options">
         {plans.map((plan) => (
           <button
             className={`plan-option ${plan.code === user.plan ? "is-current" : ""} ${plan.code === effectiveTargetPlan ? "is-selected" : ""}`}
@@ -944,4 +779,9 @@ function PlanPanel({
     </Card>
   );
 }
+
+
+
+
+
 

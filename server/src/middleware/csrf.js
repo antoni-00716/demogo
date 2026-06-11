@@ -30,7 +30,7 @@ export function csrfMiddleware(req, res, next) {
     res.cookie(CSRF_COOKIE, token, {
       httpOnly: false,
       sameSite: "strict",
-      secure: String(process.env.PUBLIC_BASE_URL || "").startsWith("https://"),
+      secure: req.secure || req.headers["x-forwarded-proto"] === "https",
       maxAge: 24 * 60 * 60 * 1000,
       path: "/"
     });

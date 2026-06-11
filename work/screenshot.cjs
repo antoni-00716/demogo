@@ -1,0 +1,10 @@
+﻿const { chromium } = require("playwright");
+(async () => {
+  const browser = await chromium.launch();
+  const page = await browser.newPage();
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("https://demogo.cn", { waitUntil: "networkidle" });
+  await page.screenshot({ path: "C:/Users/wei.gu/Documents/demogo/work/homepage-v5.png", fullPage: true });
+  await browser.close();
+  console.log("OK");
+})();

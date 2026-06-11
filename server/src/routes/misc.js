@@ -7,20 +7,13 @@ import { readJson, writeJson } from "../lib/data-access.js";
 import { calculateFormQuota, sanitizeSubmissionPayload, publicFormSubmission } from "../services/form-service.js";
 import { getClientIp } from "../lib/request-utils.js";
 import { slugify } from "../lib/project-utils.js";
+import { exists } from "../lib/utils.js";
 
 const formsFile = pathJoin(dataDir, "forms.json");
 const formSubmissionsFile = pathJoin(dataDir, "form-submissions.json");
 const usersFile = pathJoin(dataDir, "users.json");
 
-async function exists(filePath) {
-  try { await fs.access(filePath); return true; } catch { return false; }
-}
-
 export function registerMiscRoutes(app, {
-  routeRuntimeDemo,
-  securityHeadersMiddleware,
-  createStrictRateLimiter,
-  createRateLimiter,
   express,
   normalizeTrialEventType,
   getUserFromRequest,
@@ -43,10 +36,6 @@ export function registerMiscRoutes(app, {
     next();
   });
 
-  app.use("/d/:slug", routeRuntimeDemo);
-  app.use(securityHeadersMiddleware);
-  app.use("/api/auth/login", createStrictRateLimiter({ maxRequests: parseInt(process.env.DEMOGO_LOGIN_RATE_LIMIT || "10") }).middleware);
-  app.use("/api", createRateLimiter({ maxRequests: parseInt(process.env.DEMOGO_API_RATE_LIMIT || "60") }).middleware);
   app.use("/d", express.static(demoRoot));
 
   // POST /api/trial-events

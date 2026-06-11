@@ -11,13 +11,13 @@ import { writeAuditLog } from "../lib/audit-log.js";
 import { calculateQuota } from "./quota-service.js";
 import {
   dataDir, demoRoot, publicBaseUrl,
-  buildTimeoutMs, dockerImage, dockerMemory, dockerCpus
+  buildTimeoutMs, dockerImage, dockerMemory, dockerCpus, maxZipSizeMb
 } from "../config.js";
 import logger from "../lib/logger.js";
+import { exists } from "../lib/utils.js";
 
 const demosFile = path.join(dataDir, "demos.json");
 
-async function exists(p) { try { await fs.access(p); return true; } catch { return false; } }
 async function commandAvailable(cmd) {
   try { await runCommand(cmd, ["--version"], "/tmp", 5000); return true; } catch { return false; }
 }
@@ -56,7 +56,13 @@ export async function executeDeployment({
     // Quota check
     const quota = calculateQuota(user, existingDemos);
     if (quota.onlineDemos.used >= quota.onlineDemos.limit) {
-      const err = new Error("Current plan demo limit reached");
+      const err = new Error("当前套餐的在线试用项目数已达上限");
+      err.statusCode = 403;
+      throw err;
+    }
+    // Check storage quota (approx: maxZipSizeMb * 3 as rough estimate of extracted size)
+    if (quota.storage.usedBytes + maxZipSizeMb * 3 * 1024 * 1024 > quota.storage.limitBytes) {
+      const err = new Error(`存储空间不足。当前已使用 ${quota.storage.usedMB}MB，套餐上限 ${quota.storage.limitMB}MB。请删除旧的试用项目后重试。`);
       err.statusCode = 403;
       throw err;
     }
@@ -119,8 +125,11 @@ export async function executeDeployment({
     const hasHtml = await exists(path.join(targetDir, "index.html"));
     let hostingMode = hasHtml ? "static" : "unknown";
 
+    // Re-check package.json — it may have been removed by promoteDirectory during build
+    const finalHasPackageJson = await exists(path.join(targetDir, "package.json"));
+
     // Detect Node.js runtime capability
-    if (hasPackageJson) {
+    if (finalHasPackageJson) {
       const pkgRaw = await fs.readFile(path.join(targetDir, "package.json"), "utf8");
       const pkg = JSON.parse(pkgRaw.replace(/^\uFEFF/, ""));
       if (pkg.scripts && (pkg.scripts.start || pkg.scripts.dev)) {
@@ -132,6 +141,9 @@ export async function executeDeployment({
     const publicUrl = publicBaseUrl.replace(/\/$/, "") + "/d/" + slug + "/";
     const demoId = crypto.randomUUID();
     const now = new Date().toISOString();
+
+    // Calculate extracted storage size for quota tracking
+    const storageBytes = await calculateDirectorySize(targetDir);
 
     // Create demo record
     const demo = {
@@ -152,6 +164,7 @@ export async function executeDeployment({
       deployEvents: [{ type: "create", at: now, status: "success" }],
       expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
       buildLog,
+      storageBytes,
     };
 
     const demos = await readJson(demosFile, []);
@@ -342,4 +355,24 @@ async function extractZip(filePath, targetDir) {
   const AdmZip = (await import("adm-zip")).default;
   const zip = new AdmZip(filePath);
   zip.extractAllTo(targetDir, true);
+}
+
+/** Recursively calculate total byte size of all files in a directory */
+async function calculateDirectorySize(dir) {
+  let total = 0;
+  try {
+    const entries = await fs.readdir(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        total += await calculateDirectorySize(fullPath);
+      } else {
+        const stat = await fs.stat(fullPath);
+        total += stat.size;
+      }
+    }
+  } catch {
+    // Directory may not exist yet or was cleaned up
+  }
+  return total;
 }

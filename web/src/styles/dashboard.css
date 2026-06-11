@@ -1,4 +1,4 @@
-﻿/* ═══════════════════════════════════════════════════════════
+/* ═══════════════════════════════════════════════════════════
    DemoGo 工作台样式 v2 — 第一轮打磨
    面向非技术创作者的友好工作区 + 微动效
    ═══════════════════════════════════════════════════════════ */
@@ -456,7 +456,29 @@
   font-weight: var(--weight-medium);
 }
 
-/* ====== Upgrade form (升级表单) ====== */
+/* ====== Pricing note (套餐咨询提示) ====== */
+  .plan-pricing-note {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-1);
+    padding: var(--sp-4);
+    margin-bottom: var(--sp-4);
+    border: 1px solid var(--amber-400);
+    border-radius: var(--r-lg);
+    background: var(--amber-50);
+    font-size: var(--text-sm);
+    color: var(--amber-700);
+  }
+  .plan-pricing-note strong {
+    font-size: var(--text-sm);
+    font-weight: var(--weight-semibold);
+  }
+  .plan-pricing-note span {
+    color: var(--amber-700);
+    line-height: var(--leading-relaxed);
+  }
+
+  /* ====== Upgrade form (升级表单) ====== */
 .upgrade-form {
   display: grid;
   gap: var(--sp-4);

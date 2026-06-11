@@ -1,0 +1,19 @@
+
+=== server/src\lib\inspection-builder.js ===
+  L212: 留言反馈页面
+
+=== server/src\server.js ===
+  L2643: 这个 Node.js 单服务项目已创建试用运行环境，可以通过试用链接访问页面和接口。
+
+=== server/src\services\content-review-service.js ===
+  L38: 诈骗或高风险金融引导
+  L43: 请删除刷单返利、保本收益、贷款套现、征信修复等高风险宣传内容。
+  L127: 请确认外部链接真实可信，避免跳转到不明下载、支付、私聊或高风险页面。
+  L226: 这个页面包含不适合公开分享的高风险内容，请根据提示修改后重新上传。
+  L333: 请删除或改写高风险内容后重新上传。
+  L391: 高风险内容
+  L563: 高风险内容
+  L649: 这个页面包含不适合公开分享的高风险内容，请先修改后再重新上传。
+
+=== server/src\services\failure-diagnosis-service.js ===
+  L327: 留言反馈页面
