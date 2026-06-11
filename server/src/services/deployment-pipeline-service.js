@@ -102,8 +102,9 @@ import {
   publicRuntimeEnv,
 } from "../lib/admin-helpers.js";
 import { exists } from "../lib/utils.js";
-import { isSlugClaimedByDemo, canUseCustomDomain, isExpired, getArchivedDemoDir } from "../lib/slug-utils.js";
-import { copyDemoArchive } from "../lib/file-utils.js";
+import { isSlugClaimedByDemo, canUseCustomDomain, isExpired, getArchivedDemoDir, demoSlug } from "../lib/slug-utils.js";
+import { copyDemoArchive, removePath } from "../lib/file-utils.js";
+import { purgeCache } from "../lib/cdn.js";
 
 export function createDeploymentPipelineService(deps) {
   const {
@@ -114,19 +115,11 @@ export function createDeploymentPipelineService(deps) {
     writeAuditLog, writeTrialEvent, summarizeResponseLimits,
   } = deps;
 
-  // File handlers injected lazily to break circular dependency with lifecycle service
-  let expireDemoFiles = deps.expireDemoFiles || (() => { throw new Error("expireDemoFiles not yet injected"); });
-  // copyDemoArchive is now imported directly from lib/file-utils.js
-
   // Build functions injected lazily to break circular dependency with build service
   let detectBuildAndNormalizeOutput = () => { throw new Error("detectBuildAndNormalizeOutput not yet injected"); };
   let summarizePublishedDirectory = () => { throw new Error("summarizePublishedDirectory not yet injected"); };
   let injectTrackingScript = () => { throw new Error("injectTrackingScript not yet injected"); };
   let ensureAutoHostedForm = () => { throw new Error("ensureAutoHostedForm not yet injected"); };
-
-  function setFileHandlers(handlers) {
-    if (handlers.expireDemoFiles) expireDemoFiles = handlers.expireDemoFiles;
-  }
 
   function setBuildFunctions(fns) {
     if (fns.detectBuildAndNormalizeOutput) detectBuildAndNormalizeOutput = fns.detectBuildAndNormalizeOutput;
@@ -178,6 +171,45 @@ function hostingConfig() {
 
 function hostingCapabilities() {
   return createHostingCapabilities(hostingConfig());
+}
+
+// ---- Demo file lifecycle ----
+
+async function removeDemoFiles(value) {
+  const slug = demoSlug(value);
+  if (!slug) return;
+  await stopRuntime(slug);
+  const liveDir = path.join(demoRoot, slug);
+  const archiveDir = getArchivedDemoDir(slug);
+  await removePath(archiveDir);
+  if (await exists(liveDir)) {
+    await fs.mkdir(path.dirname(archiveDir), { recursive: true });
+    await copyDemoArchive(liveDir, archiveDir);
+    await removePath(liveDir);
+  }
+}
+
+async function expireDemoFiles(value) {
+  const slug = demoSlug(value);
+  if (!slug) return;
+  await stopRuntime(slug);
+  purgeCache(slug).catch(() => {});
+  await removePath(path.join(demoRoot, slug));
+  await removePath(getArchivedDemoDir(slug));
+  if (typeof value === "object") {
+    await deleteDemoDatabase(value.database, hostingConfig()).catch(() => null);
+  }
+}
+
+async function deleteDemoFiles(value) {
+  const slug = demoSlug(value);
+  if (!slug) return;
+  await stopRuntime(slug);
+  await removePath(path.join(demoRoot, slug));
+  await removePath(getArchivedDemoDir(slug));
+  if (typeof value === "object") {
+    await deleteDemoDatabase(value.database, hostingConfig()).catch(() => null);
+  }
 }
 
 function isNodeRuntimeInspection(inspection = {}) {
@@ -1509,7 +1541,9 @@ async function performUpdateDeployment({ demoId, uploadedFile, user, clientIp = 
     extractRuntimeDemo,
     inferProjectDisplayName,
     createAvailableSlug,
-    setFileHandlers,
     setBuildFunctions,
+    removeDemoFiles,
+    expireDemoFiles,
+    deleteDemoFiles,
   };
 }

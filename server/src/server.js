@@ -162,6 +162,7 @@ import { apiVersionMiddleware } from "./middleware/api-version.js";
 import { createErrorHandler } from "./middleware/error-handler.js";
 import { createDeploymentJobService } from "./services/deployment-job-service.js";
 import { createBuildService } from "./services/build-service.js";
+import { createDeploymentPipelineService } from "./services/deployment-pipeline-service.js";
 
 import { registerAgentRoutes } from "./routes/agent.js";
 import { registerAuthRoutes } from "./routes/auth.js";
@@ -477,6 +478,16 @@ const { detectBuildAndNormalizeOutput, findPublishableOutput,
   injectTrackingScript, recordDemoVisit, flushUsageStats,
   formatBytes, stripBom
 } = buildService;
+
+// --- Pipeline service: file operations ---
+const pipelineService = createDeploymentPipelineService({
+  readJson, writeJson,
+  demosFile, demoRoot,
+  checkDeployRateLimit, calculateQuota,
+  startNodeRuntime, stopRuntime,
+  writeAuditLog, writeTrialEvent, summarizeResponseLimits,
+});
+const { removeDemoFiles, expireDemoFiles, deleteDemoFiles } = pipelineService;
 
 // --- Agent route module ---
 app.use(requestIdMiddleware);
@@ -1843,42 +1854,6 @@ async function restartDemoRuntime(demo) {
       error: error instanceof Error ? error.message : "运行环境启动失败。",
       diagnosis
     };
-  }
-}
-
-async function removeDemoFiles(value) {
-  const slug = demoSlug(value);
-  if (!slug) return;
-  await stopRuntime(slug);
-  const liveDir = path.join(demoRoot, slug);
-  const archiveDir = getArchivedDemoDir(slug);
-  await removePath(archiveDir);
-  if (await exists(liveDir)) {
-    await fs.mkdir(path.dirname(archiveDir), { recursive: true });
-    await copyDemoArchive(liveDir, archiveDir);
-    await removePath(liveDir);
-  }
-}
-
-async function expireDemoFiles(value) {
-  const slug = demoSlug(value);
-  if (!slug) return;
-  await stopRuntime(slug);
-  await removePath(path.join(demoRoot, slug));
-  await removePath(getArchivedDemoDir(slug));
-  if (typeof value === "object") {
-    await deleteDemoDatabase(value.database, hostingConfig()).catch(() => null);
-  }
-}
-
-async function deleteDemoFiles(value) {
-  const slug = demoSlug(value);
-  if (!slug) return;
-  await stopRuntime(slug);
-  await removePath(path.join(demoRoot, slug));
-  await removePath(getArchivedDemoDir(slug));
-  if (typeof value === "object") {
-    await deleteDemoDatabase(value.database, hostingConfig()).catch(() => null);
   }
 }
 

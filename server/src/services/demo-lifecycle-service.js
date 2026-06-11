@@ -1,14 +1,11 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import logger from "../lib/logger.js";
-import { purgeCache } from "../lib/cdn.js";
 import { putDirectory, deletePrefix, isMinioBackend } from "../lib/storage.js";
-import { startNodeRuntime, stopRuntime } from "./runtime-service.js";
+import { startNodeRuntime } from "./runtime-service.js";
 import { demoDatabaseBlockReason } from "./demo-database-service.js";
 import { exists } from "../lib/utils.js";
 import { getArchivedDemoDir } from "../lib/slug-utils.js";
-import { demoSlug } from "../lib/slug-utils.js";
-import { removePath, copyDemoArchive } from "../lib/file-utils.js";
 
 export function createDemoLifecycleService(deps) {
   const {
@@ -154,46 +151,6 @@ export function createDemoLifecycleService(deps) {
     }
   }
 
-  // ---- Demo file lifecycle ----
-
-  async function removeDemoFiles(value) {
-    const slug = demoSlug(value);
-    if (!slug) return;
-    await stopRuntime(slug);
-    const liveDir = path.join(demoRoot, slug);
-    const archiveDir = getArchivedDemoDir(slug);
-    await removePath(archiveDir);
-    if (await exists(liveDir)) {
-      await fs.mkdir(path.dirname(archiveDir), { recursive: true });
-      await copyDemoArchive(liveDir, archiveDir);
-      await removePath(liveDir);
-    }
-  }
-
-  async function expireDemoFiles(value) {
-    const slug = demoSlug(value);
-    if (!slug) return;
-    await stopRuntime(slug);
-    purgeCache(slug).catch(() => {});
-    deleteDemoFromStorage(slug).catch(() => {});
-    await removePath(path.join(demoRoot, slug));
-    await removePath(getArchivedDemoDir(slug));
-    if (typeof value === "object") {
-      await deleteDemoDatabase(value.database, hostingConfig()).catch(() => null);
-    }
-  }
-
-  async function deleteDemoFiles(value) {
-    const slug = demoSlug(value);
-    if (!slug) return;
-    await stopRuntime(slug);
-    await removePath(path.join(demoRoot, slug));
-    await removePath(getArchivedDemoDir(slug));
-    if (typeof value === "object") {
-      await deleteDemoDatabase(value.database, hostingConfig()).catch(() => null);
-    }
-  }
-
   // ---- Alias redirect ----
 
   async function redirectDemoAlias(req, res) {
@@ -209,10 +166,6 @@ export function createDemoLifecycleService(deps) {
   return {
     exists,
     getArchivedDemoDir,
-    copyDemoArchive,
-    expireDemoFiles,
-    removeDemoFiles,
-    deleteDemoFiles,
     restartDemoRuntime,
     syncDemoToStorage,
     redirectDemoAlias,
