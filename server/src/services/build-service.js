@@ -8,6 +8,7 @@ import { isNonCollectableControl, filterAutoHostableFormFields } from "../lib/fo
 import { normalizeFormFields } from "./form-service.js";
 import { promoteSingleHtmlEntry } from "../lib/archive-analyzer.js";
 import { exists, formatBytes, stripBom } from "../lib/utils.js";
+import { withDockerSlot } from "../lib/concurrency.js";
 import { buildMode, buildTimeoutMs, dockerImage, dockerMemory, dockerCpus } from "../config.js";
 
 
@@ -262,27 +263,29 @@ async function buildNodeProjectOnHost(projectDir) {
 }
 
 async function buildNodeProjectInDocker(projectDir) {
-  const installCommand = await exists(path.join(projectDir, "package-lock.json")) ? "npm ci" : "npm install";
-  const script = `${installCommand} && npm run build`;
-  const args = [
-    "run",
-    "--rm",
-    "--network=bridge",
-    "--memory",
-    dockerMemory,
-    "--cpus",
-    dockerCpus,
-    "-v",
-    `${path.resolve(projectDir)}:/workspace`,
-    "-w",
-    "/workspace",
-    dockerImage,
-    "sh",
-    "-lc",
-    script
-  ];
-  const log = await runCommand("docker", args, projectDir);
-  return [`[docker build] image=${dockerImage} memory=${dockerMemory} cpus=${dockerCpus}`, log].join("\n");
+  return withDockerSlot(async () => {
+    const installCommand = await exists(path.join(projectDir, "package-lock.json")) ? "npm ci" : "npm install";
+    const script = `${installCommand} && npm run build`;
+    const args = [
+      "run",
+      "--rm",
+      "--network=bridge",
+      "--memory",
+      dockerMemory,
+      "--cpus",
+      dockerCpus,
+      "-v",
+      `${path.resolve(projectDir)}:/workspace`,
+      "-w",
+      "/workspace",
+      dockerImage,
+      "sh",
+      "-lc",
+      script
+    ];
+    const log = await runCommand("docker", args, projectDir);
+    return [`[docker build] image=${dockerImage} memory=${dockerMemory} cpus=${dockerCpus}`, log].join("\n");
+  });
 }
 
 function runCommand(command, args, cwd) {

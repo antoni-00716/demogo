@@ -10,6 +10,7 @@ let nextHostPort = 43100;
 import { join as pathJoin } from "node:path";
 import { dataDir } from "../config.js";
 import { sleep, formatBytes } from "../lib/utils.js";
+import { withDockerSlot } from "../lib/concurrency.js";
 
 const RUNTIME_STATE_FILE = pathJoin(dataDir, "runtime-state.json");
 
@@ -457,67 +458,69 @@ async function startHostRuntime({ slug, projectDir, inspection, runtimeConfig, r
 }
 
 async function startDockerRuntime({ slug, projectDir, inspection, runtimeConfig, runtimeEnv = {} }) {
-  await ensureDockerAvailable();
-  const containerName = `demogo-${slug}`;
-  const port = await allocateHostPort();
-  const runtimeCommand = selectRuntimeCommand(inspection);
-  const installCommand = await selectNpmInstallShell(projectDir, runtimeCommand);
-  const buildCommand = runtimeCommand.buildBeforeStart ? "npm run build && " : "";
-  const script = `${installCommand} && ${buildCommand}${runtimeCommand.shell}`;
-  await execDocker(["rm", "-f", containerName], { timeoutMs: 15000 }).catch(() => "");
-  const runtimeEnvArgs = Object.entries({
-    ...sanitizeRuntimeEnv(runtimeEnv),
-    NODE_ENV: "production",
-    PORT: "3000"
-  }).flatMap(([key, value]) => ["-e", `${key}=${value}`]);
-  const args = [
-    "run",
-    "-d",
-    "--name",
-    containerName,
-    "--network=bridge",
-    "--memory",
-    runtimeConfig.memory,
-    "--cpus",
-    runtimeConfig.cpus,
-    ...runtimeEnvArgs,
-    "-p",
-    `127.0.0.1:${port}:3000`,
-    "-v",
-    `${path.resolve(projectDir)}:/workspace`,
-    "-w",
-    "/workspace",
-    runtimeConfig.dockerImage,
-    "sh",
-    "-lc",
-    script
-  ];
-  const containerId = (await execDocker(args, { timeoutMs: 30000 })).trim();
-  const now = new Date();
-  const record = {
-    id: containerId || containerName,
-    slug,
-    driver: "docker",
-    containerName,
-    containerId,
-    port,
-    status: "running",
-    statusLabel: "运行中",
-    startCommand: runtimeCommand.label,
-    logs: [`[docker runtime] image=${runtimeConfig.dockerImage} memory=${runtimeConfig.memory} cpus=${runtimeConfig.cpus}`],
-    startedAt: now.toISOString(),
-    expiresAt: new Date(now.getTime() + runtimeConfig.ttlMinutes * 60 * 1000).toISOString()
-  };
-  try {
-    await waitForDockerRuntimeReady(record, runtimeConfig.startTimeoutSeconds * 1000);
-    await refreshDockerLogs(record);
-  } catch (error) {
-    await refreshDockerLogs(record);
+  return withDockerSlot(async () => {
+    await ensureDockerAvailable();
+    const containerName = `demogo-${slug}`;
+    const port = await allocateHostPort();
+    const runtimeCommand = selectRuntimeCommand(inspection);
+    const installCommand = await selectNpmInstallShell(projectDir, runtimeCommand);
+    const buildCommand = runtimeCommand.buildBeforeStart ? "npm run build && " : "";
+    const script = `${installCommand} && ${buildCommand}${runtimeCommand.shell}`;
     await execDocker(["rm", "-f", containerName], { timeoutMs: 15000 }).catch(() => "");
-    const output = formatRuntimeLogs(record.logs, 3000);
-    throw createRuntimeError(`${error.message}${output ? `\n\n运行日志摘要：\n${output}` : ""}`);
-  }
-  return record;
+    const runtimeEnvArgs = Object.entries({
+      ...sanitizeRuntimeEnv(runtimeEnv),
+      NODE_ENV: "production",
+      PORT: "3000"
+    }).flatMap(([key, value]) => ["-e", `${key}=${value}`]);
+    const args = [
+      "run",
+      "-d",
+      "--name",
+      containerName,
+      "--network=bridge",
+      "--memory",
+      runtimeConfig.memory,
+      "--cpus",
+      runtimeConfig.cpus,
+      ...runtimeEnvArgs,
+      "-p",
+      `127.0.0.1:${port}:3000`,
+      "-v",
+      `${path.resolve(projectDir)}:/workspace`,
+      "-w",
+      "/workspace",
+      runtimeConfig.dockerImage,
+      "sh",
+      "-lc",
+      script
+    ];
+    const containerId = (await execDocker(args, { timeoutMs: 30000 })).trim();
+    const now = new Date();
+    const record = {
+      id: containerId || containerName,
+      slug,
+      driver: "docker",
+      containerName,
+      containerId,
+      port,
+      status: "running",
+      statusLabel: "运行中",
+      startCommand: runtimeCommand.label,
+      logs: [`[docker runtime] image=${runtimeConfig.dockerImage} memory=${runtimeConfig.memory} cpus=${runtimeConfig.cpus}`],
+      startedAt: now.toISOString(),
+      expiresAt: new Date(now.getTime() + runtimeConfig.ttlMinutes * 60 * 1000).toISOString()
+    };
+    try {
+      await waitForDockerRuntimeReady(record, runtimeConfig.startTimeoutSeconds * 1000);
+      await refreshDockerLogs(record);
+    } catch (error) {
+      await refreshDockerLogs(record);
+      await execDocker(["rm", "-f", containerName], { timeoutMs: 15000 }).catch(() => "");
+      const output = formatRuntimeLogs(record.logs, 3000);
+      throw createRuntimeError(`${error.message}${output ? `\n\n运行日志摘要：\n${output}` : ""}`);
+    }
+    return record;
+  });
 }
 
 function selectRuntimeCommand(inspection = {}) {
