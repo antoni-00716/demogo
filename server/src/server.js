@@ -309,58 +309,6 @@ import { registerDemoTrackRoutes } from "./routes/demo-track.js";
 
 const app = express();
 
-const blockedExactNames = new Set([
-  ".env",
-  ".env.local",
-  ".env.production",
-  ".env.development",
-  ".env.test",
-  "id_rsa",
-  "id_dsa"
-]);
-
-const ignoredPathParts = new Set([
-  ".git",
-  ".hg",
-  ".svn",
-  ".cache",
-  ".microcompact",
-  ".parcel-cache",
-  ".turbo",
-  ".next",
-  ".nuxt",
-  ".vite",
-  ".vscode",
-  "coverage",
-  "node_modules"
-]);
-
-const ignoredExactNames = new Set([
-  ".DS_Store",
-  "Thumbs.db",
-  "npm-debug.log",
-  "yarn-error.log",
-  "pnpm-debug.log"
-]);
-
-const ignoredExtensions = new Set([
-  ".log",
-  ".tmp"
-]);
-
-const blockedExtensions = new Set([
-  ".key",
-  ".pem",
-  ".p12",
-  ".pfx",
-  ".exe",
-  ".dll",
-  ".sh",
-  ".bat",
-  ".cmd",
-  ".ps1"
-]);
-
 await fs.mkdir(uploadDir, { recursive: true });
 await fs.mkdir(demoRoot, { recursive: true });
 await fs.mkdir(dataDir, { recursive: true });
@@ -386,13 +334,6 @@ const loginFailureLimit = 5;
 const verificationCodeTtlMs = 10 * 60 * 1000;
 const verificationResendMs = 60 * 1000;
 const verificationMaxAttempts = 5;
-
-const deploySourceLabels = {
-  web: "网页上传",
-  cli: "DemoGo CLI",
-  mcp: "DemoGo MCP",
-  agent_api: "AI 助手 API"
-};
 
 const { upload, uploadProjectArchive } = createUploadMiddleware({ maxZipSizeMb, uploadDir, isSupportedArchiveName });
 
