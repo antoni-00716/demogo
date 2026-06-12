@@ -30,7 +30,7 @@ export function AdminForms({ forms, submissions }: { forms: HostedForm[]; submis
             <div className="form-admin-grid">
               {forms.map((form) => (
                 <div className="form-admin-card" key={form.id}>
-                  <div className="request-main">
+                  <div className="panel">
                     <div>
                       <h3>{form.name}</h3>
                       <p>{form.userEmail || "-"} · {form.demoName || form.demoSlug || "-"}</p>
@@ -82,7 +82,7 @@ export function AdminForms({ forms, submissions }: { forms: HostedForm[]; submis
 export function AdminFormDetail({ form, submissions }: { form: HostedForm; submissions: FormSubmission[] }) {
   return (
     <div className="drawer-detail-stack">
-      <div className="request-main">
+      <div className="panel">
         <div>
           <h3>{form.name}</h3>
           <p>{form.userEmail || "-"} · {form.demoName || form.demoSlug || "-"}</p>

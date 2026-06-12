@@ -83,7 +83,7 @@ export function PlanRequestDetail({
 }) {
   return (
     <div className="drawer-detail-stack">
-      <div className="request-main">
+      <div className="panel">
         <div>
           <h3>{request.userEmail}</h3>
           <p>{planName(request.currentPlan)} → {planName(request.requestedPlan)} · {formatDate(request.createdAt)}</p>
@@ -188,7 +188,7 @@ export function PlanRequestCard({
     <div className={`request-card ${compact ? "request-card-compact" : ""}`}>
       {!compact ? (
         <>
-          <div className="request-main">
+          <div className="panel">
             <div>
               <h3>{request.userEmail}</h3>
               <p>{planName(request.currentPlan)} → {planName(request.requestedPlan)} · {formatDate(request.createdAt)}</p>

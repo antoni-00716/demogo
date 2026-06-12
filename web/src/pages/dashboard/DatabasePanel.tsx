@@ -4,7 +4,6 @@ import { Badge } from '../../components/Badge';
 import { Button } from '../../components/Button';
 import { formatDate } from '../../utils/format';
 import { getDemoDatabaseTables, getDemoDatabaseRows, type DatabaseTable, type DatabaseRow } from '../../api/demos';
-import { Download } from 'lucide-react';
 
 const API_BASE = '';
 
@@ -113,7 +112,7 @@ export function DatabasePanel({ demoId, database, onReset }: { demoId: string; d
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                       <span>{rows.length} 条记录</span>
                       <Button variant='ghost' onClick={() => exportTable(selectedTable)} style={{ padding: '2px 8px', fontSize: 11 }}>
-                        <Download size={13} /> 导出 CSV
+                        ⬇️ 导出 CSV
                       </Button>
                     </div>
                   </div>

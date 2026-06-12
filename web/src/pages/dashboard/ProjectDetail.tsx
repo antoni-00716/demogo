@@ -18,7 +18,7 @@ export function ProjectDetail(props: any) {
 
   return (
     <div className="drawer-detail-stack">
-      <div className="request-main">
+      <div className="panel">
         <div>
           <h3>{demo.name || demo.slug}</h3>
           <p>{demo.publicUrl || demo.slug}</p>

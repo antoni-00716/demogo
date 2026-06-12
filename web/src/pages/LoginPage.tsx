@@ -1,7 +1,5 @@
 ﻿import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { Eye, EyeOff, CheckCircle } from "lucide-react";
 import { getRegisterOptions, login, register, sendVerificationCode } from "../api/auth";
-import { Button } from "../components/Button";
 import { Toast } from "../components/Toast";
 import { trackTrialEvent } from "../api/trialEvents";
 
@@ -102,7 +100,7 @@ export function LoginPage() {
         <div className="logo"><span className="mark">◆</span>DemoGo</div>
         {succeeded ? (
           <div className="login-success-state">
-            <CheckCircle size={48} className="login-success-icon-svg" />
+            <span className="login-success-icon">✅</span>
             <h1>{mode === "login" ? "登录成功！" : "注册成功！"}</h1>
             <p>正在跳转到工作台...</p>
           </div>
@@ -147,7 +145,7 @@ export function LoginPage() {
                     autoComplete={mode === "login" ? "current-password" : "new-password"}
                   />
                   <button type="button" className="password-toggle" onClick={() => setShowPassword(!showPassword)} tabIndex={-1} aria-label={showPassword ? "隐藏密码" : "显示密码"}>
-                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    {showPassword ? "🙈" : "👁️"}
                   </button>
                 </div>
                 {passwordError ? <span className="field-error">{passwordError}</span> : null}
@@ -158,9 +156,9 @@ export function LoginPage() {
                     <label>邮箱验证码</label>
                     <input value={verificationCode} onChange={(e) => setVerificationCode(e.target.value)} required={emailVerificationRequired} inputMode="numeric" maxLength={6} placeholder="6 位验证码" autoComplete="one-time-code" />
                   </div>
-                  <Button onClick={handleSendCode} disabled={sendingCode || !email || password.length < 8} loading={sendingCode} variant="secondary">
-                    发送验证码
-                  </Button>
+                  <button className="btn-sm" type="button" onClick={handleSendCode} disabled={sendingCode || !email || password.length < 8}>
+                    {sendingCode ? "发送中..." : "发送验证码"}
+                  </button>
                 </div>
               ) : null}
               {mode === "register" && registerOptions && !registerOptions.canRegister ? (

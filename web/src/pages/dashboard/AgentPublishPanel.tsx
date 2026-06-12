@@ -1,14 +1,13 @@
 ﻿import { useState } from "react";
 import type { AgentToken } from "../../types";
 import { Button } from "../../components/Button";
-import { Sparkles, Copy, CheckCircle2, Eye, EyeOff, Upload, RefreshCw, Wand2 } from "lucide-react";
 import { createAgentInstruction } from "./utils";
 
 type StepStatus = "pending" | "active" | "completed";
 
 function StepDot({ step, status }: { step: number; status: StepStatus }) {
   if (status === "completed") {
-    return <div className="ag-step-dot completed"><CheckCircle2 size={18} /></div>;
+    return <div className="ag-step-dot completed"><span>✅</span></div>;
   }
   return <div className={`ag-step-dot ${status}`}>{step}</div>;
 }
@@ -105,16 +104,16 @@ export function AgentPublishPanel({
                   : "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022"}
             </code>
             <button className="ag-token-eye" onClick={() => setShowToken(!showToken)} title={showToken ? "隐藏" : "显示"}>
-              {showToken ? <EyeOff size={15} /> : <Eye size={15} />}
+              {showToken ? <span>🙈</span> : <span>👁️</span>}
             </button>
             <Button variant="ghost" onClick={() => copyToClipboard(tokenValue, setCopiedToken)} style={{ padding: "5px 10px", fontSize: 12 }}>
-              {copiedToken ? <><CheckCircle2 size={13} /><span style={{marginLeft:3}}>已复制</span></> : <><Copy size={13} /><span style={{marginLeft:3}}>复制</span></>}
+              {copiedToken ? <><span>✅</span><span style={{marginLeft:3}}>已复制</span></> : <><span>📋</span><span style={{marginLeft:3}}>复制</span></>}
             </Button>
             <span className="ag-token-div" />
             <button className="ag-token-reset" onClick={onResetToken}>重新生成</button>
           </div>
         ) : (
-          <Button variant="primary" onClick={onResetToken}><Sparkles size={16} /> 生成口令</Button>
+          <Button variant="primary" onClick={onResetToken}><span>✨</span> 生成口令</Button>
         )}
       </StepBlock>
 
@@ -129,13 +128,13 @@ export function AgentPublishPanel({
         <div className="ag-mode-row">
           <button className={`ag-mode-btn ${publishMode === "new" ? "active" : ""}`}
             onClick={() => { setPublishMode("new"); setGeneratedInstruction(""); }}>
-            <Upload size={18} />
+            <span>📦</span>
             <strong>发布新项目</strong>
             <span>把项目首次发到 DemoGo，获得一个试用链接</span>
           </button>
           <button className={`ag-mode-btn ${publishMode === "update" ? "active" : ""}`}
             onClick={() => { setPublishMode("update"); setGeneratedInstruction(""); }}>
-            <RefreshCw size={18} />
+            <span>🔄</span>
             <strong>更新已有项目</strong>
             <span>项目改好了，更新到之前发布的链接</span>
           </button>
@@ -159,7 +158,7 @@ export function AgentPublishPanel({
         {!generatedInstruction ? (
           <div className="ag-gen-row">
             <Button variant="primary" onClick={handleGenerate} disabled={!canGenerate} style={{ width: "100%", justifyContent: "center", minHeight: 44 }}>
-              <Wand2 size={18} /> 生成发布指令
+              <span>✨</span> 生成发布指令
             </Button>
             {!canGenerate && <span className="ag-gen-hint">请先填写原项目链接</span>}
           </div>
@@ -168,7 +167,7 @@ export function AgentPublishPanel({
             <pre className="ag-result-pre">{generatedInstruction}</pre>
             <div className="ag-result-action">
               <Button variant="primary" onClick={() => copyToClipboard(generatedInstruction, setCopiedInstruction)} style={{ width: "100%", justifyContent: "center", minHeight: 44 }}>
-                {copiedInstruction ? <><CheckCircle2 size={18} /> 已复制</> : <><Copy size={18} /> 复制给 AI</>}
+                {copiedInstruction ? <><span>✅</span> 已复制</> : <><span>📋</span> 复制给 AI</>}
               </Button>
             </div>
           </div>

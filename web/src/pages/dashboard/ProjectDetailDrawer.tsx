@@ -68,7 +68,7 @@ export function ProjectDetailDrawer({
   }, [onClose]);
 
   return (
-    <div className="detail-drawer-layer" role="dialog" aria-modal="true" aria-label="试用项目详情">
+    <div className="detail-drawer" role="dialog" aria-modal="true" aria-label="试用项目详情">
       <button className="detail-drawer-backdrop" type="button" aria-label="关闭试用项目详情" onClick={onClose} />
       <aside className="detail-drawer">
         <div className="detail-drawer-header">

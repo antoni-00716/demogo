@@ -3,7 +3,6 @@ import type { Inspection } from "../../api/demos";
 import type { FormQuota } from "../../api/forms";
 import { DemoList } from "../../components/dashboard/DemoList";
 import { Button } from "../../components/Button";
-import { ExternalLink, Copy, Share2, RefreshCw, Archive, Trash2, X } from "lucide-react";
 import { DatabasePanel } from "./DatabasePanel";
 import { FormDataPanel } from "./FormDataPanel";
 
@@ -76,7 +75,7 @@ export function ProjectsView(
           <p>还没有发布过作品，从工作台开始发布吧</p>
         </div>
       ) : (
-        <div className={`projects-split${detailOpen ? " has-detail" : ""}`}>
+        <div className={`view-stack${detailOpen ? " has-detail" : ""}`}>
           <DemoList
             demos={demos}
             selectedDemoId={selectedDemoId}
@@ -89,7 +88,7 @@ export function ProjectsView(
               <div className="project-detail-head">
                 <h3>{demo.name || demo.slug}</h3>
                 <button className="project-detail-close" type="button" onClick={onCloseDetail}>
-                  <X size={18} />
+                  ✕
                 </button>
               </div>
 
@@ -99,7 +98,7 @@ export function ProjectsView(
                   {demo.publicUrl ? (
                     <div className="detail-link-row">
                       <code>{demo.publicUrl}</code>
-                      <Button onClick={() => onCopyLink(demo.publicUrl)}><Copy size={14} /></Button>
+                      <Button onClick={() => onCopyLink(demo.publicUrl)}><span>📋</span></Button>
                     </div>
                   ) : (
                     <span className="ws-project-meta">链接暂不可用</span>
@@ -109,7 +108,7 @@ export function ProjectsView(
                 <div className="detail-block">
                   <label>状态</label>
                   <div className="detail-meta-row">
-                    <span className={`project-status-dot status-${demo.status}`} />
+                    <span className={`demo-status status-${demo.status}`} />
                     <span>{statusLabel(demo.status)}</span>
                     {demo.createdAt && <span className="ws-project-meta"> · {new Date(demo.createdAt).toLocaleDateString("zh-CN")} 创建</span>}
                     {demo.updatedAt && <span className="ws-project-meta"> · {new Date(demo.updatedAt).toLocaleDateString("zh-CN")} 更新</span>}
@@ -132,15 +131,15 @@ export function ProjectsView(
 
 <div className="detail-actions">
                   {demo.publicUrl && (
-                    <a href={demo.publicUrl} target="_blank" rel="noreferrer" className="btn btn-primary">
-                      <ExternalLink size={14} /> 打开试用
+                    <a href={demo.publicUrl} target="_blank" rel="noreferrer" className="btn-pill">
+                      ↗️ 打开试用
                     </a>
                   )}
-                  {demo.publicUrl && <Button onClick={() => onCopyLink(demo.publicUrl)}><Copy size={14} /> 复制</Button>}
-                  <Button onClick={() => onCopyShare(demo)}><Share2 size={14} /> 转发</Button>
-                  {demo.status === "published" && <Button onClick={() => onUpdate(demo)}><RefreshCw size={14} /> 更新</Button>}
-                  {demo.status === "published" && <Button onClick={() => onAction("offline", demo)}><Archive size={14} /> 下线</Button>}
-                  <Button onClick={() => onAction("delete", demo)} style={{ color: "var(--red-600)" }}><Trash2 size={14} /> 删除</Button>
+                  {demo.publicUrl && <Button onClick={() => onCopyLink(demo.publicUrl)}>📋 复制</Button>}
+                  <Button onClick={() => onCopyShare(demo)}>📤 转发</Button>
+                  {demo.status === "published" && <Button onClick={() => onUpdate(demo)}>🔄 更新</Button>}
+                  {demo.status === "published" && <Button onClick={() => onAction("offline", demo)}>📦 下线</Button>}
+                  <Button onClick={() => onAction("delete", demo)} style={{ color: "var(--red-600)" }}>🗑️ 删除</Button>
                 </div>
               </div>
             </div>

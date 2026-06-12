@@ -3,7 +3,6 @@ import { Button } from '../../components/Button';
 import { formatDate } from '../../utils/format';
 import { getDemoForms } from '../../api/demos';
 import type { HostedForm, FormSubmission } from '../../types';
-import { Download } from 'lucide-react';
 
 const API_BASE = '';
 
@@ -54,7 +53,7 @@ export function FormDataPanel({ demoId }: { demoId: string }) {
           </Button>
           {expanded && submissions.length > 0 && (
             <Button variant='ghost' onClick={exportForms} style={{ padding: '2px 8px', fontSize: 11 }}>
-              <Download size={13} /> 导出全部 CSV
+              ⬇️ 导出全部 CSV
             </Button>
           )}
         </div>

@@ -19,7 +19,7 @@ export function AdminDemoDetail({
 
   return (
     <div className="drawer-detail-stack">
-      <div className="request-main">
+      <div className="panel">
         <div>
           <h3>{demo.name || demo.slug}</h3>
           <p>{demo.userEmail || "-"} · {demo.publicUrl || demo.slug}</p>

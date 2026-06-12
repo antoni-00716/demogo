@@ -21,7 +21,7 @@ export function AdminDetailDrawer({
   }, [onClose]);
 
   return (
-    <div className="detail-drawer-layer" role="dialog" aria-modal="true" aria-label={title}>
+    <div className="detail-drawer" role="dialog" aria-modal="true" aria-label={title}>
       <button className="detail-drawer-backdrop" type="button" aria-label="关闭详情" onClick={onClose} />
       <aside className="detail-drawer">
         <div className="detail-drawer-header">

@@ -60,7 +60,7 @@ export function ApplicationReadinessPanel({
         </div>
       ) : null}
       {visibleChecks.length ? (
-        <div className="readiness-check-grid">
+        <div className="diagnosis-grid">
           {visibleChecks.map((item: { code?: string; label?: string; status?: string; statusLabel?: string; detail?: string }) => (
             <div key={item.code || item.label} className={`readiness-check readiness-${item.status || "unknown"}`}>
               <strong>{item.label}</strong>

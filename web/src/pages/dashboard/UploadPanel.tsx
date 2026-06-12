@@ -2,7 +2,6 @@ import { type DragEvent } from "react";
 import type { Demo, DeploymentStep } from "../../types";
 import type { Inspection } from "../../api/demos";
 import { Button } from "../../components/Button";
-import { Upload, CheckCircle2, Copy, ExternalLink, Package, X } from "lucide-react";
 import { isSupportedArchive } from "./utils";
 import { DeploymentSteps } from "../../components/dashboard/DashPanels";
 
@@ -10,7 +9,7 @@ import { DeploymentSteps } from "../../components/dashboard/DashPanels";
 type StepStatus = "pending" | "active" | "completed";
 function StepDot({ step, status }: { step: number; status: StepStatus }) {
   if (status === "completed")
-    return <div className="ag-step-dot completed"><CheckCircle2 size={18} /></div>;
+    return <div className="ag-step-dot completed"><span>✅</span></div>;
   return <div className={`ag-step-dot ${status}`}>{step}</div>;
 }
 function StepArrow() {
@@ -126,7 +125,7 @@ export function UploadPanel({
           {/* Before publish */}
           {!isDone && !deploying && hasFile && (
             <Button variant="primary" onClick={onPublish} style={{ width: "100%", justifyContent: "center", minHeight: 44 }}>
-              <Upload size={18} /> {updateTarget ? "更新上线" : "发布上线"}
+              📦 {updateTarget ? "更新上线" : "发布上线"}
             </Button>
           )}
 
@@ -147,7 +146,7 @@ export function UploadPanel({
             <div className="ag-result">
               <div style={{ padding: "18px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <CheckCircle2 size={18} style={{ color: "var(--green-500)" }} />
+                  <span style={{ color: "var(--green-500)" }}>✅</span>
                   <strong style={{ fontSize: 15 }}>发布成功</strong>
                 </div>
                 {latestDemo.publicUrl && (
@@ -160,10 +159,10 @@ export function UploadPanel({
                 )}
                 <div style={{ display: "flex", gap: 10 }}>
                   <Button variant="primary" onClick={() => onCopyLink(latestDemo.publicUrl)}>
-                    <Copy size={16} /> 复制链接
+                    📋 复制链接
                   </Button>
                   <Button onClick={() => onCopyShare(latestDemo)}>
-                    <ExternalLink size={16} /> 转发文案
+                    ↗️ 转发文案
                   </Button>
                 </div>
               </div>
@@ -174,7 +173,7 @@ export function UploadPanel({
 
       {/* Supported types */}
       <div className="ag-tools">
-        <Package size={14} />
+        <span>📦</span>
         <span>支持</span>
         <strong>静态网页</strong>
         <span>·</span>
@@ -207,15 +206,15 @@ function DropZone({ file, onFile }: { file: File | null; onFile: (f: File | null
       />
       {file ? (
         <div className="up-file-selected">
-          <Package size={20} />
+          <span>📦</span>
           <strong>{file.name}</strong>
           <button className="up-file-remove" onClick={(e) => { e.preventDefault(); onFile(null); }}>
-            <X size={14} />
+            ✕
           </button>
         </div>
       ) : (
         <>
-          <Upload size={22} />
+          <span>📦</span>
           <strong>拖拽 ZIP 文件到这里，或点击选择</strong>
           <span>支持 .zip .tar.gz .tgz · 最大 50MB</span>
         </>

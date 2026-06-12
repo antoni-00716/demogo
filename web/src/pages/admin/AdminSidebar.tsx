@@ -3,7 +3,7 @@ export type AdminView = "overview" | "requests" | "subdomains" | "demos" | "runt
 // Map: internal view name → display config
 const itemConfig: Record<string, { label: string; emoji: string; badge?: string }> = {
   overview:   { label: "总览", emoji: "📊" },
-  users:      { label: "用户管理", emoji: "👥", badge: "12" },
+  users:      { label: "用户管理", emoji: "👥" },
   requests:   { label: "升级申请", emoji: "👥" },
   subdomains: { label: "二级域名", emoji: "📁" },
   demos:      { label: "Demo 管理", emoji: "📁" },

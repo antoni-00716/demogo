@@ -48,7 +48,7 @@ export function AdminFeedback({
           <div className="feedback-list">
             {feedback.slice(0, 30).map((item) => (
               <div className="feedback-item" key={item.id}>
-                <div className="request-main">
+                <div className="panel">
                   <div>
                     <h3>{item.typeLabel || item.type}</h3>
                     <p>{item.userEmail || "-"} · {item.demoSlug || "未关联试用项目"} · {formatDate(item.createdAt)}</p>
@@ -82,7 +82,7 @@ export function AdminFeedbackDetail({
 }) {
   return (
     <div className="drawer-detail-stack">
-      <div className="request-main">
+      <div className="panel">
         <div>
           <h3>{feedback.typeLabel || feedback.type}</h3>
           <p>{feedback.userEmail || "-"} · {formatDate(feedback.createdAt)}</p>

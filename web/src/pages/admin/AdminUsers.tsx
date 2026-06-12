@@ -61,7 +61,7 @@ export function AdminUsers({ users, compact = false }: { users: AdminUser[]; com
 export function AdminUserDetail({ user }: { user: AdminUser }) {
   return (
     <div className="drawer-detail-stack">
-      <div className="request-main">
+      <div className="panel">
         <div>
           <h3>{user.email}</h3>
           <p>{formatDate(user.createdAt)} 注册</p>

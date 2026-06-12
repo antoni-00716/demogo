@@ -1,6 +1,6 @@
 ﻿import type { Demo, User, Quota } from "../../types";
 import { Button } from "../../components/Button";
-import { Sparkles, Upload, ArrowRight, CreditCard } from "lucide-react";
+import { planName } from "../../config/plans";
 
 type DashboardView = "overview" | "projects" | "upload" | "agent" | "plan" | "history" | "feedback";
 
@@ -54,9 +54,29 @@ export function OverviewView({
           </div>
           <div>
             <h1 className="ws-greeting">你好，{user.email?.split("@")[0] || "用户"}</h1>
+            <p className="ws-section-desc" style={{ marginTop: 2 }}>
+              {planName(user.plan)} · 在线 {onlineDemos?.used || 0}/{onlineDemos?.limit || 1} · 本月 {deploys?.used || 0}/{deploys?.limit || 0} 次
+            </p>
           </div>
         </div>
       </div>
+
+      {/* ===== Onboarding banner (first-time users) ===== */}
+      {!hasProjects ? (
+        <div className="onboarding-banner">
+          <div className="onboarding-content">
+            <strong>欢迎来到 DemoGo</strong>
+            <span>上传你的项目文件，立刻生成一个可分享的试用链接。</span>
+          </div>
+          <div className="onboarding-steps">
+            <span>1. 上传文件</span>
+            <span className="onboarding-arrow">&rarr;</span>
+            <span>2. 选择发布方式</span>
+            <span className="onboarding-arrow">&rarr;</span>
+            <span>3. 分享链接</span>
+          </div>
+        </div>
+      ) : null}
 
       {/* ===== Stats row ===== */}
       <div className="ws-stats">
@@ -81,7 +101,7 @@ export function OverviewView({
           style={{ cursor: "pointer" }}
         >
           <span className="ws-stat-label">
-            <CreditCard size={14} /> 当前套餐
+            💳 当前套餐
           </span>
           <strong className="ws-stat-value">{user.planName || "Free"}</strong>
           <span className="ws-stat-sub">{isFree ? "了解升级套餐 →" : "查看套餐详情 →"}</span>
@@ -95,23 +115,23 @@ export function OverviewView({
         <div className="ws-publish-options">
           <button className="ws-publish-card" type="button" onClick={() => setActiveView("agent")}>
             <div className="ws-publish-icon">
-              <Sparkles size={24} />
+              ✨
             </div>
             <div className="ws-publish-body">
               <strong>我的项目在 AI 工具里</strong>
               <span>在 Cursor / Codex / Windsurf 里做好了，告诉 AI 一句话就发布</span>
             </div>
-            <ArrowRight size={16} />
+            →
           </button>
           <button className="ws-publish-card" type="button" onClick={onCreate}>
             <div className="ws-publish-icon">
-              <Upload size={24} />
+                📦
             </div>
             <div className="ws-publish-body">
               <strong>我有项目文件包</strong>
               <span>把项目打包成 zip，上传到这里，自动生成链接</span>
             </div>
-            <ArrowRight size={16} />
+            →
           </button>
         </div>
       </div>
@@ -125,13 +145,13 @@ export function OverviewView({
           </div>
           {hasProjects && (
             <Button onClick={() => setActiveView("projects")} variant="ghost">
-              查看全部 <ArrowRight size={14} />
+              查看全部 →
             </Button>
           )}
         </div>
         {!hasProjects ? (
           <div className="ws-empty">
-            <div className="ws-empty-icon"><Sparkles size={32} /></div>
+            <div className="ws-empty-icon">✨</div>
             <h3>还没有作品</h3>
             <p>上方选一种方式开始发布，你的第一个作品就会出现在这里</p>
           </div>

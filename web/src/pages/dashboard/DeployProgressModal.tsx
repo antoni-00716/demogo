@@ -1,13 +1,12 @@
 ﻿import type { Demo, DeploymentStep, FailureDiagnosis } from "../../types";
 import { Button, LinkButton } from "../../components/Button";
-import { PackageOpen, ScanSearch, Cog, ShieldCheck, Link, CheckCircle, AlertTriangle, Loader } from "lucide-react";
 
 const stepLabels = [
-  { key: "receive", label: "接收项目", icon: PackageOpen },
-  { key: "inspect", label: "检查项目", icon: ScanSearch },
-  { key: "build", label: "准备上线", icon: Cog },
-  { key: "review", label: "内容审核", icon: ShieldCheck },
-  { key: "publish", label: "生成链接", icon: Link },
+  { key: "receive", label: "接收项目" },
+  { key: "inspect", label: "检查项目" },
+  { key: "build", label: "准备上线" },
+  { key: "review", label: "内容审核" },
+  { key: "publish", label: "生成链接" },
 ];
 
 function mapToStage(stepType: string): string {
@@ -60,7 +59,7 @@ export function DeployProgressModal({
       <div className="deploy-modal">
         {/* Icon */}
         <div className={`deploy-modal-icon ${succeeded ? "success" : failed ? "failed" : ""}`}>
-          {succeeded ? <CheckCircle size={32} /> : failed ? <AlertTriangle size={32} /> : <Loader size={32} />}
+          {succeeded ? <span>✅</span> : failed ? <span>⚠️</span> : <span>⏳</span>}
         </div>
 
         {/* Title */}

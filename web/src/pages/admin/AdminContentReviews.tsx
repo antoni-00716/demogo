@@ -107,7 +107,7 @@ export function ContentReviewDetail({
 
   return (
     <div className="drawer-detail-stack">
-      <div className="request-main">
+      <div className="panel">
         <div>
           <h3>{review.projectName || review.fileName || "-"}</h3>
           <p>{review.userEmail || "-"} · {formatDate(review.createdAt)}</p>
