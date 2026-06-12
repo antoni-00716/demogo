@@ -993,9 +993,6 @@ async function appendDeploymentEvents(events) {
 
 
 
-// Demo track route
-registerDemoTrackRoutes(app, { recordDemoVisit });
-
 // Sync upload to object storage
 async function syncUploadToStorage(filePath, originalName) {
   if (!isMinioBackend()) return;
