@@ -1,10 +1,7 @@
 ﻿import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Eye, EyeOff, CheckCircle } from "lucide-react";
 import { getRegisterOptions, login, register, sendVerificationCode } from "../api/auth";
-import { BrandLogo } from "../components/BrandLogo";
-import { Button, LinkButton } from "../components/Button";
-import { Card } from "../components/Card";
-import { IcpLink } from "../components/IcpLink";
+import { Button } from "../components/Button";
 import { Toast } from "../components/Toast";
 import { trackTrialEvent } from "../api/trialEvents";
 
@@ -52,7 +49,6 @@ export function LoginPage() {
   useEffect(() => {
     if (mode === "register") void trackTrialEvent("register_view");
   }, [mode]);
-
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -102,97 +98,92 @@ export function LoginPage() {
 
   return (
     <div className="login-page">
-      <div className="login-shell">
-        <LinkButton href="/" variant="ghost">
-          ← 返回首页
-        </LinkButton>
-        <Card className={`login-card${succeeded ? " login-succeeded" : ""}`}>
-          <a className="brand" href="/">
-            <BrandLogo />
-          </a>
-          {succeeded ? (
-            <div className="login-success-state">
-              <CheckCircle size={48} className="login-success-icon-svg" />
-              <h1>{mode === "login" ? "登录成功！" : "注册成功！"}</h1>
-              <p>正在跳转到工作台...</p>
+      <div className="login-card">
+        <div className="logo"><span className="mark">◆</span>DemoGo</div>
+        {succeeded ? (
+          <div className="login-success-state">
+            <CheckCircle size={48} className="login-success-icon-svg" />
+            <h1>{mode === "login" ? "登录成功！" : "注册成功！"}</h1>
+            <p>正在跳转到工作台...</p>
+          </div>
+        ) : (
+          <>
+            <div className="title">{mode === "login" ? "欢迎回来" : "免费注册 DemoGo"}</div>
+            <p className="sub">{mode === "login" ? "登录后继续管理你的作品" : "创建账号，开始发布你的作品"}</p>
+
+            <div className="tabs">
+              <button className={`tab${mode === "login" ? " active" : ""}`} type="button" onClick={() => setMode("login")}>登录</button>
+              <button className={`tab${mode === "register" ? " active" : ""}`} type="button" onClick={() => setMode("register")}>免费注册</button>
             </div>
-          ) : (
-            <>
-              <div>
-                <p className="login-kicker">{mode === "login" ? "欢迎回来" : "开始使用 DemoGo"}</p>
-                <h1>{mode === "login" ? "继续管理你的作品" : "免费注册，生成第一个链接"}</h1>
-                <p>{mode === "login" ? "查看你的作品、分享记录和反馈信息" : "做完作品，直接发出去，立刻生成链接"}</p>
+
+            <form onSubmit={submit} noValidate>
+              <div className="field">
+                <label>邮箱</label>
+                <input
+                  ref={emailRef}
+                  className={emailError ? "input-error" : ""}
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  onBlur={() => setEmailTouched(true)}
+                  required
+                  type="email"
+                  placeholder="your@email.com"
+                  autoComplete="email"
+                />
+                {emailError ? <span className="field-error">{emailError}</span> : null}
               </div>
-              <div className="login-mode-tabs">
-                <button className={mode === "login" ? "is-active" : ""} type="button" onClick={() => setMode("login")}>登录</button>
-                <button className={mode === "register" ? "is-active" : ""} type="button" onClick={() => setMode("register")}>免费注册</button>
-              </div>
-              <form className="login-form" onSubmit={submit} noValidate>
-                <label className="form-field">
-                  邮箱
+              <div className="field">
+                <label>密码</label>
+                <div className="password-wrapper">
                   <input
-                    ref={emailRef}
-                    className={`input${emailError ? " input-error" : ""}`}
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    onBlur={() => setEmailTouched(true)}
+                    className={passwordError ? "input-error" : ""}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    onBlur={() => setPasswordTouched(true)}
                     required
-                    type="email"
-                    placeholder="your@email.com"
-                    autoComplete="email"
+                    minLength={8}
+                    type={showPassword ? "text" : "password"}
+                    placeholder="至少 8 位"
+                    autoComplete={mode === "login" ? "current-password" : "new-password"}
                   />
-                  {emailError ? <span className="field-error">{emailError}</span> : null}
-                </label>
-                <label className="form-field">
-                  密码
-                  <div className="password-wrapper">
-                    <input
-                      className={`input${passwordError ? " input-error" : ""}`}
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      onBlur={() => setPasswordTouched(true)}
-                      required
-                      minLength={8}
-                      type={showPassword ? "text" : "password"}
-                      placeholder="至少 8 位"
-                      autoComplete={mode === "login" ? "current-password" : "new-password"}
-                    />
-                    <button type="button" className="password-toggle" onClick={() => setShowPassword(!showPassword)} tabIndex={-1} aria-label={showPassword ? "隐藏密码" : "显示密码"}>
-                      {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                    </button>
+                  <button type="button" className="password-toggle" onClick={() => setShowPassword(!showPassword)} tabIndex={-1} aria-label={showPassword ? "隐藏密码" : "显示密码"}>
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+                {passwordError ? <span className="field-error">{passwordError}</span> : null}
+              </div>
+              {emailVerificationRequired ? (
+                <div className="verification-row">
+                  <div className="field">
+                    <label>邮箱验证码</label>
+                    <input value={verificationCode} onChange={(e) => setVerificationCode(e.target.value)} required={emailVerificationRequired} inputMode="numeric" maxLength={6} placeholder="6 位验证码" autoComplete="one-time-code" />
                   </div>
-                  {passwordError ? <span className="field-error">{passwordError}</span> : null}
-                </label>
-                {emailVerificationRequired ? (
-                  <div className="verification-row">
-                    <label className="form-field">
-                      邮箱验证码
-                      <input className="input" value={verificationCode} onChange={(e) => setVerificationCode(e.target.value)} required={emailVerificationRequired} inputMode="numeric" maxLength={6} placeholder="6 位验证码" autoComplete="one-time-code" />
-                    </label>
-                    <Button onClick={handleSendCode} disabled={sendingCode || !email || password.length < 8} loading={sendingCode} variant="secondary">
-                      发送验证码
-                    </Button>
-                  </div>
-                ) : null}
-                {mode === "register" && registerOptions && !registerOptions.canRegister ? (
-                  <Toast message="邮箱验证暂未配置，请稍后再试" tone="warning" />
-                ) : null}
-                {message ? <Toast message={message} tone="danger" /> : null}
-                {successMessage ? <Toast message={successMessage} tone="success" /> : null}
-                <Button className="login-primary-action" variant="primary" disabled={loading || (mode === "register" && registerOptions?.canRegister === false) || !canSubmit} loading={loading} type="submit">
-                  {mode === "login" ? "进入工作台" : "免费注册并进入工作台"}
-                </Button>
-              </form>
-              <button className="login-switch" type="button" onClick={switchMode}>
-                {mode === "login" ? "还没有账号？免费注册 DemoGo" : "已有账号？直接登录"}
+                  <Button onClick={handleSendCode} disabled={sendingCode || !email || password.length < 8} loading={sendingCode} variant="secondary">
+                    发送验证码
+                  </Button>
+                </div>
+              ) : null}
+              {mode === "register" && registerOptions && !registerOptions.canRegister ? (
+                <Toast message="邮箱验证暂未配置，请稍后再试" tone="warning" />
+              ) : null}
+              {message ? <Toast message={message} tone="danger" /> : null}
+              {successMessage ? <Toast message={successMessage} tone="success" /> : null}
+              <button className="btn-block" type="submit" disabled={loading || (mode === "register" && registerOptions?.canRegister === false) || !canSubmit}>
+                {loading ? (mode === "login" ? "登录中..." : "注册中...") : (mode === "login" ? "进入工作台" : "免费注册并进入工作台")}
               </button>
-            </>
-          )}
-        </Card>
-        <div className="login-legal">
-          <IcpLink />
-        </div>
+            </form>
+
+            <p className="footer-text">
+              {mode === "login" ? (
+                <>还没有账号？<a onClick={switchMode}>免费注册 DemoGo</a></>
+              ) : (
+                <>已有账号？<a onClick={switchMode}>直接登录</a></>
+              )}
+            </p>
+          </>
+        )}
       </div>
+      <p className="legal">&copy; 2025 DemoGo. All rights reserved.</p>
     </div>
   );
 }

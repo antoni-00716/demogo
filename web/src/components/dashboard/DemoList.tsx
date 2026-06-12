@@ -1,7 +1,7 @@
 import type { Demo } from "../../types";
 
 const avatarColors = [
-  "linear-gradient(135deg, #06b6d4, #0891b2)",
+  "linear-gradient(135deg, #10b981, #059669)",
   "linear-gradient(135deg, #8b5cf6, #6d28d9)",
   "linear-gradient(135deg, #f59e0b, #d97706)",
   "linear-gradient(135deg, #22c55e, #16a34a)",

@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>试用演示 · DemoGo</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg-primary: #0A0A0A;
+      --bg-surface: #1A1A1A;
+      --accent: #EA580C;
+      --accent-hover: #F97316;
+      --text-primary: #F5F5F5;
+      --text-secondary: #8A8A8A;
+      --text-muted: #5A5A5A;
+      --border-subtle: #2A2A2A;
+      --green: #22C55E;
+      --font-heading: 'Outfit', sans-serif;
+      --font-body: 'Work Sans', sans-serif;
+    }
+    html, body { height: 100%; }
+    body {
+      font-family: var(--font-body);
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      display: flex; flex-direction: column;
+    }
+
+    /* ===== DEMO BAR ===== */
+    .demo-bar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 24px;
+      background: #0F0F0F;
+      border-bottom: 1px solid var(--border-subtle);
+      flex-shrink: 0;
+    }
+    .demo-bar-left {
+      display: flex; align-items: center; gap: 16px;
+    }
+    .demo-bar-logo {
+      display: flex; align-items: center; gap: 8px;
+      font-family: var(--font-heading);
+      font-size: 16px; font-weight: 700; color: var(--text-primary);
+      text-decoration: none;
+    }
+    .demo-bar-logo .mark { color: var(--accent); font-size: 18px; }
+    .demo-bar-badge {
+      font-size: 11px; padding: 3px 8px;
+      background: rgba(34,197,94,.1); color: var(--green);
+    }
+    .demo-bar-title {
+      font-size: 14px; font-weight: 500; color: var(--text-secondary);
+    }
+    .demo-bar-right {
+      display: flex; align-items: center; gap: 12px;
+    }
+    .demo-bar-share {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 16px; border: 1px solid var(--border-subtle);
+      color: var(--text-secondary); font-size: 13px; cursor: pointer;
+      background: none; font-family: var(--font-body);
+      transition: all .15s;
+    }
+    .demo-bar-share:hover { border-color: var(--accent); color: var(--accent); }
+    .demo-bar-btn {
+      padding: 8px 16px; background: var(--accent); color: var(--bg-primary);
+      font-size: 13px; font-weight: 600; border: none; cursor: pointer;
+      font-family: var(--font-heading);
+      transition: background .15s;
+    }
+    .demo-bar-btn:hover { background: var(--accent-hover); }
+    .demo-bar-time {
+      font-size: 12px; color: var(--text-muted);
+      display: flex; align-items: center; gap: 6px;
+    }
+
+    /* ===== DEMO CONTENT ===== */
+    .demo-content {
+      flex: 1; display: flex; align-items: center; justify-content: center;
+      overflow: auto;
+      position: relative;
+    }
+    .demo-content-inner {
+      width: 100%; max-width: 1200px;
+      padding: 48px 24px; text-align: center;
+    }
+    .demo-iframe-placeholder {
+      width: 100%; aspect-ratio: 16/10;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 16px; margin-bottom: 32px;
+    }
+    .demo-iframe-placeholder .big-icon { font-size: 56px; opacity: .3; }
+    .demo-iframe-placeholder .hint {
+      font-size: 15px; color: var(--text-muted);
+    }
+    .demo-iframe-placeholder .hint strong { color: var(--text-secondary); }
+
+    /* ===== FEEDBACK PANEL ===== */
+    .feedback-panel {
+      max-width: 600px; margin: 0 auto;
+      padding: 32px;
+      background: var(--bg-surface); border: 1px solid var(--border-subtle);
+    }
+    .feedback-panel h3 {
+      font-family: var(--font-heading);
+      font-size: 18px; font-weight: 700; margin-bottom: 4px;
+    }
+    .feedback-panel .sub {
+      font-size: 14px; color: var(--text-secondary); margin-bottom: 24px;
+    }
+    .feedback-type {
+      display: flex; gap: 8px; margin-bottom: 20px;
+    }
+    .feedback-type label {
+      flex: 1; text-align: center; padding: 10px;
+      border: 1px solid var(--border-subtle); cursor: pointer;
+      font-size: 14px; color: var(--text-secondary);
+      transition: all .15s;
+    }
+    .feedback-type input { display: none; }
+    .feedback-type input:checked + span { color: var(--accent); }
+    .feedback-type label:has(input:checked) {
+      border-color: var(--accent); background: rgba(234,88,12,.08);
+    }
+    .feedback-type label:has(input:checked) span { color: var(--accent); }
+    .feedback-textarea {
+      width: 100%; padding: 12px 16px;
+      background: var(--bg-primary); border: 1px solid var(--border-subtle);
+      color: var(--text-primary); font-size: 14px;
+      font-family: var(--font-body); min-height: 100px;
+      resize: vertical; outline: none; margin-bottom: 16px;
+    }
+    .feedback-textarea:focus { border-color: var(--accent); }
+    .feedback-textarea::placeholder { color: var(--text-muted); }
+    .feedback-submit {
+      width: 100%; padding: 14px;
+      background: var(--accent); color: var(--bg-primary);
+      border: none; cursor: pointer;
+      font-family: var(--font-heading); font-size: 15px; font-weight: 600;
+      transition: background .15s;
+    }
+    .feedback-submit:hover { background: var(--accent-hover); }
+    .feedback-footer {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-top: 16px; font-size: 12px; color: var(--text-muted);
+    }
+
+    /* ===== RESPONSIVE ===== */
+    @media (max-width: 768px) {
+      .demo-bar { flex-wrap: wrap; gap: 8px; padding: 10px 16px; }
+      .demo-bar-title { display: none; }
+      .demo-content-inner { padding: 24px 16px; }
+      .feedback-panel { padding: 24px 20px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ===== DEMO BAR ===== -->
+  <div class="demo-bar">
+    <div class="demo-bar-left">
+      <a href="#" class="demo-bar-logo">
+        <span class="mark">◆</span> DemoGo
+      </a>
+      <span class="demo-bar-badge">试用演示</span>
+      <span class="demo-bar-title">/ 产品落地页 v2 · 李婷</span>
+    </div>
+    <div class="demo-bar-right">
+      <div class="demo-bar-time">
+        <span>●</span> 演示剩余 23 小时
+      </div>
+      <button class="demo-bar-share">📋 复制链接</button>
+      <button class="demo-bar-btn">💬 提供反馈</button>
+    </div>
+  </div>
+
+  <!-- ===== DEMO CONTENT ===== -->
+  <div class="demo-content">
+    <div class="demo-content-inner">
+      <div class="demo-iframe-placeholder">
+        <div class="big-icon">🖥️</div>
+        <div class="hint">你的项目正在这里运行</div>
+        <div class="hint" style="font-size:13px;">这是 <strong>产品落地页 v2</strong> 的实时演示环境</div>
+      </div>
+
+      <!-- ===== FEEDBACK ===== -->
+      <div class="feedback-panel">
+        <h3>留下你的反馈</h3>
+        <p class="sub">你的意见将直接发送给作品创建者</p>
+
+        <div class="feedback-type">
+          <label><input type="radio" name="fb" checked><span>👍 很赞</span></label>
+          <label><input type="radio" name="fb"><span>💡 建议</span></label>
+          <label><input type="radio" name="fb"><span>🐛 发现 Bug</span></label>
+          <label><input type="radio" name="fb"><span>❓ 有问题</span></label>
+        </div>
+
+        <textarea class="feedback-textarea" placeholder="具体说说什么感受？有什么建议或者发现了什么问题？"></textarea>
+        <button class="feedback-submit">发送反馈</button>
+
+        <div class="feedback-footer">
+          <span>已收集 15 条反馈</span>
+          <span>由 DemoGo 提供技术支持</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>

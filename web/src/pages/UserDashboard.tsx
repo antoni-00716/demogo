@@ -498,17 +498,17 @@ export function UserDashboard() {
   if (!user) return null;
 
   return (
-    <div className="app-shell">
-      <Sidebar activeView={activeView} setActiveView={navigateDashboard} />
+    <div className="dash">
+      <Sidebar activeView={activeView} setActiveView={navigateDashboard} userName={user.email} userRole={user.planName || `免费版 · 剩余 ${quota?.monthlyDeploys ? (quota.monthlyDeploys.limit - quota.monthlyDeploys.used) : 0} 次`} />
       <main className="main">
-        <div className="topbar">
+        <div className="main-header">
           <div>
             <h1>{dashboardViewTitle(activeView)}</h1>
-            <p>{dashboardViewSubtitle(activeView, user)}</p>
+            <p className="sub">{dashboardViewSubtitle(activeView, user)}</p>
           </div>
-          <div className="nav-actions">
-            <Button onClick={handleLogout}>退出</Button>
-          </div>
+          {activeView !== "upload" && activeView !== "agent" && activeView !== "plan" && activeView !== "history" && activeView !== "feedback" ? (
+            <a className="btn-pill" onClick={startCreateProject} style={{cursor: "pointer"}}>+ 新建发布</a>
+          ) : null}
         </div>
         {message ? <Toast message={message} tone={messageTone} /> : null}
         {activeView === "overview" ? (

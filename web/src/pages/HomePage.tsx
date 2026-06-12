@@ -1,57 +1,92 @@
 import { useEffect } from "react";
-import { BrandLogo } from "../components/BrandLogo";
-import { LinkButton } from "../components/Button";
-import { IcpLink } from "../components/IcpLink";
 import { trackTrialEvent } from "../api/trialEvents";
-import { useScrollReveal } from "../hooks/useScrollReveal";
-import {
-  Terminal,
-  ArrowRight,
-  Globe,
-  RefreshCw,
-  Sparkles,
-  ChevronDown,
-} from "lucide-react";
 
 // ── Data ──
 
-const comparisonCards = [
+const painPoints = [
   {
-    icon: Terminal,
-    worry: '"部署"两个字就劝退了',
-    whyHard: "域名、DNS、SSL、服务器、环境配置……这些词听都没听过",
-    solution: "跟 AI 说一声，DemoGo 全部自动搞定",
+    q: '"发给别人就是打不开"',
+    a: "你电脑上能正常运行，换台电脑就报错，总不能让所有人都装一堆软件。",
   },
   {
-    icon: Globe,
-    worry: '"发给别人看"太难了',
-    whyHard: "截图→糊了，发文件→打不开，发安装包→没人装，都不如一个链接",
-    solution: "一个链接，手机电脑都能打开",
+    q: '"不知道怎么变成可访问的链接"',
+    a: "听说要部署到服务器，但那些技术术语你根本看不懂。",
   },
   {
-    icon: RefreshCw,
-    worry: '"改了东西"就要重新搞',
-    whyHard: "重新打包、重新上传、害怕出错、太费时间",
-    solution: "改完再发一次，自动更新，不用重新折腾",
+    q: '"最后只能发个截图"',
+    a: "别人看不到完整的交互效果，你的想法等于没说清楚。",
   },
 ];
 
-const steps = [
+interface SellItem {
+  visual: string;
+  heading: string;
+  text: string;
+  highlight: string | null;
+  tags: string[];
+  altBg: boolean;
+  reverse: boolean;
+}
+
+const sells: SellItem[] = [
   {
-    number: 1,
-    title: "在 AI 工具里做你的产品",
-    innerVoice: '"以前做完东西不知道怎么发出去，现在不用担心了"',
+    visual: "⚡",
+    heading: "AI里做完作品，<br />说句话，链接就有了。",
+    text: "在 Claude Code、OpenClaw 里实现完你的想法，直接说「用 DemoGo 生成链接」。不用下载、不用切窗口、不用开新网页，全程自动完成。",
+    highlight: "你只管想创意，链接的事交给我们。",
+    tags: ["AI一句话生成", "无缝对接", "零操作"],
+    altBg: false,
+    reverse: false,
   },
   {
-    number: 2,
-    title: "告诉 AI，帮你发布",
-    innerVoice: '"真的说一声就发出去了？太神奇了"',
+    visual: "🔗",
+    heading: "拖进本地文件，<br />3秒生成分享链接。",
+    text: "已经下载到桌面的作品，直接拖拽至平台即可。不用管任何技术细节，所有后台处理自动完成。",
+    highlight: "从拖进去到拿到链接，真的只要3秒。",
+    tags: ["拖拽生成", "秒出链接", "全自动"],
+    altBg: true,
+    reverse: true,
   },
   {
-    number: 3,
-    title: "把链接发出去，等反馈回来",
-    innerVoice: '"对方在手机上打开的那一下，我特别激动"',
+    visual: "🛠️",
+    heading: "发一个链接，<br />所有人点开就能体验。",
+    text: "分享到微信、钉钉、群聊，点击即可看到你的完整创意。对方不用注册、不用下载、不用问你怎么弄，打开就能用。",
+    highlight: "生成即分享，点开即体验。",
+    tags: ["即开即用", "无需注册", "全平台兼容"],
+    altBg: false,
+    reverse: false,
   },
+];
+
+const whoCards = [
+  { icon: "📱", title: "产品经理", desc: "生成原型链接，让客户体验你的产品想法" },
+  { icon: "🎨", title: "设计师", desc: "生成页面链接，让甲方看到你的设计效果" },
+  { icon: "📣", title: "运营人员", desc: "生成活动链接，让同事快速参与测试" },
+  { icon: "🚀", title: "创业者", desc: "生成Demo链接，让投资人看懂你的项目" },
+  { icon: "📚", title: "教育工作者", desc: "生成互动课件链接，让学生在线体验学习" },
+  { icon: "🤖", title: "AI爱好者", desc: "生成作品链接，让朋友体验你的趣味创意" },
+];
+
+const scenes = [
+  { icon: "📋", text: "客户演示", sub: "生成链接，当场演示你的产品想法" },
+  { icon: "👥", text: "团队评审", sub: "生成链接，全员一起评审交互效果" },
+  { icon: "📱", text: "社群测试", sub: "生成链接，收集大家的体验反馈" },
+  { icon: "🎯", text: "作品集展示", sub: "生成链接，让面试官看到你的实力" },
+];
+
+const cmpRows = [
+  { label: "耗时", self: "30分钟~2小时，还可能搞不定", dg: "3秒生成可分享链接" },
+  { label: "技术要求", self: "需掌握服务器、部署等专业知识", dg: "无需任何技术基础" },
+  { label: "对方体验", self: "需一步步教别人怎么安装使用", dg: "点击链接就能直接体验" },
+  { label: "综合成本", self: "服务器费+大量时间成本", dg: "基础功能永久免费" },
+  { label: "展示效果", self: "静态截图或无法正常运行", dg: "完整可交互的创意作品" },
+  { label: "数据反馈", self: "完全不知道谁看过", dg: "自动统计链接访问数据" },
+];
+
+const metrics = [
+  { num: "500", suffix: "+", label: "和你一样的创意者已加入" },
+  { num: "2,300", suffix: "+", label: "本周生成的创意分享链接" },
+  { num: "97", suffix: "%", label: "用户表示分享效率提升10倍以上" },
 ];
 
 export function HomePage() {
@@ -59,311 +94,264 @@ export function HomePage() {
     void trackTrialEvent("home_view");
   }, []);
 
-  const { ref: compRef, isRevealed: compRevealed } =
-    useScrollReveal<HTMLDivElement>();
-  const { ref: demoRef, isRevealed: demoRevealed } =
-    useScrollReveal<HTMLDivElement>();
-  const { ref: stepsRef, isRevealed: stepsRevealed } =
-    useScrollReveal<HTMLDivElement>();
-
   return (
-    <div className="page home">
+    <>
       {/* ── Nav ── */}
-      <header className="site-nav">
-        <div className="wrap site-nav-inner">
-          <a className="brand" href="/" aria-label="DemoGo 首页">
-            <BrandLogo />
+      <nav className="nav">
+        <span className="nav-logo">
+          <span className="mark">◆</span>DemoGo
+        </span>
+        <div className="nav-links">
+          <a href="#pain">我能用吗</a>
+          <a href="#sell">怎么用</a>
+          <a href="login.html?mode=register" className="cta">
+            免费试用
           </a>
-          <div className="nav-actions">
-            <LinkButton href="login.html" variant="ghost">
-              登录
-            </LinkButton>
-            <LinkButton
-              href="login.html?mode=register&next=app.html%23upload"
-              variant="primary"
-            >
-              免费开始
-            </LinkButton>
-          </div>
         </div>
-      </header>
+      </nav>
 
       <main>
-        {/* ── Section 1: Hero ── */}
-        <section className="hero">
-          <div className="wrap hero-inner">
-            <h1 className="hero-title">
-              用 AI 做出来的产品
-              <br />
-              <span className="hero-title-em">做完就能发出去</span>
+        {/* ═══════════════════════════════════════════
+            LAYER 1: Hero
+        ═══════════════════════════════════════════ */}
+        <section className="hero" id="hero">
+          <div className="hero-inner">
+            <h1>
+              用AI做完了创意作品，怎么让别人用上？<br />
+              <span className="accent-text">用 DemoGo 一键分享。</span>
             </h1>
-            <p className="hero-reassure">
-              不用买域名&nbsp;&nbsp;·&nbsp;&nbsp;不用配服务器&nbsp;&nbsp;·&nbsp;&nbsp;不用学部署
+            <p className="sub">
+              在 Claude Code 或 OpenClaw 里做完作品，说一句「用 DemoGo 生成链接」。不用部署、不用服务器、不用备案，3秒出链接，任何人点击就能体验你的创意。
             </p>
-            <p className="hero-desc">
-              一个链接，发给谁都能打开。还能看到谁看了、看了多久
-            </p>
-            <LinkButton
-              href="login.html?mode=register&next=app.html%23agent"
-              variant="primary"
-              className="btn-lg hero-cta"
-            >
-              <Sparkles size={20} />
-              <span>在 AI 工具里直接发布</span>
-            </LinkButton>
-            <p className="hero-trust">
-              3,000+ 产品已上线&nbsp;&nbsp;·&nbsp;&nbsp;免费套餐可用&nbsp;&nbsp;·&nbsp;&nbsp;无技术门槛
-            </p>
+            <div className="hero-ctas">
+              <a className="btn-pill primary" href="login.html?mode=register">
+                免费生成我的链接
+              </a>
+              <a className="btn-pill secondary" href="#pain">
+                往下看就懂 ↓
+              </a>
+            </div>
+          </div>
+        </section>
 
-            {/* Chat mockup */}
-            <div className="hero-terminal">
-              <div className="terminal-chrome">
-                <div className="terminal-dot" />
-                <div className="terminal-dot" />
-                <div className="terminal-dot" />
-              </div>
-              <div className="chat-body">
-                <div className="chat-msg chat-msg-user">
-                  <span className="chat-label">你</span>
-                  <span>帮我把这个发出去</span>
+        {/* ═══════════════════════════════════════════
+            LAYER 2: 痛点
+        ═══════════════════════════════════════════ */}
+        <section className="section-alt" id="pain" aria-label="痛点场景">
+          <div className="section-inner">
+            <h2 className="sec-title">分享你的AI创意，是不是总卡在最后一步？</h2>
+            <p className="sec-body sec-body--narrow">
+              熬了好久把想法变成了现实，却没法让别人真正体验到。
+            </p>
+            <div className="pain-grid">
+              {painPoints.map((p, i) => (
+                <div className="pain-card" key={i}>
+                  <div className="pain-q">{p.q}</div>
+                  <div className="pain-a">{p.a}</div>
                 </div>
-                <div className="chat-msg chat-msg-ai">
-                  <span className="chat-label">AI</span>
-                  <span>
-                    好了！这是你的链接 ??
-                    <br />
-                    <span className="chat-link">demogo.cn/d/my-project</span>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* ═══════════════════════════════════════════
+            LAYER 3: 三大核心价值
+        ═══════════════════════════════════════════ */}
+        {sells.map((s, i) => (
+          <section
+            key={i}
+            className={`sell${s.altBg ? " section-alt" : ""}`}
+            id={i === 0 ? "sell" : undefined}
+          >
+            <div className="sell-inner">
+              {s.reverse ? (
+                <>
+                  <div>
+                    <h2 dangerouslySetInnerHTML={{ __html: s.heading }} />
+                    <p>{s.text}</p>
+                    {s.highlight && (
+                      <p className="sell-highlight">{s.highlight}</p>
+                    )}
+                    <div className="sell-tags">
+                      {s.tags.map((t) => (
+                        <span key={t} className="sell-tag">
+                          {t}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="sell-visual" aria-hidden="true">
+                    {s.visual}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="sell-visual" aria-hidden="true">
+                    {s.visual}
+                  </div>
+                  <div>
+                    <h2 dangerouslySetInnerHTML={{ __html: s.heading }} />
+                    <p>{s.text}</p>
+                    {s.highlight && (
+                      <p className="sell-highlight">{s.highlight}</p>
+                    )}
+                    <div className="sell-tags">
+                      {s.tags.map((t) => (
+                        <span key={t} className="sell-tag">
+                          {t}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          </section>
+        ))}
+
+        {/* ═══════════════════════════════════════════
+            LAYER 4: 决策收口
+        ═══════════════════════════════════════════ */}
+
+        {/* 谁适合用 */}
+        <section className="section-alt" id="close" aria-label="适合人群">
+          <div className="section-inner">
+            <h2 className="sec-title">只要你用AI实现创意，就能用DemoGo</h2>
+            <p className="sec-body sec-body--narrow">
+              你不用会写代码，不用懂任何技术。
+              只要你用AI把想法变成了原型、页面、工具或任何可运行的作品，需要分享给别人。
+              说一句话或者拖一下文件，3秒就能搞定。
+            </p>
+            <div className="who-grid">
+              {whoCards.map((w, i) => (
+                <div className="who-card" key={i}>
+                  <div className="who-icon" aria-hidden="true">
+                    {w.icon}
+                  </div>
+                  <div className="who-title">{w.title}</div>
+                  <div className="who-desc">{w.desc}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* 使用场景 */}
+        <section aria-label="使用场景">
+          <div className="section-inner">
+            <h2 className="sec-title">这些场景，一键生成链接就能搞定</h2>
+            <div className="scene-grid">
+              {scenes.map((sc, i) => (
+                <div className="scene-item" key={i}>
+                  <span className="scene-icon" aria-hidden="true">
+                    {sc.icon}
                   </span>
-                </div>
-              </div>            </div>
-
-<div className="hero-scroll-hint">
-              <ChevronDown size={18} />
-              <span>往下看怎么用</span>
-            </div>
-          </div>
-        </section>
-
-        {/* ── Section 2: Comparison ── */}
-        <section className="home-compare">
-          <div className="wrap">
-            <div className="section-head center">
-              <h2>不用懂技术，也能把产品发出去</h2>
-              <p className="section-sub">
-                其他方式要么太复杂，要么根本没法用
-              </p>
-            </div>
-            <div
-              ref={compRef}
-              className={`three-col compare-grid scroll-reveal${compRevealed ? " is-revealed" : ""}`}
-            >
-              {comparisonCards.map((card) => (
-                <article className="compare-card" key={card.worry}>
-                  <card.icon size={24} className="compare-icon" />
-                  <h3 className="compare-worry">{card.worry}</h3>
-                  <p className="compare-hard">{card.whyHard}</p>
-                  <div className="compare-solution">
-                    <span className="compare-solution-label">DemoGo</span>
-                    <p>{card.solution}</p>
+                  <div>
+                    <div className="scene-text">{sc.text}</div>
+                    <div className="scene-sub">{sc.sub}</div>
                   </div>
-                </article>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* ── Section 3: AI Deploy Demo ── */}
-        <section className="home-demo">
-          <div className="wrap">
-            <div className="section-head center">
-              <h2>发布，就是一句话的事</h2>
-              <p className="section-sub">
-                你已经在用 Cursor 写代码了，发布也只需要跟 AI 说一声
-              </p>
-            </div>
-            <div
-              ref={demoRef}
-              className={`demo-showcase scroll-reveal${demoRevealed ? " is-revealed" : ""}`}
-            >
-              <div className="demo-left">
-                <div className="demo-terminal">
-                  <div className="terminal-chrome">
-                    <div className="terminal-dot" />
-                    <div className="terminal-dot" />
-                    <div className="terminal-dot" />
-                  </div>
-                  <div className="chat-body">
-                    <div className="chat-msg chat-msg-user">
-                      <span className="chat-label">你</span>
-                      <span>帮我把这个项目发出去</span>
-                    </div>
-                    <div className="chat-msg chat-msg-ai">
-                      <span className="chat-label">AI</span>
-                      <span>好的 ??</span>
-                    </div>
-                    <div className="chat-msg chat-msg-ai">
-                      <span className="chat-label">AI</span>
-                      <span>正在为你准备...</span>
-                    </div>
-                    <div className="chat-msg chat-msg-ai">
-                      <span className="chat-label">AI</span>
-                      <span>
-                        好了！这是你的链接 ??
-                        <br />
-                        <span className="chat-link">demogo.cn/d/my-app</span>
-                      </span>
-                    </div>
-                    <div className="chat-msg chat-msg-ai">
-                      <span className="chat-label">AI</span>
-                      <span>复制发给别人就能打开了</span>
-                    </div>
-                  </div>
-                </div>
-              <p className="demo-caption">跟 AI 说一声就行</p>
-            </div>
-
-              <div className="demo-arrow">
-                <ArrowRight size={36} />
-              </div>
-              <div className="demo-right">
-                <div className="demo-browser">
-                  <div className="preview-browser-bar">
-                    <div className="preview-dot" />
-                    <div className="preview-dot" />
-                    <div className="preview-dot" />
-                    <div className="preview-url-text">demogo.cn/d/my-app</div>
-                  </div>
-                  {/* Demo page mockup */}
-                  <div className="preview-body preview-demo-page">
-                    <div className="demo-page-nav">
-                      <span className="demo-page-logo">? 我的作品</span>
-                      <span className="demo-page-nav-link">首页</span>
-                      <span className="demo-page-nav-link">关于</span>
-                    </div>
-                    <div className="demo-page-hero">
-                      <div className="demo-page-title">欢迎来到我的第一个产品</div>
-                      <div className="demo-page-sub">这是用 AI 帮我做的，希望你喜欢</div>
-                    </div>
-                    <div className="demo-page-cards">
-                      <div className="demo-page-card">
-                        <div className="demo-card-icon">??</div>
-                        <div className="demo-card-title">功能一</div>
-                        <div className="demo-card-desc">简单实用的功能介绍</div>
-                      </div>
-                      <div className="demo-page-card">
-                        <div className="demo-card-icon">??</div>
-                        <div className="demo-card-title">功能二</div>
-                        <div className="demo-card-desc">帮用户解决问题</div>
-                      </div>
-                    </div>
-                    <div className="demo-page-footer">
-                      ? 2025 我的作品
-                    </div>
-                  </div>
-                </div>
-                <p className="demo-caption">一句话，链接就到手了</p>
-              </div>
-            </div>
-            <p className="demo-tools">
-              支持 Cursor&nbsp;&nbsp;·&nbsp;&nbsp;Windsurf&nbsp;&nbsp;·&nbsp;&nbsp;Codex&nbsp;&nbsp;·&nbsp;&nbsp;Claude Code
-            </p>
-          </div>
-        </section>
-
-        {/* ── Section 4: Steps ── */}
-        <section className="home-steps">
-          <div className="wrap">
-            <div className="section-head center">
-              <h2>三步，就三步</h2>
-            </div>
-            <div
-              ref={stepsRef}
-              className={`steps-inner scroll-reveal${stepsRevealed ? " is-revealed" : ""}`}
-            >
-              {steps.map((step) => (
-                <div className="step-item" key={step.number}>
-                  <div className="step-number">
-                    {String(step.number).padStart(2, "0")}
-                  </div>
-                  <h3 className="step-title">{step.title}</h3>
-                  <p className="step-voice">{step.innerVoice}</p>
                 </div>
               ))}
             </div>
           </div>
         </section>
 
-        {/* ── Section 5: Trust ── */}
-        <section className="home-trust">
-          <div className="wrap">
-            <div className="section-head center">
-              <h2>你不是一个人</h2>
-              <p className="section-sub">
-                已经有很多跟你一样的创作者在用了
-              </p>
-            </div>
-            <div className="trust-metrics">
-              <div className="trust-item">
-                <div className="trust-number">3,000+</div>
-                <div className="trust-label">产品已上线</div>
-              </div>
-              <div className="trust-item">
-                <div className="trust-number">&lt; 3 分钟</div>
-                <div className="trust-label">平均发布时长</div>
-              </div>
-              <div className="trust-item">
-                <div className="trust-number">免费</div>
-                <div className="trust-label">入门套餐</div>
-              </div>
+        {/* 方案对比 */}
+        <section className="section-alt" aria-label="方案对比">
+          <div className="section-inner">
+            <h2 className="sec-title">两种分享方式，差别有多大</h2>
+            <div className="cmp-wrap">
+              <table className="cmp-table">
+                <thead>
+                  <tr>
+                    <th />
+                    <th>传统分享方式</th>
+                    <th>使用 DemoGo</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {cmpRows.map((row, i) => (
+                    <tr key={i}>
+                      <td className="cmp-highlight">{row.label}</td>
+                      <td className="cmp-dim">{row.self}</td>
+                      <td>
+                        <span className="cmp-check">✓</span> {row.dg}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
         </section>
 
-        {/* ── Section 6: CTA ── */}
-        <section className="home-cta">
-          <div className="wrap home-cta-inner">
-            <h2>把你的产品发出去</h2>
-            <p className="cta-reassure">
-              不需要技术背景。不需要信用卡。
-              <br />
-              免费套餐够你把产品发出去、收到反馈。
+        {/* 用户数据 */}
+        <section aria-label="用户数据">
+          <div className="section-inner">
+            <h2 className="sec-title">已有500+创意者选择DemoGo</h2>
+            <div className="metric-row">
+              {metrics.map((m, i) => (
+                <div className="metric" key={i}>
+                  <div className="metric-num">
+                    <span className="num-accent">{m.num}</span>
+                    {m.suffix}
+                  </div>
+                  <div className="metric-label">{m.label}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* 立即开始 */}
+        <section className="section-alt sec-cta">
+          <div className="section-inner">
+            <h2 className="sec-title">
+              用AI实现想法，<br />
+              用DemoGo分享创意。
+            </h2>
+            <p className="sec-body sec-body--narrow cta-sub">
+              免费试用，无需注册，用完即走，无任何附加条件。
             </p>
-            <LinkButton
-              href="login.html?mode=register&next=app.html%23agent"
-              variant="primary"
-              className="btn-xl"
-            >
-              <Sparkles size={20} />
-              <span>免费发布</span>
-            </LinkButton>
-            <p className="cta-plan-info">
-              免费套餐包含：1 个项目 · 1 条试用链接 · 基础反馈收集
-            </p>
-            <p className="cta-upgrade-contact">
-              需要更多额度？升级 Lite / Pro 套餐请联系客服微信 <strong>demogocn</strong> · 邮箱 <strong>hello@demogo.cn</strong>
-            </p>
+            <div className="cta-btn-wrap">
+              <a className="btn-pill primary" href="login.html?mode=register">
+                免费生成我的第一个链接
+              </a>
+            </div>
+            <p className="cta-note">支持 Claude Code、OpenClaw 一句话生成链接 · 本地文件拖拽生成 · 无需服务器/域名/备案</p>
           </div>
         </section>
       </main>
 
       {/* ── Footer ── */}
-      <footer className="home-footer">
-        <div className="wrap home-footer-inner">
+      <footer className="footer">
+        <div className="footer-inner">
           <div className="footer-brand">
-            <BrandLogo />
-            <p>让作品连接真实世界</p>
+            <div className="footer-brand-name">
+              <span className="mark">◆</span>DemoGo
+            </div>
+            <p className="footer-tagline">让你的每一个创意，都能被更多人体验到。</p>
           </div>
           <div className="footer-links">
-            <div className="legal-links">
-              <a href="terms.html">服务条款</a>
-              <a href="privacy.html">隐私政策</a>
-              <a href="content-policy.html">内容政策</a>
-              <a href="mailto:hello@demogo.cn">联系我们</a>
-              <IcpLink />
+            <div className="footer-col">
+              <h4>产品</h4>
+              <a href="#">功能介绍</a>
+              <a href="#">定价方案</a>
+              <a href="#">更新日志</a>
+            </div>
+            <div className="footer-col">
+              <h4>资源</h4>
+              <a href="/terms.html">服务条款</a>
+              <a href="/privacy.html">隐私政策</a>
+              <a href="/content-policy.html">内容政策</a>
             </div>
           </div>
         </div>
+        <div className="footer-bottom">
+          <span>© 2025 DemoGo. 鄂ICP备2026023999号</span>
+          <span>hello@demogo.cn</span>
+        </div>
       </footer>
-    </div>
+    </>
   );
 }

@@ -1,237 +1,58 @@
-﻿/* ═══════════════════════════════════════════════════════════
-   DemoGo Design Tokens v2 — 第一轮打磨
-   注入活力色彩 + 玻璃态增强 + 微动效
+/* ═══════════════════════════════════════════════════════════
+   DemoGo Design Tokens v3 — 翠绿(#22C55E) iOS 极简风
+   对齐 deliverable 设计稿 CSS 变量体系
    ═══════════════════════════════════════════════════════════ */
 
 :root {
-  /* ── Typography ─────────────────────────────────────── */
-  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+  /* ── Colors ──────────────────────────────────────────── */
+  --bg: #FFFFFF;
+  --bg-section: #F5F5F7;
+
+  --accent: #22C55E;
+  --accent-hover: #16A34A;
+  --accent-subtle: rgba(34,197,94,.08);
+  --accent-border: rgba(34,197,94,.2);
+
+  --text-primary: #1D1D1F;
+  --text-secondary: #6E6E73;
+  --text-tertiary: #86868B;
+  --text-quaternary: #A1A1A6;
+
+  --border: #D2D2D7;
+  --border-light: #E8E8ED;
+
+  /* ── Shadows ─────────────────────────────────────────── */
+  --shadow-sm: 0 1px 3px rgba(0,0,0,.04), 0 1px 2px rgba(0,0,0,.04);
+  --shadow-md: 0 4px 12px rgba(0,0,0,.06), 0 1px 3px rgba(0,0,0,.04);
+  --shadow-lg: 0 8px 24px rgba(0,0,0,.08);
+  --shadow-green: 0 4px 20px rgba(34,197,94,.1);
+
+  /* ── Border Radius ───────────────────────────────────── */
+  --radius-md: 18px;
+  --radius-pill: 100px;
+
+  /* ── Layout ──────────────────────────────────────────── */
+  --max-w: 980px;
+  --section-gap: 120px;
+
+  /* ── Typography ──────────────────────────────────────── */
+  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', 'Inter', sans-serif;
   --font-mono: "JetBrains Mono", "Fira Code", "Consolas", monospace;
 
-  --text-xs:   0.75rem;
-  --text-sm:   0.8125rem;
-  --text-base: 0.875rem;
-  --text-md:   1rem;
-  --text-lg:   1.125rem;
-  --text-xl:   1.25rem;
-  --text-2xl:  1.5rem;
-  --text-3xl:  1.875rem;
-  --text-4xl:  2.25rem;
-  --text-5xl:  3rem;
-  --text-6xl:  3.75rem;
+  /* ── Animation ───────────────────────────────────────── */
+  --ease-apple: cubic-bezier(.25,0,.15,1);
 
-  --weight-normal:    400;
-  --weight-medium:    500;
-  --weight-semibold:  600;
-  --weight-bold:      700;
-  --weight-extrabold: 800;
-  --weight-black:     900;
-
-  --leading-tight:   1.15;
-  --leading-normal:  1.55;
-  --leading-relaxed: 1.7;
-
-  /* ── Spacing ────────────────────────────────────────── */
-  --sp-1:  0.25rem;
-  --sp-2:  0.5rem;
-  --sp-3:  0.75rem;
-  --sp-4:  1rem;
-  --sp-5:  1.25rem;
-  --sp-6:  1.5rem;
-  --sp-8:  2rem;
-  --sp-10: 2.5rem;
-  --sp-12: 3rem;
-  --sp-16: 4rem;
-  --sp-20: 5rem;
-  --sp-24: 6rem;
-
-  /* ── Border Radius ──────────────────────────────────── */
-  --r-xs:  4px;
-  --r-sm:  6px;
-  --r-md:  8px;
-  --r-lg:  12px;
-  --r-xl:  16px;
-  --r-2xl: 20px;
-  --r-3xl: 24px;
-  --r-full: 9999px;
-
-  /* ── Shadows (layered + colored) ────────────────────── */
-  --shadow-xs:  0 1px 2px rgba(0, 0, 0, 0.04);
-  --shadow-sm:  0 1px 3px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.04);
-  --shadow-md:  0 4px 14px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
-  --shadow-lg:  0 8px 28px rgba(0, 0, 0, 0.08), 0 2px 6px rgba(0, 0, 0, 0.04);
-  --shadow-xl:  0 16px 48px rgba(0, 0, 0, 0.10), 0 4px 10px rgba(0, 0, 0, 0.04);
-  --shadow-2xl: 0 24px 64px rgba(0, 0, 0, 0.14), 0 6px 16px rgba(0, 0, 0, 0.05);
-
-  /* Colored shadows for brand elements */
-  --shadow-cyan:  0 4px 20px rgba(6, 182, 212, 0.2), 0 1px 4px rgba(6, 182, 212, 0.1);
-  --shadow-cyan-lg: 0 8px 32px rgba(6, 182, 212, 0.25), 0 2px 8px rgba(6, 182, 212, 0.12);
-  --shadow-blue:  0 4px 20px rgba(59, 130, 246, 0.2), 0 1px 4px rgba(59, 130, 246, 0.1);
-  --shadow-indigo: 0 4px 20px rgba(99, 102, 241, 0.2), 0 1px 4px rgba(99, 102, 241, 0.1);
-
-  --glow-brand: 0 0 0 3px rgba(6, 182, 212, 0.25);
-  --glow-blue:  0 0 0 3px rgba(59, 130, 246, 0.25);
-
-  /* ── Animation ──────────────────────────────────────── */
-  --ease-fast:   150ms cubic-bezier(0.4, 0, 0.2, 1);
-  --ease-normal: 250ms cubic-bezier(0.4, 0, 0.2, 1);
-  --ease-slow:   400ms cubic-bezier(0.4, 0, 0.2, 1);
-  --ease-spring: 400ms cubic-bezier(0.34, 1.56, 0.64, 1);
-  --ease-out-expo: 500ms cubic-bezier(0.16, 1, 0.3, 1);
-
-  /* ── Z-Index ────────────────────────────────────────── */
+  /* ── Z-Index ─────────────────────────────────────────── */
   --z-dropdown: 100;
   --z-sticky:   200;
   --z-overlay:  300;
   --z-modal:    400;
   --z-toast:    500;
 
-  /* ═══════════════════════════════════════════════════════
-     Color Palette — 更鲜活的配色
-     ═══════════════════════════════════════════════════════ */
-
-  /* Brand Cyan — 调亮，更有活力 */
-  --cyan-50:  #ecfeff;
-  --cyan-100: #cffafe;
-  --cyan-200: #a5f3fc;
-  --cyan-300: #67e8f9;
-  --cyan-400: #22d3ee;
-  --cyan-500: #06b6d4;
-  --cyan-600: #0891b2;
-  --cyan-700: #0e7490;
-
-  /* Electric Blue — 新增，更亮的蓝色系 */
-  --electric-400: #38bdf8;
-  --electric-500: #0ea5e9;
-  --electric-600: #0284c7;
-
-  /* Blue */
-  --blue-50:  #eff6ff;
-  --blue-100: #dbeafe;
-  --blue-200: #bfdbfe;
-  --blue-300: #93c5fd;
-  --blue-400: #60a5fa;
-  --blue-500: #3b82f6;
-  --blue-600: #2563eb;
-  --blue-700: #1d4ed8;
-
-  /* Indigo */
-  --indigo-400: #818cf8;
-  --indigo-500: #6366f1;
-  --indigo-600: #4f46e5;
-
-  /* Violet — 新增，更丰富的紫色 */
-  --violet-400: #a78bfa;
-  --violet-500: #8b5cf6;
-
-  /* Warm Gray */
-  --gray-0:   #ffffff;
-  --gray-25:  #fdfdfc;
-  --gray-50:  #fafaf9;
-  --gray-100: #f5f5f4;
-  --gray-200: #e7e5e4;
-  --gray-300: #d6d3d1;
-  --gray-400: #a8a29e;
-  --gray-500: #78716c;
-  --gray-600: #57534e;
-  --gray-700: #44403c;
-  --gray-800: #292524;
-  --gray-900: #1c1917;
-  --gray-950: #0c0a09;
-
-  /* Semantic */
-  --green-50:  #f0fdf4;
-  --green-100: #dcfce7;
-  --green-500: #22c55e;
-  --green-600: #16a34a;
-  --green-700: #15803d;
-
-  --amber-50:  #fffbeb;
-  --amber-100: #fef3c7;
-  --amber-400: #fbbf24;
-  --amber-500: #f59e0b;
-  --amber-600: #d97706;
-  --amber-700: #b45309;
-
-  /* Warm accent -- used for badges, highlights, friendly touches */
-  --warm-accent:         var(--amber-500);
-  --warm-accent-subtle:  var(--amber-50);
-
-  --red-50:   #fef2f2;
-  --red-100:  #fee2e2;
-  --red-500:  #ef4444;
-  --red-600:  #dc2626;
-  --red-700:  #b91c1c;
-
-  /* ═══════════════════════════════════════════════════════
-     Semantic Tokens
-     ═══════════════════════════════════════════════════════ */
-
-  --text-primary:    var(--gray-900);
-  --text-secondary:  var(--gray-600);
-  --text-tertiary:   var(--gray-500);
-  --text-placeholder:var(--gray-400);
-  --text-inverse:    var(--gray-0);
-  --text-brand:      var(--cyan-600);
-  --text-link:       var(--electric-600);
-
-  /* Background */
-  --bg-body:         var(--gray-50);
-  --bg-surface:      var(--gray-0);
-  --bg-surface-hover:var(--gray-50);
-  --bg-subtle:       var(--gray-100);
-  --bg-brand-subtle: var(--cyan-50);
-  --bg-blue-subtle:  var(--blue-50);
-  --bg-success:      var(--green-50);
-  --bg-warning:      var(--amber-50);
-  --bg-error:        var(--red-50);
-
-  /* Border */
-  --border-light:    var(--gray-200);
-  --border-default:  var(--gray-300);
-  --border-strong:   var(--gray-400);
-  --border-focus:    var(--electric-400);
-
-  /* Overlay */
-  --overlay: rgba(28, 25, 23, 0.55);
-
-  /* ═══════════════════════════════════════════════════════
-     Backward Compat Aliases
-     ═══════════════════════════════════════════════════════ */
-  --ink:              var(--text-primary);
-  --text:             var(--text-secondary);
-  --muted:            var(--text-tertiary);
-  --faint:            var(--text-placeholder);
-  --soft:             var(--bg-body);
-  --surface:          var(--bg-surface);
-  --surface-2:        var(--bg-blue-subtle);
-  --line:             var(--border-light);
-  --brand:            var(--cyan-400);
-  --brand-dark:       var(--cyan-600);
-  --brand-action:     var(--electric-600);
-  --brand-action-dark:var(--blue-700);
-  --brand-contrast:   var(--text-inverse);
-  --brand-soft:       var(--bg-brand-subtle);
-  --brand-mist:       var(--bg-blue-subtle);
-  --blue:             var(--electric-600);
-  --blue-soft:        var(--bg-blue-subtle);
-  --orange:           var(--amber-600);
-  --orange-soft:      var(--bg-warning);
-  --red:              var(--red-600);
-  --red-soft:         var(--bg-error);
-  --shadow-sm:        var(--shadow-xs);
-  --shadow-md:        var(--shadow-lg);
-  --shadow-lg:        var(--shadow-2xl);
-  --radius-sm:        var(--r-md);
-  --radius-md:        var(--r-lg);
-  --radius-lg:        var(--r-xl);
-
   /* Base */
   color: var(--text-primary);
-  background: var(--bg-body);
+  background: var(--bg);
   font-family: var(--font-sans);
-  font-size: var(--text-base);
-  line-height: var(--leading-normal);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }

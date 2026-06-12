@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="DemoGo — 做完作品，直接扔个链接。">
+  <title>DemoGo — 做完作品，直接发出去</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #FFFFFF;
+      --bg-section: #F5F5F7;
+      --accent: #22C55E;
+      --accent-hover: #16A34A;
+      --accent-subtle: rgba(34,197,94,.08);
+      --accent-border: rgba(34,197,94,.2);
+      --text-primary: #1D1D1F;
+      --text-secondary: #6E6E73;
+      --text-tertiary: #86868B;
+      --text-quaternary: #A1A1A6;
+      --border: #D2D2D7;
+      --border-light: #E8E8ED;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,.04), 0 1px 2px rgba(0,0,0,.04);
+      --shadow-md: 0 4px 12px rgba(0,0,0,.06), 0 1px 3px rgba(0,0,0,.04);
+      --shadow-lg: 0 8px 24px rgba(0,0,0,.08);
+      --shadow-green: 0 4px 20px rgba(34,197,94,.1);
+      --radius-md: 18px;
+      --radius-pill: 100px;
+      --max-w: 980px;
+      --section-gap: 100px;
+      --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', 'Inter', sans-serif;
+    }
+    html { font-size: 16px; scroll-behavior: smooth; }
+    body {
+      font-family: var(--font-sans);
+      background: var(--bg);
+      color: var(--text-primary);
+      line-height: 1.47059;
+      -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+      overscroll-behavior: none;
+    }
+    a { text-decoration: none; }
+    ::selection { background: rgba(34,197,94,.2); color: var(--text-primary); }
+    :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+    }
+
+    /* ===== NAV ===== */
+    .nav {
+      position: sticky; top: 0; z-index: 100;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 40px; height: 48px;
+      background: rgba(255,255,255,.88);
+      backdrop-filter: saturate(180%) blur(20px);
+      -webkit-backdrop-filter: saturate(180%) blur(20px);
+      border-bottom: 1px solid rgba(0,0,0,.06);
+    }
+    .nav-logo { display: flex; align-items: center; gap: 6px; font-size: 16px; font-weight: 700; cursor: default; }
+    .nav-logo .mark { color: var(--accent); font-size: 18px; }
+    .nav-links { display: flex; align-items: center; gap: 32px; }
+    .nav-links a { font-size: 12px; font-weight: 400; color: var(--text-secondary); letter-spacing: .02em; transition: color .2s; }
+    .nav-links a:hover { color: var(--text-primary); }
+    .nav-links a.cta {
+      color: var(--accent); font-weight: 600; padding: 7px 16px; border-radius: var(--radius-pill);
+      border: 1px solid var(--accent-border); font-size: 12px;
+      transition: all .3s cubic-bezier(.25,0,.15,1);
+    }
+    .nav-links a.cta:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+    /* ===== SHARED ===== */
+    section { padding: var(--section-gap) 24px; }
+    .section-inner { max-width: var(--max-w); margin: 0 auto; }
+    .section-alt { background: var(--bg-section); position: relative; }
+    .section-alt::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0;
+      height: 200px;
+      background: linear-gradient(180deg, rgba(34,197,94,.03) 0%, transparent 100%);
+      pointer-events: none;
+    }
+    .btn-pill {
+      display: inline-flex; align-items: center; justify-content: center;
+      padding: 14px 30px; border-radius: var(--radius-pill);
+      font-size: 15px; font-weight: 600; letter-spacing: .01em;
+      transition: all .35s cubic-bezier(.25,0,.15,1);
+      cursor: pointer; border: none;
+    }
+    .btn-pill.primary { background: var(--accent); color: #fff; }
+    .btn-pill.primary:hover { background: var(--accent-hover); transform: scale(1.02); }
+    .btn-pill.primary:active { transform: scale(.97); }
+    .btn-pill.secondary { border: 1px solid var(--border); color: var(--text-primary); background: transparent; }
+    .btn-pill.secondary:hover { border-color: var(--text-secondary); background: rgba(0,0,0,.02); }
+    .sec-title {
+      font-size: clamp(28px, 4vw, 44px); font-weight: 700;
+      letter-spacing: -.015em; line-height: 1.1; text-wrap: balance;
+    }
+    .sec-body {
+      font-size: 18px; color: var(--text-secondary);
+      line-height: 1.7; margin-top: 16px;
+    }
+    .sec-body--narrow { max-width: 560px; }
+
+    /* ============================================
+       LAYER 1: 核心价值承诺
+    ============================================ */
+    .hero {
+      padding: 120px 24px 80px; text-align: center;
+      position: relative; overflow: hidden;
+    }
+    .hero::before {
+      content: ''; position: absolute; top: -200px; left: 50%; transform: translateX(-50%);
+      width: 700px; height: 700px;
+      background: radial-gradient(circle, rgba(34,197,94,.07) 0%, rgba(34,197,94,.02) 40%, transparent 70%);
+      pointer-events: none;
+    }
+    .hero-inner { max-width: 720px; margin: 0 auto; position: relative; }
+    .hero h1 {
+      font-size: clamp(36px, 5.5vw, 60px); font-weight: 700;
+      letter-spacing: -.022em; line-height: 1.05; text-wrap: balance;
+    }
+    .hero h1 .accent { color: var(--accent); }
+    .hero .sub {
+      font-size: 20px; color: var(--text-secondary);
+      line-height: 1.6; margin: 20px auto 0;
+    }
+    .hero-ctas { display: flex; gap: 12px; justify-content: center; margin-top: 36px; flex-wrap: wrap; }
+
+    /* ============================================
+       LAYER 2: 痛点锚定
+    ============================================ */
+    .pain-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      gap: 16px; margin-top: 48px;
+    }
+    .pain-card {
+      padding: 36px 28px;
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-md);
+      background: var(--bg);
+      transition: all .35s cubic-bezier(.25,0,.15,1);
+    }
+    .pain-card:hover { border-color: var(--accent-border); box-shadow: var(--shadow-green); transform: translateY(-2px); }
+    .pain-q {
+      font-size: 17px; font-weight: 600; color: var(--text-primary);
+      margin-bottom: 8px;
+    }
+    .pain-a {
+      font-size: 14px; color: var(--text-secondary); line-height: 1.7;
+    }
+
+    /* ============================================
+       LAYER 3: 卖点强化 — 一屏一个
+    ============================================ */
+    .sell-inner {
+      max-width: var(--max-w); margin: 0 auto;
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 60px; align-items: center;
+    }
+    .sell-visual {
+      width: 100%; aspect-ratio: 4/3;
+      background: linear-gradient(145deg, #F0F0F2, #E8E8ED);
+      border-radius: 20px; box-shadow: var(--shadow-lg);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 64px; overflow: hidden;
+    }
+    .sell h2 {
+      font-size: clamp(26px, 3.5vw, 38px); font-weight: 700;
+      letter-spacing: -.015em; line-height: 1.15;
+    }
+    .sell p {
+      font-size: 17px; color: var(--text-secondary);
+      line-height: 1.7; margin-top: 16px;
+    }
+    .sell-tags {
+      display: flex; flex-wrap: wrap; gap: 8px; margin-top: 24px;
+    }
+    .sell-tag {
+      padding: 6px 14px; border-radius: var(--radius-pill);
+      background: var(--accent-subtle); color: var(--accent);
+      font-size: 13px; font-weight: 500;
+    }
+    .sell-right { order: 2; }
+    .sell-highlight { color: var(--text-primary); font-weight: 500; }
+
+    /* ============================================
+       LAYER 4: 决策收口
+    ============================================ */
+
+    /* 适用人群 */
+    .who-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;
+      margin-top: 48px;
+    }
+    .who-card {
+      padding: 32px 24px; border: 1px solid var(--border-light);
+      border-radius: var(--radius-md); text-align: center;
+      transition: all .35s cubic-bezier(.25,0,.15,1);
+    }
+    .who-card:hover { border-color: var(--accent-border); transform: translateY(-2px); }
+    .who-icon { font-size: 32px; margin-bottom: 12px; }
+    .who-title { font-size: 15px; font-weight: 600; }
+    .who-desc { font-size: 13px; color: var(--text-secondary); margin-top: 4px; line-height: 1.5; }
+
+    /* 场景 */
+    .scene-grid {
+      display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;
+      margin-top: 40px;
+    }
+    .scene-item {
+      display: flex; align-items: center; gap: 12px;
+      padding: 16px 20px; border: 1px solid var(--border-light);
+      border-radius: var(--radius-md);
+      transition: all .35s cubic-bezier(.25,0,.15,1);
+    }
+    .scene-item:hover { border-color: var(--accent-border); transform: translateY(-2px); }
+    .scene-icon { font-size: 24px; }
+    .scene-text { font-size: 15px; font-weight: 500; }
+    .scene-sub { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
+
+    /* 对比表 */
+    .cmp-wrap {
+      margin-top: 48px;
+      background: var(--bg); border-radius: var(--radius-md);
+      border: 1px solid var(--border-light); overflow: hidden;
+      box-shadow: var(--shadow-sm);
+    }
+    .cmp-table { width: 100%; border-collapse: collapse; }
+    .cmp-table th:first-child { width: 40%; }
+    .cmp-table th:nth-child(2) { width: 30%; }
+    .cmp-table th:last-child { width: 30%; }
+    .cmp-table th {
+      text-align: left; padding: 16px 24px; font-size: 13px; font-weight: 600;
+      color: var(--text-tertiary); letter-spacing: .03em;
+      border-bottom: 1px solid var(--border);
+    }
+    .cmp-table td {
+      padding: 14px 24px; font-size: 14px;
+      border-bottom: 1px solid var(--border-light);
+    }
+    .cmp-table tr:last-child td { border-bottom: none; }
+    .cmp-check { color: var(--accent); font-weight: 700; }
+    .cmp-cross { color: var(--text-quaternary); }
+    .cmp-highlight { font-weight: 600; }
+    .cmp-dim { color: var(--text-secondary); }
+
+    /* 指标 */
+    .metric-row {
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      gap: 0; margin-top: 48px;
+      border: 1px solid var(--border-light); border-radius: var(--radius-md);
+      overflow: hidden; background: var(--bg);
+    }
+    .metric { text-align: center; padding: 44px 20px; position: relative; }
+    .metric + .metric::before {
+      content: ''; position: absolute; left: 0; top: 20%; height: 60%; width: 1px; background: var(--border-light);
+    }
+    .metric-num { font-size: 48px; font-weight: 700; letter-spacing: -.03em; }
+    .metric-num .num-accent { color: var(--accent); }
+    .metric-label { font-size: 15px; color: var(--text-secondary); margin-top: 8px; }
+
+    /* ===== CTA ===== */
+    .sec-cta { text-align: center; padding: 100px 24px 120px; }
+    .sec-cta .btn-pill.primary { padding: 16px 44px; font-size: 17px; }
+    .cta-note { font-size: 13px; color: var(--text-quaternary); margin-top: 16px; }
+    .cta-sub { margin: 14px auto 0; }
+    .cta-btn-wrap { margin-top: 32px; }
+
+    /* ===== FOOTER ===== */
+    .footer {
+      padding: 48px 24px 24px; background: var(--bg-section);
+      border-top: 1px solid var(--border-light); position: relative;
+    }
+    .footer::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0;
+      height: 120px;
+      background: linear-gradient(180deg, rgba(34,197,94,.03) 0%, transparent 100%);
+      pointer-events: none;
+    }
+    .footer-inner {
+      max-width: var(--max-w); margin: 0 auto;
+      display: flex; justify-content: space-between; align-items: flex-start;
+    }
+    .footer-brand { max-width: 200px; }
+    .footer-brand-name { font-size: 15px; font-weight: 700; margin-bottom: 6px; }
+    .footer-brand-name .mark { color: var(--accent); }
+    .footer-tagline { font-size: 12px; color: var(--text-quaternary); line-height: 1.5; }
+    .footer-links { display: flex; gap: 48px; }
+    .footer-col { display: flex; flex-direction: column; gap: 10px; }
+    .footer-col h4 { font-size: 11px; font-weight: 600; color: var(--text-tertiary); letter-spacing: .05em; }
+    .footer-col a { font-size: 12px; color: var(--text-secondary); transition: color .2s; }
+    .footer-col a:hover { color: var(--text-primary); }
+    .footer-bottom {
+      max-width: var(--max-w); margin: 36px auto 0; padding-top: 20px;
+      border-top: 1px solid var(--border-light);
+      display: flex; justify-content: space-between; font-size: 11px; color: var(--text-quaternary);
+    }
+
+    @media (max-width: 900px) {
+      :root { --section-gap: 80px; }
+      .nav { padding: 0 20px; }
+      .nav-links a:not(.cta) { display: none; }
+      .pain-grid, .who-grid { grid-template-columns: 1fr; }
+      .sell-inner { grid-template-columns: 1fr; gap: 32px; }
+      .sell-visual { aspect-ratio: 16/9; }
+      .scene-grid { grid-template-columns: 1fr; }
+      .metric-row { grid-template-columns: 1fr; border: none; }
+      .metric { padding: 32px 20px; }
+      .metric + .metric::before { display: none; }
+      .metric + .metric { border-top: 1px solid var(--border-light); }
+      .metric-num { font-size: 36px; }
+      .sec-cta { padding: 80px 20px; }
+      .sec-cta .btn-pill.primary { width: 100%; justify-content: center; }
+      .footer-inner { flex-direction: column; gap: 32px; }
+      .footer-links { gap: 32px; }
+      .footer-bottom { flex-direction: column; gap: 8px; text-align: center; }
+    }
+    @media (max-width: 480px) {
+      :root { --section-gap: 60px; }
+      .hero-ctas { flex-direction: column; align-items: center; }
+      .btn-pill { width: 100%; justify-content: center; }
+      .sell-visual { aspect-ratio: 16/8; }
+    }
+  </style>
+</head>
+<body>
+
+  <nav class="nav">
+    <span class="nav-logo"><span class="mark">◆</span>DemoGo</span>
+    <div class="nav-links">
+      <a href="#pain">适合谁</a>
+      <a href="#sell">为什么选</a>
+      <a href="#close">怎么用</a>
+      <a href="#" class="cta">免费使用</a>
+    </div>
+  </nav>
+
+  <!-- ===== LAYER 1: 核心价值承诺 ===== -->
+  <section class="hero">
+    <div class="hero-inner">
+      <h1>做完作品，<span class="accent">直接扔个链接</span></h1>
+      <p class="sub">用 Cursor、Windsurf 做完项目，拖进 DemoGo 三秒生成一个可访问的链接。发给任何人，打开就是你的作品。</p>
+      <div class="hero-ctas">
+        <a href="#" class="btn-pill primary">免费开始使用</a>
+        <a href="#pain" class="btn-pill secondary">看看适不适合我 →</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== LAYER 2: 痛点锚定 ===== -->
+  <section class="section-alt" id="pain" aria-label="痛点场景">
+    <div class="section-inner">
+      <div class="sec-title">说的是不是你？</div>
+      <p class="sec-body sec-body--narrow">如果你也经历过这些场景，DemoGo 就是为你准备的。</p>
+      <div class="pain-grid">
+        <div class="pain-card">
+          <div class="pain-q">"用 Cursor 做了个原型，不知道怎么给别人看"</div>
+          <div class="pain-a">发 zip 对方不会解。录屏没法交互。开服务器太麻烦。最后拖了一周才给人看到。</div>
+        </div>
+        <div class="pain-card">
+          <div class="pain-q">"设计师交付了 HTML，但我打不开"</div>
+          <div class="pain-a">本地打开路径不对。扔服务器不会配。发给开发还要等排期。一个演示活活等三天。</div>
+        </div>
+        <div class="pain-card">
+          <div class="pain-q">"用 Windsurf 写了小工具，想分享到群里"</div>
+          <div class="pain-a">GitHub Pages 要配。Vercel 要绑账号。Netlify 要拖构建。就想发个链接，这么难？</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== LAYER 3: 卖点强化 - 一屏一个 ===== -->
+  <section class="sell" id="sell">
+    <div class="sell-inner">
+      <div class="sell-visual" aria-hidden="true">⚡</div>
+      <div class="sell-right">
+        <h2>不用配域名、<br>不用搞 SSL、<br>不用写 Dockerfile。</h2>
+        <p>项目拖进去立刻就有链接。你不需要懂什么是部署，不需要知道端口是什么，不需要碰一行命令行。</p>
+        <p class="sell-highlight">你只需要负责把东西做出来，剩下的交给 DemoGo。</p>
+        <div class="sell-tags">
+          <span class="sell-tag">零部署</span>
+          <span class="sell-tag">零配置</span>
+          <span class="sell-tag">零命令行</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section-alt sell">
+    <div class="sell-inner">
+      <div class="sell-right">
+        <h2>链接丢出去，<br>对方点开即用。</h2>
+        <p>不管对方用的是微信、飞书、钉钉还是邮件。打开链接就是你的作品，不需要注册、不需要下载、不需要任何解释。</p>
+        <p class="sell-highlight">收反馈和收快递一样简单。</p>
+        <div class="sell-tags">
+          <span class="sell-tag">无需注册</span>
+          <span class="sell-tag">跨平台</span>
+          <span class="sell-tag">即时反馈</span>
+        </div>
+      </div>
+      <div class="sell-visual" aria-hidden="true">🔗</div>
+    </div>
+  </section>
+
+  <section class="sell">
+    <div class="sell-inner">
+      <div class="sell-visual" aria-hidden="true">🛠️</div>
+      <div class="sell-right">
+        <h2>不管你用什么做，<br>DemoGo 都能接住。</h2>
+        <p>Cursor、Windsurf、VS Code、Replit、Claude Code——你用最舒服的工具做东西，DemoGo 处理剩下的。不挑工具、不绑架 workflow。</p>
+        <div class="sell-tags">
+          <span class="sell-tag">Cursor</span>
+          <span class="sell-tag">Windsurf</span>
+          <span class="sell-tag">VS Code</span>
+          <span class="sell-tag">Replit</span>
+          <span class="sell-tag">Claude Code</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== LAYER 4: 决策收口 ===== -->
+
+  <!-- 适合人群 -->
+  <section class="section-alt" id="close" aria-label="适合人群">
+    <div class="section-inner">
+      <div class="sec-title">专门为这些人做的</div>
+      <p class="sec-body sec-body--narrow">如果你符合下面任一情况，DemoGo 就是你的工具。</p>
+      <div class="who-grid">
+        <div class="who-card">
+          <div class="who-icon" aria-hidden="true">📱</div>
+          <div class="who-title">产品经理</div>
+          <div class="who-desc">做了原型想给客户看，不想求开发帮忙部署</div>
+        </div>
+        <div class="who-card">
+          <div class="who-icon" aria-hidden="true">🎨</div>
+          <div class="who-title">设计师</div>
+          <div class="who-desc">交付了 HTML，想让对方直接打开看效果</div>
+        </div>
+        <div class="who-card">
+          <div class="who-icon" aria-hidden="true">📣</div>
+          <div class="who-title">运营人员</div>
+          <div class="who-desc">做了活动页面，想快速分享到社群里测试</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 使用场景 -->
+  <section aria-label="使用场景">
+    <div class="section-inner">
+      <div class="sec-title">你可以这样用 DemoGo</div>
+      <div class="scene-grid">
+        <div class="scene-item">
+          <span class="scene-icon" aria-hidden="true">📋</span>
+          <div><div class="scene-text">客户 Demo 演示</div><div class="scene-sub">做完直接丢链接给客户，不用约时间不用搭环境</div></div>
+        </div>
+        <div class="scene-item">
+          <span class="scene-icon" aria-hidden="true">👥</span>
+          <div><div class="scene-text">团队内部评审</div><div class="scene-sub">发到群里全员打开即看，收集反馈快三倍</div></div>
+        </div>
+        <div class="scene-item">
+          <span class="scene-icon" aria-hidden="true">📱</span>
+          <div><div class="scene-text">社群测试</div><div class="scene-sub">扔到用户群测试反应，看数据再决定要不要继续做</div></div>
+        </div>
+        <div class="scene-item">
+          <span class="scene-icon" aria-hidden="true">🎯</span>
+          <div><div class="scene-text">面试作品展示</div><div class="scene-sub">链接附在简历里，HR 点开就能看你做的东西</div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 对比表格 -->
+  <section class="section-alt" aria-label="对比">
+    <div class="section-inner">
+      <div class="sec-title">不用 DemoGo 的话，你只能这样</div>
+      <div class="cmp-wrap">
+        <table class="cmp-table">
+          <thead>
+            <tr>
+              <th></th>
+              <th>自己部署</th>
+              <th>DemoGo</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="cmp-highlight">平均耗时</td>
+              <td class="cmp-dim">30 分钟 ~ 2 小时</td>
+              <td><span class="cmp-check">✓</span> 10 秒</td>
+            </tr>
+            <tr>
+              <td class="cmp-highlight">需要懂的东西</td>
+              <td class="cmp-dim">服务器、域名、SSL、Nginx、Docker</td>
+              <td><span class="cmp-check">✓</span> 什么都不用懂</td>
+            </tr>
+            <tr>
+              <td class="cmp-highlight">分享给他人</td>
+              <td class="cmp-dim">要解释"怎么打开""为什么打不开"</td>
+              <td><span class="cmp-check">✓</span> 丢链接就行</td>
+            </tr>
+            <tr>
+              <td class="cmp-highlight">费用</td>
+              <td class="cmp-dim">服务器每月几十到几百</td>
+              <td><span class="cmp-check">✓</span> 免费开始</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- 数据 -->
+  <section aria-label="数据">
+    <div class="section-inner">
+      <div class="sec-title">已经有 500+ 创作者在用</div>
+      <div class="metric-row">
+        <div class="metric">
+          <div class="metric-num"><span class="num-accent">500</span>+</div>
+          <div class="metric-label">创作者已加入</div>
+        </div>
+        <div class="metric">
+          <div class="metric-num"><span class="num-accent">2,300</span>+</div>
+          <div class="metric-label">本周生成的演示</div>
+        </div>
+        <div class="metric">
+          <div class="metric-num"><span class="num-accent">97</span>%</div>
+          <div class="metric-label">愿意推荐给朋友</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== CTA ===== -->
+  <section class="section-alt sec-cta">
+    <div class="section-inner">
+      <h2 class="sec-title">你的下个作品，<br>现在就发出去。</h2>
+      <p class="sec-body sec-body--narrow cta-sub">免费加入，用完即走。没有任何绑定，没有任何风险。</p>
+      <div class="cta-btn-wrap">
+        <a href="#" class="btn-pill primary">免费开始使用</a>
+      </div>
+      <p class="cta-note">无需信用卡，随时取消。</p>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <div class="footer-inner">
+      <div class="footer-brand">
+        <div class="footer-brand-name"><span class="mark">◆</span>DemoGo</div>
+        <p class="footer-tagline">做完作品，直接扔个链接出去。</p>
+      </div>
+      <div class="footer-links">
+        <div class="footer-col"><h4>产品</h4><a href="#">功能介绍</a><a href="#">定价方案</a><a href="#">更新日志</a></div>
+        <div class="footer-col"><h4>资源</h4><a href="#">使用文档</a><a href="#">API 文档</a><a href="#">服务状态</a></div>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>&copy; 2025 DemoGo. All rights reserved.</span>
+      <span>微博 · 微信公众号</span>
+    </div>
+  </footer>
+
+</body>
+</html>

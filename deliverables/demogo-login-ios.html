@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="DemoGo — 登录/注册">
+  <title>登录 · DemoGo</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #FFFFFF;
+      --bg-section: #F5F5F7;
+      --accent: #22C55E;
+      --accent-hover: #16A34A;
+      --accent-subtle: rgba(34,197,94,.08);
+      --accent-border: rgba(34,197,94,.2);
+      --text-primary: #1D1D1F;
+      --text-secondary: #6E6E73;
+      --text-tertiary: #86868B;
+      --text-quaternary: #A1A1A6;
+      --border: #D2D2D7;
+      --border-light: #E8E8ED;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,.04), 0 1px 2px rgba(0,0,0,.04);
+      --shadow-md: 0 4px 12px rgba(0,0,0,.06), 0 1px 3px rgba(0,0,0,.04);
+      --radius-md: 18px;
+      --radius-pill: 100px;
+      --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', 'Inter', sans-serif;
+    }
+    html { font-size: 16px; }
+    body {
+      font-family: var(--font-sans);
+      background: var(--bg-section);
+      color: var(--text-primary);
+      line-height: 1.47059;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      min-height: 100vh;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      padding: 40px 24px;
+    }
+    :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+    ::selection { background: rgba(34,197,94,.2); color: var(--text-primary); }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+    }
+
+    .card {
+      width: 100%; max-width: 400px;
+      background: var(--bg); border-radius: var(--radius-md);
+      box-shadow: var(--shadow-md); border: 1px solid var(--border-light);
+      padding: 48px 36px 40px;
+    }
+    .logo {
+      display: flex; align-items: center; justify-content: center; gap: 6px;
+      font-size: 20px; font-weight: 700; margin-bottom: 28px;
+    }
+    .logo .mark { color: var(--accent); font-size: 22px; }
+    .title {
+      font-size: 22px; font-weight: 700; text-align: center; margin-bottom: 4px;
+    }
+    .sub {
+      font-size: 14px; color: var(--text-secondary); text-align: center; margin-bottom: 28px;
+    }
+    .tabs {
+      display: flex; background: var(--bg-section); border-radius: 12px; padding: 4px; margin-bottom: 24px;
+    }
+    .tab {
+      flex: 1; padding: 8px; text-align: center; border-radius: 10px;
+      font-size: 14px; font-weight: 500; color: var(--text-tertiary);
+      border: none; background: none; cursor: pointer; font-family: var(--font-sans);
+      transition: all .25s cubic-bezier(.25,0,.15,1);
+    }
+    .tab.active { background: var(--bg); color: var(--text-primary); box-shadow: 0 1px 4px rgba(0,0,0,.06); }
+
+    .field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 16px; }
+    .field label { font-size: 12px; font-weight: 600; color: var(--text-secondary); }
+    .field input {
+      padding: 12px 14px; border: 1px solid var(--border); border-radius: 12px;
+      font-size: 15px; font-family: var(--font-sans); outline: none;
+      transition: border-color .2s;
+    }
+    .field input:focus { border-color: var(--accent); }
+    .field input::placeholder { color: var(--text-quaternary); }
+    .row { display: flex; gap: 12px; align-items: flex-end; }
+    .row .field { flex: 1; }
+    .btn-sm {
+      padding: 12px 16px; background: var(--bg-section);
+      border: 1px solid var(--border); border-radius: 12px;
+      color: var(--text-secondary); font-size: 13px; cursor: pointer; white-space: nowrap;
+      font-family: var(--font-sans); transition: all .2s;
+    }
+    .btn-sm:hover { border-color: var(--accent); color: var(--accent); }
+
+    .btn-block {
+      width: 100%; padding: 13px; border-radius: var(--radius-pill);
+      background: var(--accent); color: #fff; border: none;
+      font-size: 15px; font-weight: 600; cursor: pointer;
+      font-family: var(--font-sans); margin-top: 8px;
+      transition: all .3s cubic-bezier(.25,0,.15,1);
+    }
+    .btn-block:hover { background: var(--accent-hover); }
+
+    .footer-text {
+      text-align: center; margin-top: 20px; font-size: 14px; color: var(--text-secondary);
+    }
+    .footer-text a { color: var(--accent); text-decoration: none; font-weight: 600; }
+    .legal { text-align: center; margin-top: 24px; font-size: 11px; color: var(--text-quaternary); }
+
+    @media (max-width: 480px) {
+      .card { padding: 36px 24px 32px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo"><span class="mark">◆</span>DemoGo</div>
+    <div class="title">欢迎回来</div>
+    <p class="sub">登录后继续管理你的作品</p>
+
+    <div class="tabs">
+      <button class="tab active">登录</button>
+      <button class="tab">免费注册</button>
+    </div>
+
+    <form>
+      <div class="field">
+        <label>邮箱</label>
+        <input type="email" placeholder="your@email.com">
+      </div>
+      <div class="field">
+        <label>密码</label>
+        <input type="password" placeholder="至少 8 位">
+      </div>
+      <button class="btn-block">进入工作台</button>
+    </form>
+
+    <p class="footer-text">还没有账号？<a href="#">免费注册 DemoGo</a></p>
+  </div>
+  <p class="legal">&copy; 2025 DemoGo. All rights reserved.</p>
+</body>
+</html>

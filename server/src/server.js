@@ -7,7 +7,6 @@ import { fileURLToPath } from "node:url";
 import process from "node:process";
 import cookieParser from "cookie-parser";
 import express from "express";
-import multer from "multer";
 import * as tar from "tar";
 import unzipper from "unzipper";
 import {
@@ -150,10 +149,12 @@ import {
 import { hashPassword, verifyPassword, hashVerificationCode, createVerifyEmailCode } from "./lib/password-utils.js";
 import { normalizeEmail, createLoginRateLimiter } from "./lib/login-rate-limiter.js";
 import { createSessionStore, setSessionCookie, createAgentTokenRecord, publicAgentToken, verifyAgentToken, parseAgentToken } from "./lib/session-store.js";
+import { readBearerToken, getUserFromRequest, getUserFromAgentToken } from "./lib/auth-helpers.js";
 import { createDeployRateLimiter } from "./lib/deploy-rate-limiter.js";
 import { requestIdMiddleware } from "./middleware/request-id.js";
 import { securityHeadersMiddleware } from "./middleware/security.js";
 import { createRateLimiter, createStrictRateLimiter } from "./middleware/rate-limiter.js";
+import { createUploadMiddleware } from "./middleware/upload.js";
 import { isEmailConfigured, sendVerificationEmail, createSmtpMailer, sendExpirationReminderEmail } from "./email/mailer.js";
 import { checkAndRemindExpiringDemos } from "./services/demo-expiration-service.js";
 import { createAuthMiddleware } from "./middleware/auth.js";
@@ -163,6 +164,7 @@ import { createErrorHandler } from "./middleware/error-handler.js";
 import { createDeploymentJobService } from "./services/deployment-job-service.js";
 import { createBuildService } from "./services/build-service.js";
 import { createDeploymentPipelineService } from "./services/deployment-pipeline-service.js";
+import { createDeployHandlerService } from "./services/deploy-handler-service.js";
 
 import { registerAgentRoutes } from "./routes/agent.js";
 import { registerAuthRoutes } from "./routes/auth.js";
@@ -392,29 +394,7 @@ const deploySourceLabels = {
   agent_api: "AI 助手 API"
 };
 
-const upload = multer({
-  dest: uploadDir,
-  limits: {
-    fileSize: maxZipSizeMb * 1024 * 1024,
-    files: 1
-  },
-  fileFilter: (_req, file, cb) => {
-    const isSupported = isSupportedArchiveName(file.originalname);
-    cb(isSupported ? null : new Error("当前仅支持 .zip、.tar.gz、.tgz 项目包"), isSupported);
-  }
-});
-
-const uploadProjectArchive = [
-  upload.fields([
-    { name: "project", maxCount: 1 },
-    { name: "file", maxCount: 1 },
-    { name: "package", maxCount: 1 }
-  ]),
-  (req, _res, next) => {
-    req.file = req.files?.project?.[0] || req.files?.file?.[0] || req.files?.package?.[0] || null;
-    next();
-  }
-];
+const { upload, uploadProjectArchive } = createUploadMiddleware({ maxZipSizeMb, uploadDir, isSupportedArchiveName });
 
 app.use("/d/:slug", routeRuntimeDemo);
 app.use(securityHeadersMiddleware);
@@ -437,8 +417,8 @@ const markEmailCodeUsed = verifyEmailCodeModule.markEmailCodeUsed;
 const mailer = createSmtpMailer({ smtpHost, smtpPort, smtpUser, smtpPass, smtpFrom, smtpSecure, publicBaseUrl });
 const sendSmtpMail = mailer.sendSmtpMail;
 const authMiddleware = createAuthMiddleware({
-  getUserFromRequest,
-  getUserFromAgentToken,
+  getUserFromRequest: (req) => getUserFromRequest(req, { sessionsFile, usersFile }),
+  getUserFromAgentToken: (value) => getUserFromAgentToken(value, { usersFile }),
   adminUser,
   adminPassword,
   readJson,
@@ -449,6 +429,27 @@ const requireUser = authMiddleware.requireUser;
 const requireAgentToken = authMiddleware.requireAgentToken;
 const requireAdmin = authMiddleware.requireAdmin;
 
+
+async function resolveAgentUpdateDemoId({ user, demoRef }) {
+  const ref = String(demoRef || "").trim();
+  if (!ref) {
+    throw createHttpError("请提供要更新的 Demo ID、链接后缀或原试用链接。", 400);
+  }
+
+  const demos = await readJson(demosFile, []);
+  const direct = demos.find((demo) => demo.userId === user.id && demo.id === ref);
+  if (direct) return direct.id;
+
+  const slug = extractDemoSlug(ref);
+  const demo = demos.find((item) => (
+    item.userId === user.id &&
+    (item.slug === slug || (Array.isArray(item.aliases) && item.aliases.includes(slug)))
+  ));
+  if (!demo) {
+    throw createHttpError("未找到可更新的 Demo。请确认原链接属于当前 AI 发布口令对应的账号。", 404);
+  }
+  return demo.id;
+}
 
 // --- Deployment job service (canonical) ---
 const deploymentJobService = createDeploymentJobService({
@@ -509,6 +510,15 @@ const {
 // Wire up deployment job handlers (using pipeline versions)
 deploymentJobService.setHandlers({ processCreateJob: performCreateDeployment, processUpdateJob: performUpdateDeployment });
 
+// --- Deploy handler service ---
+const deployHandlerService = createDeployHandlerService({
+  getClientIp, detectDeploySource, writeTrialEvent,
+  inspectProjectArchive, createDeploymentJob, addDeploymentJob,
+  performCreateDeployment, performUpdateDeployment,
+  resolveAgentUpdateDemoId, attachErrorDiagnosis,
+});
+const { handleCreateDeployment, handleUpdateDeployment } = deployHandlerService;
+
 // --- Agent route module ---
 app.use(requestIdMiddleware);
 app.use(express.json({ limit: "1mb" }));
@@ -560,7 +570,7 @@ registerAuthRoutes(app, {
   clearLoginFailures,
   createAgentTokenRecord,
   publicAgentToken,
-  getUserFromRequest,
+  getUserFromRequest: (req) => getUserFromRequest(req, { sessionsFile, usersFile }),
   getClientIp,
   writeTrialEvent,
   writeAuditLog,
@@ -585,7 +595,7 @@ registerFormsRoutes(app, { requireUser });
 registerMiscRoutes(app, {
   express,
   normalizeTrialEventType,
-  getUserFromRequest,
+  getUserFromRequest: (req) => getUserFromRequest(req, { sessionsFile, usersFile }),
   writeTrialEvent: writeTrialEvent,
   redirectDemoAlias,
   looksLikeAssetRequest,
@@ -609,7 +619,7 @@ registerDemosRoutes(app, {
   requireUser,
   uploadProjectArchive,
   flushUsageStats,
-  getUserFromRequest,
+  getUserFromRequest: (req) => getUserFromRequest(req, { sessionsFile, usersFile }),
   svcReadDeploymentEventsForDemo,
   createDeploymentJob,
   runDeploymentJob,
@@ -702,164 +712,6 @@ app.get("/api/demo-track/:slug", async (req, res) => {
 });
 
 
-// ===== USER DEPLOY =====
-
-async function handleCreateDeployment(req, res, next, options = {}) {
-  const uploadedFile = req.file;
-  const requestedName = String(req.body?.name || "").trim();
-  const user = req.user;
-  const clientIp = getClientIp(req);
-  const actor = options.actor || "user";
-  const deploySource = detectDeploySource(req, actor);
-
-  if (!uploadedFile) {
-    res.status(400).json({ error: "请上传 .zip、.tar.gz 或 .tgz 项目包" });
-    return;
-  }
-
-  try {
-    await writeTrialEvent({
-      eventType: "deploy_upload_started",
-      userId: user.id,
-      userEmail: user.email,
-      source: deploySource,
-      path: actor === "agent" ? "/api/agent/deploy" : "/api/deploy",
-      ip: clientIp,
-      metadata: {
-        fileName: uploadedFile.originalname,
-        actor
-      }
-    });
-    res.json(await performCreateDeployment({
-      uploadedFile,
-      requestedName,
-      user,
-      clientIp,
-      actor,
-      deploySource
-    }));
-  } catch (error) {
-    const diagnosis = attachErrorDiagnosis(error, {
-      fileName: uploadedFile.originalname,
-      actor,
-      action: "create",
-      deploySource
-    });
-    await writeTrialEvent({
-      eventType: "deploy_failed",
-      userId: user.id,
-      userEmail: user.email,
-      source: deploySource,
-      path: actor === "agent" ? "/api/agent/deploy" : "/api/deploy",
-      ip: clientIp,
-      metadata: {
-        fileName: uploadedFile.originalname,
-        actor,
-        message: error instanceof Error ? error.message : "发布失败",
-        statusCode: error.statusCode || 500,
-        failureCategory: diagnosis.category
-      }
-    });
-    next(error);
-  }
-}
-
-async function handleUpdateDeployment(req, res, next, options = {}) {
-  const uploadedFile = req.file;
-  const user = req.user;
-  const clientIp = getClientIp(req);
-  const actor = options.actor || "user";
-  const deploySource = detectDeploySource(req, actor);
-  const pathLabel = actor === "agent" ? "/api/agent/update" : "/api/demos/:id/update";
-
-  if (!uploadedFile) {
-    res.status(400).json({ error: "请上传 .zip、.tar.gz 或 .tgz 项目包" });
-    return;
-  }
-
-  try {
-    const demoId = actor === "agent"
-      ? await resolveAgentUpdateDemoId({
-          user,
-          demoRef: options.demoRef || req.body?.demoId || req.body?.id || req.body?.slug || req.body?.link || req.body?.url
-        })
-      : options.demoRef || req.params.id;
-
-    await writeTrialEvent({
-      eventType: "deploy_upload_started",
-      userId: user.id,
-      userEmail: user.email,
-      source: deploySource,
-      path: pathLabel,
-      ip: clientIp,
-      metadata: {
-        demoId,
-        fileName: uploadedFile.originalname,
-        actor,
-        action: "update"
-      }
-    });
-
-    const result = await performUpdateDeployment({
-      demoId,
-      uploadedFile,
-      user,
-      clientIp,
-      actor,
-      deploySource
-    });
-
-    await writeTrialEvent({
-      eventType: "deploy_success",
-      userId: user.id,
-      userEmail: user.email,
-      source: deploySource,
-      path: pathLabel,
-      ip: clientIp,
-      metadata: {
-        demoId,
-        demoSlug: result.slug,
-        actor,
-        action: "update",
-        deploySource,
-        detectedType: result.detectedType,
-        databaseEngine: result.database?.engine || ""
-      }
-    });
-
-    if (actor === "agent") {
-      result.message = "更新成功，原试用链接保持不变。";
-      result.nextStep = "请把原访问链接发给用户，并提醒用户刷新页面检查最新版本。";
-    }
-
-    res.json(result);
-  } catch (error) {
-    const diagnosis = attachErrorDiagnosis(error, {
-      fileName: uploadedFile.originalname,
-      actor,
-      action: "update",
-      deploySource
-    });
-    await writeTrialEvent({
-      eventType: "deploy_failed",
-      userId: user.id,
-      userEmail: user.email,
-      source: deploySource,
-      path: pathLabel,
-      ip: clientIp,
-      metadata: {
-        fileName: uploadedFile.originalname,
-        actor,
-        action: "update",
-        message: error instanceof Error ? error.message : "更新失败",
-        statusCode: error.statusCode || 500,
-        failureCategory: diagnosis.category
-      }
-    });
-    next(error);
-  }
-}
-
 async function runExpirationCheck() {
   try {
     const result = await checkAndRemindExpiringDemos({
@@ -890,54 +742,6 @@ export const server = app.listen(port, () => {
   setTimeout(runExpirationCheck, 30000);
   setInterval(runExpirationCheck, 6 * 60 * 60 * 1000);
 });
-
-function readBearerToken(req) {
-  const authorization = String(req.get("authorization") || "");
-  const [scheme, token] = authorization.split(" ");
-  if (scheme?.toLowerCase() === "bearer" && token) return token.trim();
-  return String(req.get("x-demogo-agent-token") || "").trim();
-}
-
-async function getUserFromRequest(req) {
-  const token = req.cookies?.demogo_session;
-  if (!token) return null;
-
-  const [sessions, users] = await Promise.all([
-    readJson(sessionsFile, []),
-    readJson(usersFile, [])
-  ]);
-  const session = sessions.find((item) => item.token === token && new Date(item.expiresAt) > new Date());
-  if (!session) return null;
-  return users.find((user) => user.id === session.userId) || null;
-}
-
-async function getUserFromAgentToken(value) {
-  const token = parseAgentToken(value);
-  if (!token) return null;
-  const users = await readJson(usersFile, []);
-  return users.find((user) => verifyAgentToken(user, token)) || null;
-}
-
-async function resolveAgentUpdateDemoId({ user, demoRef }) {
-  const ref = String(demoRef || "").trim();
-  if (!ref) {
-    throw createHttpError("请提供要更新的 Demo ID、链接后缀或原试用链接。", 400);
-  }
-
-  const demos = await readJson(demosFile, []);
-  const direct = demos.find((demo) => demo.userId === user.id && demo.id === ref);
-  if (direct) return direct.id;
-
-  const slug = extractDemoSlug(ref);
-  const demo = demos.find((item) => (
-    item.userId === user.id &&
-    (item.slug === slug || (Array.isArray(item.aliases) && item.aliases.includes(slug)))
-  ));
-  if (!demo) {
-    throw createHttpError("未找到可更新的 Demo。请确认原链接属于当前 AI 发布口令对应的账号。", 404);
-  }
-  return demo.id;
-}
 
 function calculateQuota(user, allDemos) {
   return calculateUserQuota(user, allDemos, isExpired);

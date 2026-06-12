@@ -1,50 +1,51 @@
-import { BrandLogo } from "../../components/BrandLogo";
-import {
-  LayoutDashboard,
-  FolderOpen,
-  CreditCard,
-  MessageSquare,
-  Home,
-} from "lucide-react";
-
 type DashboardView = "overview" | "projects" | "upload" | "agent" | "plan" | "history" | "feedback";
 
-const items: Array<{ view: DashboardView; label: string; icon: typeof LayoutDashboard }> = [
-  { view: "overview", label: "工作台", icon: LayoutDashboard },
-  { view: "projects", label: "我的作品", icon: FolderOpen },
-  { view: "plan", label: "套餐与额度", icon: CreditCard },
-  { view: "feedback", label: "反馈", icon: MessageSquare },
+const items: Array<{ view: DashboardView; label: string; emoji: string }> = [
+  { view: "overview", label: "总览", emoji: "📊" },
+  { view: "projects", label: "我的作品", emoji: "📁" },
+  { view: "upload", label: "上传发布", emoji: "⬆️" },
+  { view: "agent", label: "AI 发布", emoji: "🤖" },
+  { view: "history", label: "发布记录", emoji: "📋" },
+  { view: "feedback", label: "反馈收集", emoji: "💬" },
+  { view: "plan", label: "套餐额度", emoji: "📦" },
 ];
 
 export function Sidebar({
   activeView,
   setActiveView,
+  userName,
+  userRole,
 }: {
   activeView: DashboardView;
   setActiveView: (view: DashboardView) => void;
+  userName: string;
+  userRole: string;
 }) {
+  const avatarLetter = userName.charAt(0).toUpperCase();
+
   return (
     <aside className="sidebar">
-      <a className="brand" href="/">
-        <BrandLogo />
-      </a>
-      <nav className="side-nav">
-        {items.map(({ view, label, icon: Icon }) => (
+      <div className="sidebar-logo"><span className="mark">◆</span>DemoGo</div>
+      <nav className="sidebar-nav">
+        {items.map(({ view, label, emoji }) => (
           <button
-            className={activeView === view ? "active" : ""}
+            className={`nav-item${activeView === view ? " active" : ""}`}
             key={view}
             type="button"
             onClick={() => setActiveView(view)}
           >
-            <Icon size={18} />
-            <span>{label}</span>
+            <span aria-hidden="true">{emoji}</span>
+            {label}
           </button>
         ))}
-        <a href="/">
-          <Home size={18} />
-          <span>返回首页</span>
-        </a>
       </nav>
+      <div className="sidebar-user">
+        <div className="sidebar-avatar">{avatarLetter}</div>
+        <div className="sidebar-user-info">
+          <div className="sidebar-user-name">{userName}</div>
+          <div className="sidebar-user-role">{userRole}</div>
+        </div>
+      </div>
     </aside>
   );
 }

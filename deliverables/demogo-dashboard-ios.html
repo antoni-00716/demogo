@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="DemoGo 工作台">
+  <title>工作台 · DemoGo</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #FFFFFF;
+      --bg-section: #F5F5F7;
+      --accent: #22C55E;
+      --accent-hover: #16A34A;
+      --accent-subtle: rgba(34,197,94,.08);
+      --accent-border: rgba(34,197,94,.2);
+      --text-primary: #1D1D1F;
+      --text-secondary: #6E6E73;
+      --text-tertiary: #86868B;
+      --text-quaternary: #A1A1A6;
+      --border: #D2D2D7;
+      --border-light: #E8E8ED;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,.04), 0 1px 2px rgba(0,0,0,.04);
+      --shadow-md: 0 4px 12px rgba(0,0,0,.06), 0 1px 3px rgba(0,0,0,.04);
+      --radius-md: 18px;
+      --radius-pill: 100px;
+      --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', 'Inter', sans-serif;
+      --green: #22C55E;
+    }
+    html { font-size: 16px; }
+    body {
+      font-family: var(--font-sans);
+      background: var(--bg-section);
+      color: var(--text-primary);
+      line-height: 1.47059;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+    :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+    ::selection { background: rgba(34,197,94,.2); color: var(--text-primary); }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+    }
+
+    .dash { display: flex; min-height: 100vh; }
+
+    /* ===== SIDEBAR ===== */
+    .sidebar {
+      width: 240px; background: var(--bg);
+      border-right: 1px solid var(--border);
+      padding: 24px 20px; display: flex; flex-direction: column;
+      position: sticky; top: 0; height: 100vh;
+    }
+    .sidebar-logo {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 16px; font-weight: 700; margin-bottom: 32px;
+    }
+    .sidebar-logo .mark { color: var(--accent); font-size: 18px; }
+    .sidebar-nav { display: flex; flex-direction: column; gap: 2px; flex: 1; }
+    .nav-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 12px; border-radius: 8px;
+      font-size: 14px; color: var(--text-secondary); text-decoration: none;
+      transition: all .2s cubic-bezier(.25,0,.15,1);
+    }
+    .nav-item:hover { background: var(--bg-section); color: var(--text-primary); }
+    .nav-item.active { background: var(--accent-subtle); color: var(--accent); font-weight: 500; }
+    .sidebar-user {
+      display: flex; align-items: center; gap: 10px;
+      padding: 16px 8px 0; margin-top: 12px;
+      border-top: 1px solid var(--border);
+    }
+    .sidebar-avatar {
+      width: 32px; height: 32px; border-radius: 16px;
+      background: var(--accent); color: #fff;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px; font-weight: 600;
+    }
+    .sidebar-user-info { flex: 1; }
+    .sidebar-user-name { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+    .sidebar-user-role { font-size: 11px; color: var(--text-tertiary); }
+
+    /* ===== MAIN ===== */
+    .main { flex: 1; padding: 36px 48px; min-width: 0; }
+
+    .main-header {
+      display: flex; justify-content: space-between; align-items: center; margin-bottom: 28px;
+    }
+    .main-header h1 {
+      font-size: 24px; font-weight: 700; letter-spacing: -.015em;
+    }
+    .main-header .sub { font-size: 14px; color: var(--text-secondary); margin-top: 2px; }
+    .main-header .btn-pill {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 10px 22px; border-radius: var(--radius-pill);
+      background: var(--accent); color: #fff;
+      font-size: 14px; font-weight: 600; text-decoration: none;
+      transition: all .3s cubic-bezier(.25,0,.15,1);
+    }
+    .main-header .btn-pill:hover { background: var(--accent-hover); }
+
+    .stats-row {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 40px;
+    }
+    .stat-card {
+      background: var(--bg); border-radius: var(--radius-md); padding: 24px;
+      box-shadow: var(--shadow-sm); border: 1px solid var(--border-light);
+      transition: all .3s cubic-bezier(.25,0,.15,1);
+    }
+    .stat-card:hover { box-shadow: var(--shadow-md); border-color: var(--accent-border); }
+    .stat-label { font-size: 12px; color: var(--text-tertiary); }
+    .stat-value { font-size: 28px; font-weight: 700; margin-top: 4px; letter-spacing: -.02em; }
+    .stat-change { font-size: 12px; margin-top: 2px; color: var(--green); }
+
+    .section-hdr {
+      display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;
+    }
+    .section-hdr h2 { font-size: 17px; font-weight: 600; }
+    .section-hdr a { font-size: 13px; color: var(--accent); text-decoration: none; }
+    .section-hdr a:hover { text-decoration: underline; }
+
+    .demo-list { display: flex; flex-direction: column; gap: 8px; }
+    .demo-row {
+      display: flex; align-items: center; gap: 14px;
+      padding: 18px 24px;
+      background: var(--bg); border-radius: var(--radius-md);
+      box-shadow: var(--shadow-sm); border: 1px solid var(--border-light);
+      transition: all .25s cubic-bezier(.25,0,.15,1);
+    }
+    .demo-row:hover { border-color: var(--accent-border); box-shadow: var(--shadow-md); }
+    .demo-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .demo-dot.online { background: var(--green); }
+    .demo-dot.offline { background: var(--border); }
+    .demo-info { flex: 1; }
+    .demo-name { font-size: 15px; font-weight: 600; }
+    .demo-meta { font-size: 12px; color: var(--text-tertiary); margin-top: 2px; }
+    .demo-views { font-size: 13px; color: var(--text-secondary); white-space: nowrap; }
+    .demo-btn {
+      padding: 6px 14px; border-radius: var(--radius-pill);
+      border: 1px solid var(--border); background: none;
+      font-size: 12px; font-family: var(--font-sans); cursor: pointer;
+      color: var(--text-secondary); transition: all .2s cubic-bezier(.25,0,.15,1);
+    }
+    .demo-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+    @media (max-width: 900px) {
+      .sidebar { display: none; }
+      .main { padding: 24px; }
+      .stats-row { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 600px) {
+      .stats-row { grid-template-columns: 1fr; }
+      .main-header { flex-direction: column; align-items: flex-start; gap: 12px; }
+      .demo-row { flex-wrap: wrap; }
+    }
+  </style>
+</head>
+<body>
+  <div class="dash">
+    <!-- ===== SIDEBAR ===== -->
+    <aside class="sidebar">
+      <div class="sidebar-logo"><span class="mark">◆</span>DemoGo</div>
+      <nav class="sidebar-nav">
+        <a href="#" class="nav-item active"><span aria-hidden="true">📊</span>总览</a>
+        <a href="#" class="nav-item"><span aria-hidden="true">📁</span>我的作品</a>
+        <a href="#" class="nav-item"><span aria-hidden="true">⬆️</span>上传发布</a>
+        <a href="#" class="nav-item"><span aria-hidden="true">🤖</span>AI 发布</a>
+        <a href="#" class="nav-item"><span aria-hidden="true">📋</span>发布记录</a>
+        <a href="#" class="nav-item"><span aria-hidden="true">💬</span>反馈收集</a>
+        <a href="#" class="nav-item"><span aria-hidden="true">📦</span>套餐额度</a>
+      </nav>
+      <div class="sidebar-user">
+        <div class="sidebar-avatar">W</div>
+        <div class="sidebar-user-info">
+          <div class="sidebar-user-name">wang@email.com</div>
+          <div class="sidebar-user-role">免费版 · 剩余 3 次</div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ===== MAIN ===== -->
+    <main class="main">
+      <div class="main-header">
+        <div>
+          <h1>你好，wang</h1>
+          <p class="sub">今天有 2 个新的反馈，快去看看。</p>
+        </div>
+        <a href="#" class="btn-pill">+ 新建发布</a>
+      </div>
+
+      <div class="stats-row">
+        <div class="stat-card"><div class="stat-label">在线作品</div><div class="stat-value">3</div><div class="stat-change">↑ 1 本周新增</div></div>
+        <div class="stat-card"><div class="stat-label">本月发布</div><div class="stat-value">7</div><div class="stat-change" style="color:var(--text-tertiary);">剩余 3 次</div></div>
+        <div class="stat-card"><div class="stat-label">总访问量</div><div class="stat-value">1,284</div><div class="stat-change">↑ 12%</div></div>
+        <div class="stat-card"><div class="stat-label">反馈数</div><div class="stat-value">42</div><div class="stat-change">↑ 3 今日</div></div>
+      </div>
+
+      <div class="section-hdr"><h2>最近作品</h2><a href="#">查看全部 →</a></div>
+      <div class="demo-list">
+        <div class="demo-row">
+          <span class="demo-dot online"></span>
+          <div class="demo-info">
+            <div class="demo-name">产品落地页 v2</div>
+            <div class="demo-meta">2 小时前发布 · 已分享 48 次</div>
+          </div>
+          <div class="demo-views">👁️ 327 次查看</div>
+          <button class="demo-btn">复制链接</button>
+          <button class="demo-btn">详情</button>
+        </div>
+        <div class="demo-row">
+          <span class="demo-dot online"></span>
+          <div class="demo-info">
+            <div class="demo-name">用户调研原型</div>
+            <div class="demo-meta">昨天发布 · 已分享 12 次</div>
+          </div>
+          <div class="demo-views">👁️ 89 次查看</div>
+          <button class="demo-btn">复制链接</button>
+          <button class="demo-btn">详情</button>
+        </div>
+        <div class="demo-row">
+          <span class="demo-dot offline"></span>
+          <div class="demo-info">
+            <div class="demo-name">老版官网 (已归档)</div>
+            <div class="demo-meta">5 天前过期 · 已分享 203 次</div>
+          </div>
+          <div class="demo-views">👁️ 1,024 次查看</div>
+          <button class="demo-btn">重新发布</button>
+        </div>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

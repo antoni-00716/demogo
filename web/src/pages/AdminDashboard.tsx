@@ -8,7 +8,6 @@ import {
   getAdminSubdomainRequests,
   getAdminUsers,
 } from "../api/admin";
-import { Button } from "../components/Button";
 import { IcpLink } from "../components/IcpLink";
 import { Toast } from "../components/Toast";
 import type { AdminMetrics, AdminUser, ContentReview, Demo, Feedback, FormSubmission, HostedForm, PlanRequest, SubdomainRequest } from "../types";
@@ -123,17 +122,14 @@ export function AdminDashboard() {
   }
 
   return (
-    <div className="app-shell admin-shell">
+    <div className="admin">
       <AdminSidebar activeView={activeView} setActiveView={setActiveView} />
       <main className="main">
-        <div className="topbar">
-          <div>
-            <h1>{adminViewTitle(activeView)}</h1>
-            <p>{adminViewSubtitle(activeView)}</p>
-          </div>
-          <div className="nav-actions">
-            <Button onClick={loadAll}>刷新数据</Button>
-            <Button variant="primary" onClick={() => window.location.href = "/"}>返回首页</Button>
+        <div className="admin-header">
+          <h1>{adminViewTitle(activeView)}</h1>
+          <div className="search-box">
+            <span aria-hidden="true">🔍</span>
+            <input placeholder="搜索用户、Demo..." />
           </div>
         </div>
         {message ? <Toast message={message} tone={tone} /> : null}
