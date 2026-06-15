@@ -1,14 +1,10 @@
 import crypto from "node:crypto";
-import { execFile } from "node:child_process";
-import { createWriteStream } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import process from "node:process";
 import cookieParser from "cookie-parser";
 import express from "express";
-import * as tar from "tar";
-import unzipper from "unzipper";
 import {
   adminPassword,
   adminUser,
@@ -180,55 +176,8 @@ import { detectDeploySource, deploySourceLabel, normalizeDeploySource } from "./
 import { cleanProjectName, isGenericProjectName, slugify } from "./lib/project-utils.js";
 
 import {
-  promoteSingleHtmlEntry,
   isSupportedArchiveName,
-  detectArchiveType,
   looksLikeAssetRequest,
-  stripArchiveExtension,
-  analyzeArchiveEntries,
-  cleanupArchiveAnalysis,
-  writeArchiveEntry,
-  normalizeZipPath,
-  findCommonRoot,
-  stripCommonRoot,
-  emptyArchiveAnalysis,
-  analyzeZipEntries,
-  analyzeTarEntries,
-  collectExtractedFiles,
-  normalizeArchivePath,
-  isSafeArchivePath,
-  isUnsafeTarEntryType,
-  classifyEntryPath,
-  isAllowedEnvTemplateName,
-  summarizePathIssues,
-  summarizeRootEntries,
-  detectEntryFile,
-  detectSingleHtmlEntry,
-  hasSourceProjectIndicators,
-  hasBackendIndicators,
-  hasNodeRuntimeDependency,
-  hasSsrIndicators,
-  shouldAnalyzeTextFile,
-  analyzeTextEntries,
-  pickTextSignal,
-  extractHtmlTitle,
-  extractHtmlHeading,
-  stripHtml,
-  analyzePackageJson,
-  analyzeEnvironmentVariableHints,
-  readZipEntryText,
-  readArchiveEntryText,
-  extractFormFields,
-  isCollectableFormField,
-  isNonCollectableControl,
-  parseHtmlAttributes,
-  inferFieldNamesFromCode,
-  inferFieldType,
-  inferFieldLabel,
-  extractApiCalls,
-  isLocalApiUrl,
-  createInvalidZipInspection,
-  createInvalidArchiveInspection,
   createProjectError
 } from "./lib/archive-analyzer.js";
 
@@ -640,17 +589,6 @@ setInterval(() => {
   stopExpiredRuntimes().catch((error) => logger.error({ err: error }, "Failed to stop expired runtimes"));
 }, 60 * 1000);
 
-app.get("/api/demo-track/:slug", async (req, res) => {
-  try {
-    const slug = slugify(req.params.slug);
-    if (slug) {
-      recordDemoVisit(slug, Number(req.query?.bytes || 0), getClientIp(req));
-    }
-    res.type("application/javascript").send("");
-  } catch {
-    res.type("application/javascript").send("");
-  }
-});
 
 
 async function runExpirationCheck() {
@@ -688,11 +626,6 @@ function calculateQuota(user, allDemos) {
   return calculateUserQuota(user, allDemos, isExpired);
 }
 
-function canUpgradePlan(currentPlan, requestedPlan) {
-  const rank = { free: 0, lite: 1, pro: 2 };
-  return (rank[requestedPlan] ?? 0) > (rank[currentPlan || "free"] ?? 0);
-}
-
 async function expireDemos() {
   const demos = await readJson(demosFile, []);
   let changed = false;
@@ -728,26 +661,10 @@ async function redirectDemoAlias(req, res) {
   return true;
 }
 
-async function appendDeploymentEvents(events) {
-  const items = Array.isArray(events) ? events.filter(Boolean) : [];
-  if (!items.length) return;
-  const existing = await readJson(deploymentEventsFile, []);
-  await writeJson(deploymentEventsFile, [...items, ...existing].slice(0, 5000));
-}
 
 
 
 
-// Sync upload to object storage
-async function syncUploadToStorage(filePath, originalName) {
-  if (!isMinioBackend()) return;
-  try {
-    const key = `uploads/${path.basename(filePath)}-${originalName}`;
-    await putFile(key, filePath);
-  } catch (err) {
-    logger.warn({ originalName, error: err.message }, "Failed to sync upload to object storage");
-  }
-}
 
 // Sync demo files to object storage
 async function syncDemoToStorage(slug) {
@@ -761,16 +678,6 @@ async function syncDemoToStorage(slug) {
   }
 }
 
-// Delete demo from object storage
-async function deleteDemoFromStorage(slug) {
-  if (!isMinioBackend()) return;
-  try {
-    await deletePrefix(`demos/${slug}`);
-    logger.info({ slug }, "Demo deleted from object storage");
-  } catch (err) {
-    logger.warn({ slug, error: err.message }, "Failed to delete demo from object storage");
-  }
-}
 
 // Graceful shutdown
 let shuttingDown = false;
