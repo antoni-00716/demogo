@@ -21,6 +21,7 @@ import { AdminForms } from "./admin/AdminForms";
 import { AdminContentReviews } from "./admin/AdminContentReviews";
 import { AdminUsers } from "./admin/AdminUsers";
 import { AdminSettings } from "./admin/AdminSettings";
+import { AdminAnalytics } from "./admin/AdminAnalytics";
 
 type ToastTone = "info" | "success" | "warning" | "danger";
 
@@ -197,6 +198,7 @@ export function AdminDashboard() {
         {activeView === "forms" ? <AdminForms forms={forms} submissions={formSubmissions} /> : null}
         {activeView === "reviews" ? <AdminContentReviews reviews={contentReviews} onHandled={loadAll} show={show} /> : null}
         {activeView === "users" ? <AdminUsers users={users} /> : null}
+        {activeView === "analytics" ? <AdminAnalytics metrics={metrics} demos={demos} users={users} /> : null}
         {activeView === "settings" ? <AdminSettings /> : null}
         <footer className="app-footer">
           <span>DemoGo 运营后台</span>

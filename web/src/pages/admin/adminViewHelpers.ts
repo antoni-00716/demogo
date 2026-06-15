@@ -11,7 +11,8 @@ export function adminViewTitle(view: AdminView) {
     forms: "报名/留言",
     feedback: "用户问题",
     users: "用户",
-    settings: "系统设置"
+    settings: "系统设置",
+    analytics: "数据分析"
   };
   return titles[view];
 }
@@ -27,7 +28,8 @@ export function adminViewSubtitle(view: AdminView) {
     forms: "查看用户通过 DemoGo 收到的报名、预约和留言记录。",
     feedback: "跟进真实试用中的问题，标记处理状态。",
     users: "查看用户套餐、在线试用项目和注册时间。",
-    settings: "确认当前试用阶段的套餐命名、升级流程和产品范围。"
+    settings: "确认当前试用阶段的套餐命名、升级流程和产品范围。",
+    analytics: "查看平台核心指标、热门 Demo 和用户增长趋势。"
   };
   return subtitles[view];
 }

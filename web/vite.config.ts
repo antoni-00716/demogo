@@ -43,7 +43,8 @@ export default defineConfig({
         index: resolve(__dirname, "index.html"),
         login: resolve(__dirname, "login.html"),
         app: resolve(__dirname, "app.html"),
-        admin: resolve(__dirname, "admin.html")
+        admin: resolve(__dirname, "admin.html"),
+        preview: resolve(__dirname, "preview.html")
       }
     }
   }
