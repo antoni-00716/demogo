@@ -21,13 +21,10 @@ import {
   type DeploymentJob
 } from "../api/demos";
 import { createHostedForm, getForms, getHostedForm, type FormQuota } from "../api/forms";
-import { createPlanRequest, getPlanRequests } from "../api/planRequests";
-import { Badge } from "../components/Badge";
-import { Button } from "../components/Button";
-import { Card } from "../components/Card";
+import { getPlanRequests } from "../api/planRequests";
 import { IcpLink } from "../components/IcpLink";
 import { Toast } from "../components/Toast";
-import { planName, plans } from "../config/plans";
+import { planName } from "../config/plans";
 import type { Demo, DeployEvent, DeploymentStep, FormSubmission, HostedForm, PlanRequest, Quota, SubdomainRequest, User } from "../types";
 import { trackTrialEvent } from "../api/trialEvents";
 import { createShareText, writeClipboardText } from "../utils/share";

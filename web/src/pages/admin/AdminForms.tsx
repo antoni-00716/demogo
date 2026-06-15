@@ -56,7 +56,7 @@ export function AdminForms({ forms, submissions }: { forms: HostedForm[]; submis
                   >
                     <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
                       <strong style={{ fontSize: 15, flex: 1 }}>{form.name}</strong>
-                      <Badge tone={st.tone as any}>{st.label}</Badge>
+                      <Badge tone={st.tone as "info" | "success" | "warning" | "danger"}>{st.label}</Badge>
                     </div>
                     <div style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 8 }}>
                       {form.userEmail || "-"} · {form.demoName || form.demoSlug || "-"}

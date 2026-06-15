@@ -1,10 +1,10 @@
 {
-    "version": "0.9.39",
-    "name": "@demogo-cn/shared",
-    "main": "./lib/core.js",
-    "description": "DemoGo shared core module for CLI and MCP",
-    "exports": {
-        ".": "./lib/core.js"
-    },
-    "type": "module"
+  "version": "0.9.40",
+  "name": "@demogo-cn/shared",
+  "main": "./lib/core.js",
+  "description": "DemoGo shared core module for CLI and MCP",
+  "exports": {
+    ".": "./lib/core.js"
+  },
+  "type": "module"
 }

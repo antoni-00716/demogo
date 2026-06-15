@@ -4,7 +4,7 @@ import { Badge } from "../../components/Badge";
 import { Button } from "../../components/Button";
 import { Card } from "../../components/Card";
 import { plans, planName, planRank } from "../../config/plans";
-import { createPlanRequest } from "../../api/plans";
+import { createPlanRequest } from "../../api/planRequests";
 
 export function PlanPanel({
   user,

@@ -20,7 +20,8 @@ export function AdminAnalytics({
     .sort((a, b) => (b.usage?.visits || 0) - (a.usage?.visits || 0))
     .slice(0, 5);
 
-  // Weekly new users (approximate)
+  // Weekly new users (approximate) — stable per render cycle for admin dashboard
+  // eslint-disable-next-line react-hooks/purity
   const oneWeekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
   const weeklyNew = users.filter((u) => u.createdAt && new Date(u.createdAt).getTime() > oneWeekAgo).length;
   const totalNewUsers = (metrics.users || users.length);

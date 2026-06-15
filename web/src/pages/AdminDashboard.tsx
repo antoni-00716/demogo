@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from "react";
+﻿import { useCallback, useEffect, useState } from "react";
 import {
   getAdminContentReviews,
   getAdminFeedback,
@@ -41,26 +41,12 @@ export function AdminDashboard() {
   const [message, setMessage] = useState("");
   const [tone, setTone] = useState<ToastTone>("info");
 
-  useEffect(() => {
-    let mounted = true;
-
-    async function loadInitialData() {
-      await loadAll();
-      if (mounted) setLoading(false);
-    }
-
-    void loadInitialData();
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
   function show(text: string, nextTone: ToastTone = "info") {
     setMessage(text);
     setTone(nextTone);
   }
 
-  async function loadAll() {
+  const loadAll = useCallback(async () => {
     try {
       const [overview, usersPayload, requestsPayload, subdomainPayload, feedbackPayload, formsPayload, contentReviewsPayload] = await Promise.all([
         getAdminOverview(),
@@ -86,7 +72,21 @@ export function AdminDashboard() {
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadInitialData() {
+      await loadAll();
+      if (mounted) setLoading(false);
+    }
+
+    void loadInitialData();
+    return () => {
+      mounted = false;
+    };
+  }, [loadAll]);
 
   async function refreshOverview() {
     const overview = await getAdminOverview();
