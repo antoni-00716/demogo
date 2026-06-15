@@ -10,14 +10,52 @@ import { AdminDetailDrawer } from "./AdminDetailDrawer";
 
 export function AdminUsers({ users, compact = false }: { users: AdminUser[]; compact?: boolean }) {
   const [selectedUserId, setSelectedUserId] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
   const selectedUser = users.find((user) => user.id === selectedUserId) || null;
+
+  const proUsers = users.filter((u) => u.plan === "pro");
+  const liteUsers = users.filter((u) => u.plan === "lite");
+  const disabledUsers = users.filter((u) => u.plan === "disabled");
+
+  const filtered = searchQuery.trim()
+    ? users.filter((u) => u.email?.toLowerCase().includes(searchQuery.toLowerCase()))
+    : users;
+
   return (
     <>
+      {/* Stats Grid */}
+      <div className="stats-grid" style={{ marginBottom: 24 }}>
+        <div className="stat-card">
+          <div className="stat-label">注册用户</div>
+          <div className="stat-value">{users.length}</div>
+          <div className="stat-change up">总量</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-label">专业版</div>
+          <div className="stat-value">{proUsers.length}</div>
+          <div className="stat-change up">{((proUsers.length / (users.length || 1)) * 100).toFixed(1)}%</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-label">入门版</div>
+          <div className="stat-value">{liteUsers.length}</div>
+          <div className="stat-change">{((liteUsers.length / (users.length || 1)) * 100).toFixed(1)}%</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-label">已禁用</div>
+          <div className="stat-value">{disabledUsers.length}</div>
+          <div className="stat-change down">{disabledUsers.length > 0 ? "需关注" : "正常"}</div>
+        </div>
+      </div>
+
       <Card className={`panel ${compact ? "compact-panel" : ""}`} id="users">
         <div className="panel-head">
           <div>
             <h2>用户列表</h2>
             <p>这里只看用户和套餐状态，开通套餐仍然从升级申请进入。</p>
+          </div>
+          <div className="search-box" style={{ marginLeft: "auto" }}>
+            <span aria-hidden="true">🔍</span>
+            <input placeholder="搜索用户..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
           </div>
         </div>
         {!users.length ? (
@@ -35,7 +73,7 @@ export function AdminUsers({ users, compact = false }: { users: AdminUser[]; com
                 </tr>
               </thead>
               <tbody>
-                {users.slice(0, 80).map((user) => (
+                {filtered.slice(0, 80).map((user) => (
                   <tr key={user.id}>
                     <td>{user.email}</td>
                     <td>{planName(user.plan)}</td>

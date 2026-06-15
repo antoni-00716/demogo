@@ -65,7 +65,7 @@ export function UploadPanel({
   }
 
   return (
-    <div className="workspace-home">
+    <div className="upload-card">
 
       {/* === STEP 1 === */}
       <div className={`ag-step ${s1}`}>
@@ -85,13 +85,26 @@ export function UploadPanel({
             <>
               <DropZone file={file} onFile={handleFile} />
               {!updateTarget && (
-                <input
-                  className="ag-url-input"
-                  style={{ marginTop: 12 }}
-                  value={name}
-                  onChange={(e) => setDemoName(e.target.value)}
-                  placeholder="项目名称（选填，DemoGo 会自动识别）"
-                />
+                <>
+                  <div className="form-group">
+                    <label className="form-label">项目名称（选填）</label>
+                    <input
+                      className="form-input"
+                      value={name}
+                      onChange={(e) => setDemoName(e.target.value)}
+                      placeholder="DemoGo 会自动识别"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">文件类型</label>
+                    <select className="form-select">
+                      <option>自动识别</option>
+                      <option>静态网页</option>
+                      <option>前端源码</option>
+                      <option>Node 服务</option>
+                    </select>
+                  </div>
+                </>
               )}
               {updateTarget && (
                 <div style={{ marginTop: 12 }}>
@@ -124,9 +137,14 @@ export function UploadPanel({
         <div className="ag-step-body">
           {/* Before publish */}
           {!isDone && !deploying && hasFile && (
-            <Button variant="primary" onClick={onPublish} style={{ width: "100%", justifyContent: "center", minHeight: 44 }}>
-              📦 {updateTarget ? "更新上线" : "发布上线"}
-            </Button>
+            <div className="form-actions">
+              <Button variant="primary" onClick={onPublish} style={{ flex: 1, justifyContent: "center", minHeight: 44 }}>
+                📦 {updateTarget ? "更新上线" : "发布上线"}
+              </Button>
+              <button className="btn-pill btn-pill--outline btn-pill--disabled" disabled style={{ flex: 1, justifyContent: "center" }}>
+                👁️ 预览
+              </button>
+            </div>
           )}
 
           {/* Deploying progress */}
@@ -136,7 +154,7 @@ export function UploadPanel({
             </div>
           )}
 
-          {/* Inspection result (if failed/blocked) */}
+          {/* Inspection result */}
           {inspection && !inspection.canPublish && !deploying && !isDone && (
             <InspectionPanel inspection={inspection} />
           )}
@@ -146,7 +164,7 @@ export function UploadPanel({
             <div className="ag-result">
               <div style={{ padding: "18px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ color: "var(--green-500)" }}>✅</span>
+                  <span style={{ color: "var(--green)" }}>✅</span>
                   <strong style={{ fontSize: 15 }}>发布成功</strong>
                 </div>
                 {latestDemo.publicUrl && (
@@ -195,7 +213,7 @@ function DropZone({ file, onFile }: { file: File | null; onFile: (f: File | null
 
   return (
     <label
-      className="up-drop"
+      className="upload-zone"
       onDragOver={(e) => e.preventDefault()}
       onDrop={handleDrop}
     >
@@ -203,6 +221,7 @@ function DropZone({ file, onFile }: { file: File | null; onFile: (f: File | null
         type="file"
         accept=".zip,.tar.gz,.tgz,application/zip,application/gzip"
         onChange={(e) => onFile(e.target.files?.[0] || null)}
+        style={{ display: "none" }}
       />
       {file ? (
         <div className="up-file-selected">
@@ -214,9 +233,11 @@ function DropZone({ file, onFile }: { file: File | null; onFile: (f: File | null
         </div>
       ) : (
         <>
-          <span>📦</span>
-          <strong>拖拽 ZIP 文件到这里，或点击选择</strong>
-          <span>支持 .zip .tar.gz .tgz · 最大 50MB</span>
+          <div style={{ textAlign: "center" }}>
+            <div className="upload-zone-icon">📦</div>
+            <div className="upload-zone-text">拖拽 ZIP 文件到这里，或点击选择</div>
+            <div className="upload-zone-hint">支持 .zip .tar.gz .tgz · 最大 50MB</div>
+          </div>
         </>
       )}
     </label>

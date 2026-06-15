@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="DemoGo 管理后台 - 表单管理">
+  <title>表单管理 · DemoGo</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #FFFFFF;
+      --bg-section: #F5F5F7;
+      --accent: #22C55E;
+      --accent-hover: #16A34A;
+      --accent-subtle: rgba(34,197,94,.08);
+      --accent-border: rgba(34,197,94,.2);
+      --text-primary: #1D1D1F;
+      --text-secondary: #6E6E73;
+      --text-tertiary: #86868B;
+      --text-quaternary: #A1A1A6;
+      --border: #D2D2D7;
+      --border-light: #E8E8ED;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,.04), 0 1px 2px rgba(0,0,0,.04);
+      --shadow-md: 0 4px 12px rgba(0,0,0,.06), 0 1px 3px rgba(0,0,0,.04);
+      --shadow-green: 0 4px 20px rgba(34,197,94,.1);
+      --radius-md: 18px;
+      --radius-pill: 100px;
+      --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', 'Inter', sans-serif;
+      --green: #22C55E;
+      --red: #EF4444;
+      --amber: #F59E0B;
+    }
+    html { font-size: 16px; }
+    body {
+      font-family: var(--font-sans);
+      background: var(--bg-section);
+      color: var(--text-primary);
+      line-height: 1.47059;
+      -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+      overscroll-behavior: none;
+    }
+    :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+    ::selection { background: rgba(34,197,94,.2); color: var(--text-primary); }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+    }
+
+    .admin { display: flex; min-height: 100vh; }
+
+    .sidebar {
+      width: 240px; background: var(--bg);
+      border-right: 1px solid var(--border);
+      padding: 24px 20px; display: flex; flex-direction: column;
+      position: sticky; top: 0; height: 100vh;
+    }
+    .sidebar-logo {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 16px; font-weight: 700; margin-bottom: 32px;
+    }
+    .sidebar-logo .mark { color: var(--accent); font-size: 18px; }
+    .sidebar-logo .tag {
+      font-size: 10px; font-weight: 600; background: var(--accent);
+      color: #fff; padding: 2px 6px; border-radius: 4px; margin-left: 4px;
+    }
+    .sidebar-nav { display: flex; flex-direction: column; gap: 2px; flex: 1; }
+    .nav-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 12px; border-radius: 8px;
+      font-size: 14px; color: var(--text-secondary); text-decoration: none;
+      transition: all .2s cubic-bezier(.25,0,.15,1);
+    }
+    .nav-item:hover { background: var(--bg-section); color: var(--text-primary); }
+    .nav-item.active { background: var(--accent-subtle); color: var(--accent); font-weight: 500; }
+    .nav-item .badge {
+      margin-left: auto; font-size: 11px; background: var(--red);
+      color: #fff; padding: 1px 6px; border-radius: 8px;
+    }
+    .sidebar-user {
+      display: flex; align-items: center; gap: 10px;
+      padding: 16px 8px 0; margin-top: 12px;
+      border-top: 1px solid var(--border);
+    }
+    .sidebar-avatar {
+      width: 32px; height: 32px; border-radius: 16px;
+      background: var(--accent); color: #fff;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px; font-weight: 600;
+    }
+
+    .main { flex: 1; padding: 36px 40px; min-width: 0; }
+
+    .admin-header {
+      display: flex; justify-content: space-between; align-items: center; margin-bottom: 28px;
+    }
+    .admin-header h1 { font-size: 24px; font-weight: 700; letter-spacing: -.015em; }
+
+    .admin-header-actions { display: flex; align-items: center; gap: 12px; }
+
+    .search-box {
+      display: flex; align-items: center; gap: 6px;
+      background: var(--bg); border-radius: 10px;
+      padding: 8px 14px; box-shadow: var(--shadow-sm); border: 1px solid var(--border-light);
+    }
+    .search-box input {
+      border: none; background: none; outline: none; font-size: 13px;
+      font-family: var(--font-sans); width: 160px;
+    }
+    .search-box input::placeholder { color: var(--text-quaternary); }
+    .search-box input:focus { border-color: var(--accent); }
+
+    .btn-primary {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 9px 18px; border-radius: 10px; border: none;
+      background: var(--accent); color: #fff; font-size: 13px;
+      font-weight: 600; font-family: var(--font-sans); cursor: pointer;
+      transition: all .25s cubic-bezier(.25,0,.15,1);
+    }
+    .btn-primary:hover { background: var(--accent-hover); }
+
+    .forms-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 16px;
+    }
+
+    .form-card {
+      background: var(--bg); border-radius: var(--radius-md); padding: 20px;
+      box-shadow: var(--shadow-sm); border: 1px solid var(--border-light);
+      transition: all .35s cubic-bezier(.25,0,.15,1);
+    }
+    .form-card:hover { box-shadow: var(--shadow-green); border-color: var(--accent-border); }
+
+    .form-card-header {
+      display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;
+    }
+    .form-card-name { font-size: 15px; font-weight: 600; }
+    .form-card-project { font-size: 12px; color: var(--text-tertiary); margin-top: 2px; }
+    .form-card-meta { margin-top: 12px; display: flex; flex-direction: column; gap: 4px; }
+    .form-card-meta-item { font-size: 12px; color: var(--text-secondary); display: flex; align-items: center; gap: 6px; }
+    .form-card-meta-item strong { color: var(--text-primary); }
+
+    .status-tag {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: 11px; font-weight: 500; padding: 3px 8px; border-radius: 8px;
+    }
+    .status-tag.active { background: rgba(34,197,94,.1); color: var(--green); }
+    .status-tag.closed { background: rgba(134,134,139,.1); color: var(--text-tertiary); }
+    .status-tag.draft { background: rgba(245,158,11,.1); color: var(--amber); }
+
+    .form-card-footer {
+      margin-top: 14px; padding-top: 14px;
+      border-top: 1px solid var(--border-light);
+      display: flex; justify-content: space-between; align-items: center;
+    }
+
+    .action-btn {
+      padding: 5px 12px; border-radius: 12px; border: 1px solid var(--border);
+      background: none; font-size: 12px; font-family: var(--font-sans); cursor: pointer;
+      color: var(--text-secondary);
+      transition: all .25s cubic-bezier(.25,0,.15,1);
+    }
+    .action-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .action-btn.danger:hover { border-color: var(--red); color: var(--red); }
+
+    @media (max-width: 1000px) {
+      .sidebar { display: none; }
+      .main { padding: 24px; }
+    }
+    @media (max-width: 600px) {
+      .admin-header { flex-direction: column; align-items: flex-start; gap: 12px; }
+      .forms-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="admin">
+    <aside class="sidebar">
+      <div class="sidebar-logo"><span class="mark">◆</span>DemoGo<span class="tag">管理</span></div>
+      <nav class="sidebar-nav">
+        <a href="#" class="nav-item"><span aria-hidden="true">📊</span>总览</a>
+        <a href="#" class="nav-item"><span aria-hidden="true">👥</span>用户管理 <span class="badge">12</span></a>
+        <a href="#" class="nav-item"><span aria-hidden="true">📁</span>Demo 管理</a>
+        <a href="#" class="nav-item"><span aria-hidden="true">🔍</span>内容审核</a>
+        <a href="#" class="nav-item"><span aria-hidden="true">📬</span>反馈管理</a>
+        <a href="#" class="nav-item active"><span aria-hidden="true">📋</span>表单管理</a>
+        <a href="#" class="nav-item"><span aria-hidden="true">📈</span>数据分析</a>
+        <a href="#" class="nav-item"><span aria-hidden="true">⚙️</span>系统设置</a>
+      </nav>
+      <div class="sidebar-user">
+        <div class="sidebar-avatar">A</div>
+        <div><div style="font-size:13px;font-weight:600;">admin@demogo.app</div><div style="font-size:11px;color:var(--text-tertiary);">管理员</div></div>
+      </div>
+    </aside>
+    <main class="main">
+      <div class="admin-header">
+        <h1>表单管理</h1>
+        <div class="admin-header-actions">
+          <div class="search-box"><span aria-hidden="true">🔍</span><input placeholder="搜索表单..."></div>
+          <button class="btn-primary"><span aria-hidden="true">＋</span>新建表单</button>
+        </div>
+      </div>
+
+      <div class="forms-grid">
+        <div class="form-card">
+          <div class="form-card-header">
+            <div>
+              <div class="form-card-name">用户满意度调查</div>
+              <div class="form-card-project">营销落地页 - 金融产品</div>
+            </div>
+            <span class="status-tag active">● 启用</span>
+          </div>
+          <div class="form-card-meta">
+            <div class="form-card-meta-item">创建者：<strong>王浩</strong></div>
+            <div class="form-card-meta-item">提交数：<strong>128</strong></div>
+            <div class="form-card-meta-item">创建时间：<strong>2025-06-01</strong></div>
+          </div>
+          <div class="form-card-footer">
+            <button class="action-btn">查看</button>
+            <button class="action-btn">编辑</button>
+            <button class="action-btn danger">删除</button>
+          </div>
+        </div>
+
+        <div class="form-card">
+          <div class="form-card-header">
+            <div>
+              <div class="form-card-name">产品体验反馈表</div>
+              <div class="form-card-project">电商 App 交互原型</div>
+            </div>
+            <span class="status-tag active">● 启用</span>
+          </div>
+          <div class="form-card-meta">
+            <div class="form-card-meta-item">创建者：<strong>李婷</strong></div>
+            <div class="form-card-meta-item">提交数：<strong>67</strong></div>
+            <div class="form-card-meta-item">创建时间：<strong>2025-05-20</strong></div>
+          </div>
+          <div class="form-card-footer">
+            <button class="action-btn">查看</button>
+            <button class="action-btn">编辑</button>
+            <button class="action-btn danger">删除</button>
+          </div>
+        </div>
+
+        <div class="form-card">
+          <div class="form-card-header">
+            <div>
+              <div class="form-card-name">新功能投票</div>
+              <div class="form-card-project">SaaS 后台仪表盘</div>
+            </div>
+            <span class="status-tag active">● 启用</span>
+          </div>
+          <div class="form-card-meta">
+            <div class="form-card-meta-item">创建者：<strong>陈雪</strong></div>
+            <div class="form-card-meta-item">提交数：<strong>342</strong></div>
+            <div class="form-card-meta-item">创建时间：<strong>2025-04-10</strong></div>
+          </div>
+          <div class="form-card-footer">
+            <button class="action-btn">查看</button>
+            <button class="action-btn">编辑</button>
+            <button class="action-btn danger">删除</button>
+          </div>
+        </div>
+
+        <div class="form-card">
+          <div class="form-card-header">
+            <div>
+              <div class="form-card-name">Beta 测试注册</div>
+              <div class="form-card-project">游戏新手引导流程</div>
+            </div>
+            <span class="status-tag draft">● 草稿</span>
+          </div>
+          <div class="form-card-meta">
+            <div class="form-card-meta-item">创建者：<strong>张明</strong></div>
+            <div class="form-card-meta-item">提交数：<strong>0</strong></div>
+            <div class="form-card-meta-item">创建时间：<strong>2025-06-08</strong></div>
+          </div>
+          <div class="form-card-footer">
+            <button class="action-btn">查看</button>
+            <button class="action-btn">编辑</button>
+            <button class="action-btn danger">删除</button>
+          </div>
+        </div>
+
+        <div class="form-card">
+          <div class="form-card-header">
+            <div>
+              <div class="form-card-name">内容合规确认</div>
+              <div class="form-card-project">个人博客 - AI 生成内容</div>
+            </div>
+            <span class="status-tag closed">已关闭</span>
+          </div>
+          <div class="form-card-meta">
+            <div class="form-card-meta-item">创建者：<strong>赵六</strong></div>
+            <div class="form-card-meta-item">提交数：<strong>23</strong></div>
+            <div class="form-card-meta-item">创建时间：<strong>2025-03-15</strong></div>
+          </div>
+          <div class="form-card-footer">
+            <button class="action-btn">查看</button>
+            <button class="action-btn">编辑</button>
+            <button class="action-btn danger">删除</button>
+          </div>
+        </div>
+
+        <div class="form-card">
+          <div class="form-card-header">
+            <div>
+              <div class="form-card-name">Demo 展示反馈</div>
+              <div class="form-card-project">教育平台 - 在线课程</div>
+            </div>
+            <span class="status-tag active">● 启用</span>
+          </div>
+          <div class="form-card-meta">
+            <div class="form-card-meta-item">创建者：<strong>陈雪</strong></div>
+            <div class="form-card-meta-item">提交数：<strong>56</strong></div>
+            <div class="form-card-meta-item">创建时间：<strong>2025-05-28</strong></div>
+          </div>
+          <div class="form-card-footer">
+            <button class="action-btn">查看</button>
+            <button class="action-btn">编辑</button>
+            <button class="action-btn danger">删除</button>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

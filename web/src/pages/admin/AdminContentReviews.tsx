@@ -1,4 +1,4 @@
-﻿import { useState } from "react";
+import { useState } from "react";
 import type { ContentReview } from "../../types";
 import { Badge } from "../../components/Badge";
 import { Button } from "../../components/Button";
@@ -10,6 +10,13 @@ import { AdminDetailDrawer } from "./AdminDetailDrawer";
 
 type ToastTone = "info" | "success" | "warning" | "danger";
 
+const FILTER_OPTIONS = [
+  { key: "all", label: "全部状态" },
+  { key: "pending", label: "待审核" },
+  { key: "approved", label: "已通过" },
+  { key: "rejected", label: "已拒绝" },
+];
+
 export function AdminContentReviews({
   reviews,
   onHandled,
@@ -20,8 +27,20 @@ export function AdminContentReviews({
   show: (text: string, tone?: ToastTone) => void;
 }) {
   const [selectedReviewId, setSelectedReviewId] = useState("");
+  const [filterKey, setFilterKey] = useState("all");
   const selectedReview = reviews.find((review) => review.id === selectedReviewId) || null;
   const riskReviews = reviews.filter((review) => review.resolutionStatus === "pending" || review.status === "blocked" || review.status === "review_required");
+
+  const filtered = filterKey === "all"
+    ? reviews
+    : reviews.filter((r) => {
+        const s = r.resolutionStatus || "pending";
+        if (filterKey === "pending") return s === "pending" || r.status === "blocked" || r.status === "review_required";
+        if (filterKey === "approved") return s === "resolved" || s === "false_positive" || r.status === "passed";
+        if (filterKey === "rejected") return s === "confirmed_violation";
+        return true;
+      });
+
   return (
     <>
       <Card className="panel" id="contentReviews">
@@ -32,6 +51,20 @@ export function AdminContentReviews({
           </div>
           <Badge tone={riskReviews.length ? "warning" : "success"}>{riskReviews.length} 个待处理</Badge>
         </div>
+
+        {/* Filter */}
+        <div className="feedback-filters" style={{ marginBottom: 16 }}>
+          {FILTER_OPTIONS.map((f) => (
+            <button
+              key={f.key}
+              className={`filter-btn${filterKey === f.key ? " active" : ""}`}
+              onClick={() => setFilterKey(f.key)}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+
         {!reviews.length ? (
           <EmptyState title="暂无内容检查记录" description="用户生成或更新试用链接后，会在这里显示发布前内容检查结果。" />
         ) : (
@@ -49,7 +82,7 @@ export function AdminContentReviews({
                 </tr>
               </thead>
               <tbody>
-                {reviews.slice(0, 120).map((review) => (
+                {filtered.slice(0, 120).map((review) => (
                   <tr key={review.id}>
                     <td>
                       <strong>{review.projectName || review.fileName || "-"}</strong>
@@ -57,7 +90,17 @@ export function AdminContentReviews({
                     </td>
                     <td>{review.userEmail || "-"}</td>
                     <td><Badge tone={review.status === "passed" ? "success" : "warning"}>{review.statusLabel || review.status || "-"}</Badge></td>
-                    <td><Badge tone={review.resolutionStatus === "pending" ? "warning" : "success"}>{review.resolutionStatusLabel || review.resolutionStatus || "-"}</Badge></td>
+                    <td>
+                      {review.resolutionStatus === "pending" || review.status === "blocked" || review.status === "review_required" ? (
+                        <span className="risk-tag medium">待处理</span>
+                      ) : review.resolutionStatus === "resolved" ? (
+                        <span className="risk-tag low">已处理</span>
+                      ) : review.resolutionStatus === "confirmed_violation" ? (
+                        <span className="risk-tag high">违规</span>
+                      ) : (
+                        <span>{review.resolutionStatusLabel || review.resolutionStatus || "-"}</span>
+                      )}
+                    </td>
                     <td>{review.summary || "-"}</td>
                     <td>{formatDate(review.createdAt)}</td>
                     <td><Button onClick={() => setSelectedReviewId(review.id || "")}>查看详情</Button></td>

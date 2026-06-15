@@ -1,4 +1,3 @@
-// DemoGo v0.9.14 - Deploy history table (extracted from UserDashboard)
 import { Card } from "../Card";
 import { EmptyState } from "../EmptyState";
 import { formatDate } from "../../utils/format";
@@ -24,19 +23,21 @@ export function DeployHistory({
           <table className="data-table">
             <thead>
               <tr>
-                <th>时间</th>
-                <th>项目名称</th>
+                <th>作品名称</th>
                 <th>操作</th>
                 <th>版本</th>
+                <th>状态</th>
+                <th>时间</th>
               </tr>
             </thead>
             <tbody>
               {events.slice(0, 8).map((event) => (
                 <tr key={event.id}>
-                  <td>{formatDate(event.at)}</td>
-                  <td>{event.demoName || event.demoSlug}</td>
+                  <td><strong>{event.demoName || event.demoSlug}</strong></td>
                   <td>{event.typeLabel}</td>
                   <td>V{event.version || 1}</td>
+                  <td><span className={`status-badge ${event.demoStatus === "published" || !event.demoStatus ? "status-badge--online" : "status-badge--expired"}`}>{(event.demoStatus === "published" || !event.demoStatus) ? "在线" : "已过期"}</span></td>
+                  <td style={{ color: "var(--text-tertiary)", fontSize: 13 }}>{formatDate(event.at)}</td>
                 </tr>
               ))}
             </tbody>

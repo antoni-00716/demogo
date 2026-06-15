@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="DemoGo 管理后台 - 系统设置">
+  <title>系统设置 · DemoGo</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #FFFFFF;
+      --bg-section: #F5F5F7;
+      --accent: #22C55E;
+      --accent-hover: #16A34A;
+      --accent-subtle: rgba(34,197,94,.08);
+      --accent-border: rgba(34,197,94,.2);
+      --text-primary: #1D1D1F;
+      --text-secondary: #6E6E73;
+      --text-tertiary: #86868B;
+      --text-quaternary: #A1A1A6;
+      --border: #D2D2D7;
+      --border-light: #E8E8ED;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,.04), 0 1px 2px rgba(0,0,0,.04);
+      --shadow-md: 0 4px 12px rgba(0,0,0,.06), 0 1px 3px rgba(0,0,0,.04);
+      --shadow-green: 0 4px 20px rgba(34,197,94,.1);
+      --radius-md: 18px;
+      --radius-pill: 100px;
+      --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', 'Inter', sans-serif;
+      --green: #22C55E;
+      --red: #EF4444;
+      --amber: #F59E0B;
+    }
+    html { font-size: 16px; }
+    body {
+      font-family: var(--font-sans);
+      background: var(--bg-section);
+      color: var(--text-primary);
+      line-height: 1.47059;
+      -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+      overscroll-behavior: none;
+    }
+    :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+    ::selection { background: rgba(34,197,94,.2); color: var(--text-primary); }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+    }
+
+    .admin { display: flex; min-height: 100vh; }
+
+    .sidebar {
+      width: 240px; background: var(--bg);
+      border-right: 1px solid var(--border);
+      padding: 24px 20px; display: flex; flex-direction: column;
+      position: sticky; top: 0; height: 100vh;
+    }
+    .sidebar-logo {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 16px; font-weight: 700; margin-bottom: 32px;
+    }
+    .sidebar-logo .mark { color: var(--accent); font-size: 18px; }
+    .sidebar-logo .tag {
+      font-size: 10px; font-weight: 600; background: var(--accent);
+      color: #fff; padding: 2px 6px; border-radius: 4px; margin-left: 4px;
+    }
+    .sidebar-nav { display: flex; flex-direction: column; gap: 2px; flex: 1; }
+    .nav-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 12px; border-radius: 8px;
+      font-size: 14px; color: var(--text-secondary); text-decoration: none;
+      transition: all .2s cubic-bezier(.25,0,.15,1);
+    }
+    .nav-item:hover { background: var(--bg-section); color: var(--text-primary); }
+    .nav-item.active { background: var(--accent-subtle); color: var(--accent); font-weight: 500; }
+    .nav-item .badge {
+      margin-left: auto; font-size: 11px; background: var(--red);
+      color: #fff; padding: 1px 6px; border-radius: 8px;
+    }
+    .sidebar-user {
+      display: flex; align-items: center; gap: 10px;
+      padding: 16px 8px 0; margin-top: 12px;
+      border-top: 1px solid var(--border);
+    }
+    .sidebar-avatar {
+      width: 32px; height: 32px; border-radius: 16px;
+      background: var(--accent); color: #fff;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px; font-weight: 600;
+    }
+
+    .main { flex: 1; padding: 36px 40px; min-width: 0; }
+
+    .admin-header {
+      display: flex; justify-content: space-between; align-items: center; margin-bottom: 28px;
+    }
+    .admin-header h1 { font-size: 24px; font-weight: 700; letter-spacing: -.015em; }
+
+    .settings-card {
+      background: var(--bg); border-radius: var(--radius-md); padding: 28px;
+      box-shadow: var(--shadow-sm); border: 1px solid var(--border-light);
+      margin-bottom: 20px;
+    }
+    .settings-card-title {
+      font-size: 16px; font-weight: 600; margin-bottom: 20px;
+      padding-bottom: 12px; border-bottom: 1px solid var(--border-light);
+    }
+
+    .form-group {
+      margin-bottom: 18px;
+    }
+    .form-group:last-child { margin-bottom: 0; }
+    .form-label {
+      display: block; font-size: 13px; font-weight: 500;
+      color: var(--text-primary); margin-bottom: 6px;
+    }
+    .form-desc {
+      font-size: 11px; color: var(--text-tertiary); margin-bottom: 6px;
+    }
+
+    .form-input {
+      width: 100%; padding: 10px 14px; border-radius: 10px;
+      border: 1px solid var(--border-light); font-size: 14px;
+      font-family: var(--font-sans); color: var(--text-primary);
+      background: var(--bg); outline: none;
+      transition: border-color .2s cubic-bezier(.25,0,.15,1);
+    }
+    .form-input:focus { border-color: var(--accent); }
+    .form-input::placeholder { color: var(--text-quaternary); }
+
+    .form-textarea {
+      width: 100%; padding: 10px 14px; border-radius: 10px;
+      border: 1px solid var(--border-light); font-size: 14px;
+      font-family: var(--font-sans); color: var(--text-primary);
+      background: var(--bg); outline: none; resize: vertical; min-height: 80px;
+      transition: border-color .2s cubic-bezier(.25,0,.15,1);
+    }
+    .form-textarea:focus { border-color: var(--accent); }
+    .form-textarea::placeholder { color: var(--text-quaternary); }
+
+    .form-row {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+    }
+
+    .toggle-group {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 12px 0; border-bottom: 1px solid var(--border-light);
+    }
+    .toggle-group:last-child { border-bottom: none; }
+    .toggle-label { font-size: 14px; }
+    .toggle-desc { font-size: 11px; color: var(--text-tertiary); margin-top: 1px; }
+
+    .toggle-switch {
+      position: relative; width: 44px; height: 24px; flex-shrink: 0;
+    }
+    .toggle-switch input {
+      opacity: 0; width: 0; height: 0; position: absolute;
+    }
+    .toggle-slider {
+      position: absolute; inset: 0; cursor: pointer;
+      background: var(--border); border-radius: 12px;
+      transition: all .25s cubic-bezier(.25,0,.15,1);
+    }
+    .toggle-slider::before {
+      content: ''; position: absolute; width: 18px; height: 18px;
+      left: 3px; bottom: 3px; background: #fff; border-radius: 50%;
+      transition: all .25s cubic-bezier(.25,0,.15,1);
+    }
+    .toggle-switch input:checked + .toggle-slider { background: var(--accent); }
+    .toggle-switch input:checked + .toggle-slider::before { transform: translateX(20px); }
+
+    .btn-save {
+      padding: 12px 32px; border-radius: 12px; border: none;
+      background: var(--accent); color: #fff; font-size: 14px;
+      font-weight: 600; font-family: var(--font-sans); cursor: pointer;
+      transition: all .25s cubic-bezier(.25,0,.15,1);
+      margin-top: 8px;
+    }
+    .btn-save:hover { background: var(--accent-hover); }
+
+    @media (max-width: 1000px) {
+      .sidebar { display: none; }
+      .main { padding: 24px; }
+    }
+    @media (max-width: 600px) {
+      .admin-header { flex-direction: column; align-items: flex-start; gap: 12px; }
+      .form-row { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="admin">
+    <aside class="sidebar">
+      <div class="sidebar-logo"><span class="mark">◆</span>DemoGo<span class="tag">管理</span></div>
+      <nav class="sidebar-nav">
+        <a href="#" class="nav-item"><span aria-hidden="true">📊</span>总览</a>
+        <a href="#" class="nav-item"><span aria-hidden="true">👥</span>用户管理 <span class="badge">12</span></a>
+        <a href="#" class="nav-item"><span aria-hidden="true">📁</span>Demo 管理</a>
+        <a href="#" class="nav-item"><span aria-hidden="true">🔍</span>内容审核</a>
+        <a href="#" class="nav-item"><span aria-hidden="true">📬</span>反馈管理</a>
+        <a href="#" class="nav-item"><span aria-hidden="true">📋</span>表单管理</a>
+        <a href="#" class="nav-item"><span aria-hidden="true">📈</span>数据分析</a>
+        <a href="#" class="nav-item active"><span aria-hidden="true">⚙️</span>系统设置</a>
+      </nav>
+      <div class="sidebar-user">
+        <div class="sidebar-avatar">A</div>
+        <div><div style="font-size:13px;font-weight:600;">admin@demogo.app</div><div style="font-size:11px;color:var(--text-tertiary);">管理员</div></div>
+      </div>
+    </aside>
+    <main class="main">
+      <div class="admin-header">
+        <h1>系统设置</h1>
+      </div>
+
+      <div class="settings-card">
+        <div class="settings-card-title">基本设置</div>
+        <div class="form-group">
+          <label class="form-label" for="site-name">站点名称</label>
+          <div class="form-desc">用于系统界面展示和邮件通知中的站点名称。</div>
+          <input class="form-input" id="site-name" type="text" value="DemoGo" placeholder="输入站点名称">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="site-desc">站点描述</label>
+          <div class="form-desc">简短描述站点用途，显示在登录页和邮件底部。</div>
+          <textarea class="form-textarea" id="site-desc" placeholder="输入站点描述">DemoGo - 交互 Demo 展示与反馈平台</textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="site-url">站点 URL</label>
+          <div class="form-desc">系统对外访问的完整地址。</div>
+          <input class="form-input" id="site-url" type="url" value="https://demogo.app" placeholder="https://example.com">
+        </div>
+      </div>
+
+      <div class="settings-card">
+        <div class="settings-card-title">运行配置</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="max-instances">最大实例数</label>
+            <div class="form-desc">同一时间可运行的 Demo 实例上限。</div>
+            <input class="form-input" id="max-instances" type="number" value="100" min="1" max="1000">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="memory-limit">内存限制 (MB)</label>
+            <div class="form-desc">单个 Demo 实例的最大内存使用。</div>
+            <input class="form-input" id="memory-limit" type="number" value="512" min="128" max="4096">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="upload-limit">上传大小限制 (MB)</label>
+            <div class="form-desc">单个文件最大上传大小。</div>
+            <input class="form-input" id="upload-limit" type="number" value="50" min="1" max="500">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="session-timeout">会话超时 (分钟)</label>
+            <div class="form-desc">用户会话空闲超时时间。</div>
+            <input class="form-input" id="session-timeout" type="number" value="60" min="5" max="1440">
+          </div>
+        </div>
+      </div>
+
+      <div class="settings-card">
+        <div class="settings-card-title">通知设置</div>
+        <div class="toggle-group">
+          <div>
+            <div class="toggle-label">邮件通知</div>
+            <div class="toggle-desc">通过邮件发送系统通知和审核结果。</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" checked>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div class="toggle-group">
+          <div>
+            <div class="toggle-label">短信通知</div>
+            <div class="toggle-desc">通过短信发送关键告警和验证码。</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div class="toggle-group">
+          <div>
+            <div class="toggle-label">新用户注册提醒</div>
+            <div class="toggle-desc">有新用户注册时通知管理员。</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" checked>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div class="toggle-group">
+          <div>
+            <div class="toggle-label">内容审核通知</div>
+            <div class="toggle-desc">有内容等待审核时发送通知。</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" checked>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div class="toggle-group">
+          <div>
+            <div class="toggle-label">系统更新通知</div>
+            <div class="toggle-desc">平台有版本更新时通知用户。</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <button class="btn-save">保存设置</button>
+    </main>
+  </div>
+</body>
+</html>

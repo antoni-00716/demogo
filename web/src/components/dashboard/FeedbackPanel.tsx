@@ -1,4 +1,4 @@
-// DemoGo v0.9.14 - Feedback panel (extracted from UserDashboard)
+// DemoGo v0.9.14 - Feedback panel (iOS redesign)
 import { useState } from "react";
 import { Card } from "../Card";
 import { Button } from "../Button";
@@ -28,32 +28,31 @@ export function FeedbackPanel({ demos, show }: {
   }
 
   return (
-    <Card className="panel" id="feedback">
-      <h2>反馈问题</h2>
-      <div className="feedback-form">
-        <label className="form-field">
-          问题类型
-          <select className="select" value={type} onChange={(event) => setType(event.target.value)}>
-            <option value="deploy_failed">发布失败</option>
-            <option value="form_data">表单数据</option>
-            <option value="page_error">页面错误</option>
-            <option value="suggestion">功能建议</option>
-            <option value="other">其他</option>
-          </select>
-        </label>
-        <label className="form-field">
-          关联项目
-          <select className="select" value={demoId} onChange={(event) => setDemoId(event.target.value)}>
-            <option value="">不关联项目</option>
-            {demos.map((demo) => <option key={demo.id} value={demo.id}>{demo.slug}</option>)}
-          </select>
-        </label>
-        <label className="form-field">
-          问题描述
-          <textarea className="textarea" value={feedbackMessage} onChange={(event) => setFeedbackMessage(event.target.value)} placeholder="请详细描述你遇到的问题或建议" />
-        </label>
-        <Button onClick={submit}>提交反馈</Button>
+    <div>
+      <div className="feedback-filters" style={{ marginBottom: 20 }}>
+        <button className={`filter-btn ${type === "suggestion" ? "active" : ""}`} onClick={() => setType("suggestion")}>建议</button>
+        <button className={`filter-btn ${type === "bug" ? "active" : ""}`} onClick={() => setType("bug")}>问题</button>
+        <button className={`filter-btn ${type === "praise" ? "active" : ""}`} onClick={() => setType("praise")}>赞赏</button>
+        <button className={`filter-btn ${type === "other" ? "active" : ""}`} onClick={() => setType("other")}>其他</button>
       </div>
-    </Card>
+
+      <Card className="panel" id="feedback">
+        <h2>反馈问题</h2>
+        <div className="feedback-form">
+          <label className="form-field">
+            关联项目
+            <select className="select" value={demoId} onChange={(event) => setDemoId(event.target.value)}>
+              <option value="">不关联项目</option>
+              {demos.map((demo) => <option key={demo.id} value={demo.id}>{demo.slug}</option>)}
+            </select>
+          </label>
+          <label className="form-field">
+            问题描述
+            <textarea className="textarea" value={feedbackMessage} onChange={(event) => setFeedbackMessage(event.target.value)} placeholder="请详细描述你遇到的问题或建议" />
+          </label>
+          <Button onClick={submit}>提交反馈</Button>
+        </div>
+      </Card>
+    </div>
   );
 }

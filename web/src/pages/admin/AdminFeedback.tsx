@@ -19,7 +19,19 @@ export function AdminFeedback({
   onError: (text: string) => void;
 }) {
   const [selectedFeedbackId, setSelectedFeedbackId] = useState("");
+  const [filterType, setFilterType] = useState("all");
   const selectedFeedback = feedback.find((item) => item.id === selectedFeedbackId) || null;
+
+  const totalCount = feedback.length;
+  const unreadCount = feedback.filter((item) => item.status === "open").length;
+  const bugCount = feedback.filter((item) => item.type === "bug" || item.type === "deploy_failed" || item.type === "page_error").length;
+  const suggestionCount = feedback.filter((item) => item.type === "suggestion" || item.type === "form_data").length;
+
+  const filtered = filterType === "all" ? feedback
+    : filterType === "open" ? feedback.filter((item) => item.status === "open")
+    : filterType === "bug" ? feedback.filter((item) => item.type === "bug" || item.type === "deploy_failed" || item.type === "page_error")
+    : filterType === "suggestion" ? feedback.filter((item) => item.type === "suggestion" || item.type === "form_data")
+    : feedback;
 
   async function update(id: string, status: Feedback["status"]) {
     try {
@@ -38,15 +50,42 @@ export function AdminFeedback({
             <h2>用户问题</h2>
             <p>真实试用过程中的问题要完整保留，进入详情后再变更处理状态。</p>
           </div>
-          <Badge tone={feedback.some((item) => item.status === "open") ? "warning" : "success"}>
-            {feedback.filter((item) => item.status === "open").length} 条待处理
-          </Badge>
+          <Badge tone={unreadCount > 0 ? "warning" : "success"}>{unreadCount} 条待处理</Badge>
+        </div>
+
+        {/* Stats Grid */}
+        <div className="stats-grid" style={{ marginBottom: 20 }}>
+          <div className="stat-card">
+            <div className="stat-label">总反馈</div>
+            <div className="stat-value">{totalCount}</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-label">待处理</div>
+            <div className="stat-value">{unreadCount}</div>
+            {unreadCount > 0 && <div className="stat-change down">需处理</div>}
+          </div>
+          <div className="stat-card">
+            <div className="stat-label">Bug 反馈</div>
+            <div className="stat-value">{bugCount}</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-label">功能建议</div>
+            <div className="stat-value">{suggestionCount}</div>
+          </div>
+        </div>
+
+        {/* Filter */}
+        <div className="feedback-filters" style={{ marginBottom: 16 }}>
+          <button className={`filter-btn${filterType === "all" ? " active" : ""}`} onClick={() => setFilterType("all")}>全部类型</button>
+          <button className={`filter-btn${filterType === "open" ? " active" : ""}`} onClick={() => setFilterType("open")}>待处理</button>
+          <button className={`filter-btn${filterType === "bug" ? " active" : ""}`} onClick={() => setFilterType("bug")}>Bug</button>
+          <button className={`filter-btn${filterType === "suggestion" ? " active" : ""}`} onClick={() => setFilterType("suggestion")}>建议</button>
         </div>
         {!feedback.length ? (
           <EmptyState title="暂无用户问题" description="用户端提交问题后，会显示在这里。" />
         ) : (
           <div className="feedback-list">
-            {feedback.slice(0, 30).map((item) => (
+            {filtered.slice(0, 30).map((item) => (
               <div className="feedback-item" key={item.id}>
                 <div className="panel">
                   <div>

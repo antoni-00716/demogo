@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="DemoGo 管理后台">
-  <title>DemoGo 管理后台</title>
+  <meta name="description" content="DemoGo 管理后台 - 用户管理">
+  <title>用户管理 · DemoGo</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -94,6 +94,8 @@
     }
     .admin-header h1 { font-size: 24px; font-weight: 700; letter-spacing: -.015em; }
 
+    .admin-header-actions { display: flex; align-items: center; gap: 12px; }
+
     .search-box {
       display: flex; align-items: center; gap: 6px;
       background: var(--bg); border-radius: 10px;
@@ -105,6 +107,15 @@
     }
     .search-box input::placeholder { color: var(--text-quaternary); }
     .search-box input:focus { border-color: var(--accent); }
+
+    .btn-primary {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 9px 18px; border-radius: 10px; border: none;
+      background: var(--accent); color: #fff; font-size: 13px;
+      font-weight: 600; font-family: var(--font-sans); cursor: pointer;
+      transition: all .25s cubic-bezier(.25,0,.15,1);
+    }
+    .btn-primary:hover { background: var(--accent-hover); }
 
     .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 40px; }
     .stat-card {
@@ -134,7 +145,7 @@
       color: var(--text-tertiary); letter-spacing: .05em;
       border-bottom: 1px solid var(--border);
     }
-    td { padding: 14px 20px; font-size: 14px; border-bottom: 1px solid var(--border-light); }
+    td { padding: 14px 20px; font-size: 14px; border-bottom: 1px solid var(--border-light); white-space: nowrap; }
     tr:last-child td { border-bottom: none; }
     tr:hover td { background: rgba(0,0,0,.01); }
 
@@ -145,6 +156,7 @@
     .status-tag.online { background: rgba(34,197,94,.1); color: var(--green); }
     .status-tag.expired { background: rgba(239,68,68,.1); color: var(--red); }
     .status-tag.review { background: rgba(245,158,11,.1); color: var(--amber); }
+    .status-tag.disabled { background: rgba(134,134,139,.1); color: var(--text-tertiary); }
 
     .action-btn {
       padding: 5px 12px; border-radius: 12px; border: 1px solid var(--border);
@@ -153,26 +165,20 @@
       transition: all .25s cubic-bezier(.25,0,.15,1);
     }
     .action-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .action-btn.danger:hover { border-color: var(--red); color: var(--red); }
 
-    .review-item {
-      display: flex; align-items: center; gap: 16px;
-      padding: 16px 20px; background: var(--bg);
-      border-radius: var(--radius-md); margin-bottom: 8px;
-      box-shadow: var(--shadow-sm); border: 1px solid var(--border-light);
-      transition: all .35s cubic-bezier(.25,0,.15,1);
-    }
-    .review-item:hover { border-color: var(--accent-border); box-shadow: var(--shadow-green); }
-    .review-status { font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 8px; }
-    .review-status.pending { background: rgba(245,158,11,.1); color: var(--amber); }
-    .review-project { flex: 1; }
-    .review-project-name { font-size: 14px; font-weight: 600; }
-    .review-project-meta { font-size: 12px; color: var(--text-tertiary); margin-top: 2px; }
-    .review-actions { display: flex; gap: 8px; }
+    .td-name { font-weight: 600; }
+    .td-email { font-size: 13px; color: var(--text-secondary); }
+    .td-plan { font-size: 12px; color: var(--text-secondary); }
+    .td-plan--pro { color: var(--accent); font-weight: 500; }
+    .td-plan--enterprise { color: var(--amber); font-weight: 500; }
+    .td-time { font-size: 13px; color: var(--text-tertiary); }
 
     @media (max-width: 1000px) {
       .sidebar { display: none; }
       .main { padding: 24px; }
       .stats-grid { grid-template-columns: repeat(2, 1fr); }
+      th, td { white-space: normal; }
     }
     @media (max-width: 600px) {
       .stats-grid { grid-template-columns: 1fr; }
@@ -185,8 +191,8 @@
     <aside class="sidebar">
       <div class="sidebar-logo"><span class="mark">◆</span>DemoGo<span class="tag">管理</span></div>
       <nav class="sidebar-nav">
-        <a href="#" class="nav-item active"><span aria-hidden="true">📊</span>总览</a>
-        <a href="#" class="nav-item"><span aria-hidden="true">👥</span>用户管理 <span class="badge">12</span></a>
+        <a href="#" class="nav-item"><span aria-hidden="true">📊</span>总览</a>
+        <a href="#" class="nav-item active"><span aria-hidden="true">👥</span>用户管理 <span class="badge">12</span></a>
         <a href="#" class="nav-item"><span aria-hidden="true">📁</span>Demo 管理</a>
         <a href="#" class="nav-item"><span aria-hidden="true">🔍</span>内容审核</a>
         <a href="#" class="nav-item"><span aria-hidden="true">📬</span>反馈管理</a>
@@ -201,22 +207,24 @@
     </aside>
     <main class="main">
       <div class="admin-header">
-        <h1>总览</h1>
-        <div class="search-box"><span aria-hidden="true">🔍</span><input placeholder="搜索用户、Demo..."></div>
+        <h1>用户管理</h1>
+        <div class="admin-header-actions">
+          <div class="search-box"><span aria-hidden="true">🔍</span><input placeholder="搜索用户..."></div>
+          <button class="btn-primary"><span aria-hidden="true">＋</span>添加用户</button>
+        </div>
       </div>
 
       <div class="stats-grid">
-        <div class="stat-card"><div class="stat-label">注册用户</div><div class="stat-value">1,284</div><div class="stat-change up">↑ 48 本周新增</div></div>
-        <div class="stat-card"><div class="stat-label">在线 Demo</div><div class="stat-value">342</div><div class="stat-change up">↑ 12.4%</div></div>
-        <div class="stat-card"><div class="stat-label">今日访问</div><div class="stat-value">8,293</div><div class="stat-change up">↑ 23%</div></div>
-        <div class="stat-card"><div class="stat-label">待审核</div><div class="stat-value">3</div><div class="stat-change down">需尽快处理</div></div>
+        <div class="stat-card"><div class="stat-label">总用户数</div><div class="stat-value">1,284</div><div class="stat-change up">↑ 48 本周新增</div></div>
+        <div class="stat-card"><div class="stat-label">专业版用户</div><div class="stat-value">342</div><div class="stat-change up">↑ 12</div></div>
+        <div class="stat-card"><div class="stat-label">企业版用户</div><div class="stat-value">56</div><div class="stat-change up">↑ 3</div></div>
+        <div class="stat-card"><div class="stat-label">已禁用</div><div class="stat-value">12</div><div class="stat-change down">待处理</div></div>
       </div>
 
-      <div class="section-hdr"><h2>最新注册用户</h2><a href="#">查看全部 →</a></div>
       <div class="table-wrap">
         <table>
           <thead>
-            <tr><th>用户</th><th>邮箱</th><th>套餐</th><th>状态</th><th>注册时间</th><th>操作</th></tr>
+            <tr><th>姓名</th><th>邮箱</th><th>套餐</th><th>状态</th><th>注册时间</th><th>最后登录</th><th>发布数</th><th>操作</th></tr>
           </thead>
           <tbody>
             <tr>
@@ -224,51 +232,73 @@
               <td class="td-email">zhangming@qq.com</td>
               <td><span class="td-plan">免费版</span></td>
               <td><span class="status-tag online">● 正常</span></td>
-              <td class="td-time">10 分钟前</td>
-              <td><button class="action-btn">查看</button></td>
+              <td class="td-time">2025-06-01</td>
+              <td class="td-time">2 小时前</td>
+              <td>5</td>
+              <td>
+                <button class="action-btn">查看</button>
+                <button class="action-btn">禁用</button>
+                <button class="action-btn danger">删除</button>
+              </td>
             </tr>
             <tr>
               <td class="td-name">李婷</td>
               <td class="td-email">liting@outlook.com</td>
               <td><span class="td-plan td-plan--pro">专业版</span></td>
               <td><span class="status-tag online">● 正常</span></td>
-              <td class="td-time">2 小时前</td>
-              <td><button class="action-btn">查看</button></td>
+              <td class="td-time">2025-05-28</td>
+              <td class="td-time">1 天前</td>
+              <td>23</td>
+              <td>
+                <button class="action-btn">查看</button>
+                <button class="action-btn">禁用</button>
+                <button class="action-btn danger">删除</button>
+              </td>
             </tr>
             <tr>
               <td class="td-name">王浩</td>
               <td class="td-email">wh@designstudio.cn</td>
               <td><span class="td-plan">免费版</span></td>
               <td><span class="status-tag online">● 正常</span></td>
-              <td class="td-time">5 小时前</td>
-              <td><button class="action-btn">查看</button></td>
+              <td class="td-time">2025-05-20</td>
+              <td class="td-time">3 天前</td>
+              <td>2</td>
+              <td>
+                <button class="action-btn">查看</button>
+                <button class="action-btn">禁用</button>
+                <button class="action-btn danger">删除</button>
+              </td>
+            </tr>
+            <tr>
+              <td class="td-name">陈雪</td>
+              <td class="td-email">chenxue@company.com</td>
+              <td><span class="td-plan td-plan--enterprise">企业版</span></td>
+              <td><span class="status-tag online">● 正常</span></td>
+              <td class="td-time">2025-04-15</td>
+              <td class="td-time">今天 09:30</td>
+              <td>67</td>
+              <td>
+                <button class="action-btn">查看</button>
+                <button class="action-btn">禁用</button>
+                <button class="action-btn danger">删除</button>
+              </td>
+            </tr>
+            <tr>
+              <td class="td-name">赵六</td>
+              <td class="td-email">zhaoliu@gmail.com</td>
+              <td><span class="td-plan">免费版</span></td>
+              <td><span class="status-tag disabled">● 已禁用</span></td>
+              <td class="td-time">2024-12-10</td>
+              <td class="td-time">30 天前</td>
+              <td>1</td>
+              <td>
+                <button class="action-btn">查看</button>
+                <button class="action-btn">启用</button>
+                <button class="action-btn danger">删除</button>
+              </td>
             </tr>
           </tbody>
         </table>
-      </div>
-
-      <div class="section-hdr"><h2>内容审核</h2><a href="#">查看全部 →</a></div>
-      <div class="review-item">
-        <span class="review-status pending">待审核</span>
-        <div class="review-project">
-          <div class="review-project-name">营销落地页 - 金融产品</div>
-          <div class="review-project-meta">用户：王浩 · 2 小时前提交</div>
-        </div>
-        <div class="review-actions">
-          <button class="action-btn" style="border-color:var(--green);color:var(--green);">通过</button>
-          <button class="action-btn" style="border-color:var(--red);color:var(--red);">拒绝</button>
-        </div>
-      </div>
-      <div class="review-item">
-        <span class="review-status pending">待审核</span>
-        <div class="review-project">
-          <div class="review-project-name">个人博客 - AI 生成内容</div>
-          <div class="review-project-meta">用户：赵六 · 4 小时前提交</div>
-        </div>
-        <div class="review-actions">
-          <button class="action-btn" style="border-color:var(--green);color:var(--green);">通过</button>
-          <button class="action-btn" style="border-color:var(--red);color:var(--red);">拒绝</button>
-        </div>
       </div>
     </main>
   </div>

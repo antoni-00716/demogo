@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="DemoGo 工作台">
-  <title>工作台 · DemoGo</title>
+  <meta name="description" content="DemoGo 上传发布">
+  <title>上传发布 · DemoGo</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -91,6 +91,45 @@
       font-size: 24px; font-weight: 700; letter-spacing: -.015em;
     }
     .main-header .sub { font-size: 14px; color: var(--text-secondary); margin-top: 2px; }
+
+    .upload-card {
+      background: var(--bg); border-radius: var(--radius-md);
+      box-shadow: var(--shadow-sm); border: 1px solid var(--border-light);
+      padding: 40px; max-width: 640px;
+    }
+    .upload-zone {
+      border: 2px dashed var(--border); border-radius: var(--radius-md);
+      padding: 60px 24px; text-align: center;
+      cursor: pointer; transition: all .3s cubic-bezier(.25,0,.15,1);
+      background: var(--bg-section);
+    }
+    .upload-zone:hover { border-color: var(--accent); background: var(--accent-subtle); }
+    .upload-zone-icon { font-size: 40px; margin-bottom: 12px; }
+    .upload-zone-text { font-size: 15px; font-weight: 600; color: var(--text-primary); }
+    .upload-zone-hint { font-size: 13px; color: var(--text-tertiary); margin-top: 4px; }
+
+    .form-group { margin-top: 24px; }
+    .form-label { display: block; font-size: 13px; font-weight: 600; color: var(--text-primary); margin-bottom: 6px; }
+    .form-input {
+      width: 100%; padding: 12px 16px;
+      border: 1px solid var(--border); border-radius: 10px;
+      background: var(--bg); font-size: 14px; font-family: var(--font-sans);
+      color: var(--text-primary); outline: none;
+      transition: all .25s cubic-bezier(.25,0,.15,1);
+    }
+    .form-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-subtle); }
+    .form-input::placeholder { color: var(--text-quaternary); }
+    .form-select {
+      width: 100%; padding: 12px 16px;
+      border: 1px solid var(--border); border-radius: 10px;
+      background: var(--bg); font-size: 14px; font-family: var(--font-sans);
+      color: var(--text-primary); outline: none; appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236E6E73' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 14px center;
+      transition: all .25s cubic-bezier(.25,0,.15,1);
+    }
+    .form-select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-subtle); }
+
     .btn-pill {
       display: inline-flex; align-items: center; gap: 6px;
       padding: 10px 22px; border-radius: var(--radius-pill);
@@ -101,62 +140,18 @@
     }
     .btn-pill:hover { background: var(--accent-hover); }
     .btn-pill:active { transform: scale(.97); }
-
-    .stats-row {
-      display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 40px;
-    }
-    .stat-card {
-      background: var(--bg); border-radius: var(--radius-md); padding: 24px;
-      box-shadow: var(--shadow-sm); border: 1px solid var(--border-light);
-      transition: all .35s cubic-bezier(.25,0,.15,1);
-    }
-    .stat-card:hover { box-shadow: var(--shadow-green); border-color: var(--accent-border); }
-    .stat-label { font-size: 12px; color: var(--text-tertiary); }
-    .stat-value { font-size: 28px; font-weight: 700; margin-top: 4px; letter-spacing: -.02em; }
-    .stat-change { font-size: 12px; margin-top: 2px; color: var(--green); }
-    .stat-change--dim { color: var(--text-tertiary); }
-
-    .section-hdr {
-      display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;
-    }
-    .section-hdr h2 { font-size: 17px; font-weight: 600; }
-    .section-hdr a { font-size: 13px; color: var(--accent); text-decoration: none; }
-    .section-hdr a:hover { text-decoration: underline; }
-
-    .demo-list { display: flex; flex-direction: column; gap: 8px; }
-    .demo-row {
-      display: flex; align-items: center; gap: 14px;
-      padding: 18px 24px;
-      background: var(--bg); border-radius: var(--radius-md);
-      box-shadow: var(--shadow-sm); border: 1px solid var(--border-light);
-      transition: all .35s cubic-bezier(.25,0,.15,1);
-    }
-    .demo-row:hover { border-color: var(--accent-border); box-shadow: var(--shadow-green); }
-    .demo-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-    .demo-dot.online { background: var(--green); }
-    .demo-dot.offline { background: var(--border); }
-    .demo-info { flex: 1; }
-    .demo-name { font-size: 15px; font-weight: 600; }
-    .demo-meta { font-size: 12px; color: var(--text-tertiary); margin-top: 2px; }
-    .demo-views { font-size: 13px; color: var(--text-secondary); white-space: nowrap; }
-    .demo-btn {
-      padding: 6px 14px; border-radius: var(--radius-pill);
-      border: 1px solid var(--border); background: none;
-      font-size: 12px; font-family: var(--font-sans); cursor: pointer;
-      color: var(--text-secondary);
-      transition: all .25s cubic-bezier(.25,0,.15,1);
-    }
-    .demo-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .btn-pill--disabled { background: var(--border); color: var(--text-quaternary); cursor: not-allowed; }
+    .btn-pill--disabled:hover { background: var(--border); }
+    .form-actions { margin-top: 28px; display: flex; gap: 12px; }
 
     @media (max-width: 900px) {
       .sidebar { display: none; }
       .main { padding: 24px; }
-      .stats-row { grid-template-columns: repeat(2, 1fr); }
+      .upload-card { max-width: 100%; }
     }
     @media (max-width: 600px) {
-      .stats-row { grid-template-columns: 1fr; }
       .main-header { flex-direction: column; align-items: flex-start; gap: 12px; }
-      .demo-row { flex-wrap: wrap; }
+      .upload-zone { padding: 40px 16px; }
     }
   </style>
 </head>
@@ -165,9 +160,9 @@
     <aside class="sidebar">
       <div class="sidebar-logo"><span class="mark">◆</span>DemoGo</div>
       <nav class="sidebar-nav">
-        <a href="#" class="nav-item active"><span aria-hidden="true">📊</span>总览</a>
+        <a href="#" class="nav-item"><span aria-hidden="true">📊</span>总览</a>
         <a href="#" class="nav-item"><span aria-hidden="true">📁</span>我的作品</a>
-        <a href="#" class="nav-item"><span aria-hidden="true">⬆️</span>上传发布</a>
+        <a href="#" class="nav-item active"><span aria-hidden="true">⬆️</span>上传发布</a>
         <a href="#" class="nav-item"><span aria-hidden="true">🤖</span>AI 发布</a>
         <a href="#" class="nav-item"><span aria-hidden="true">📋</span>发布记录</a>
         <a href="#" class="nav-item"><span aria-hidden="true">💬</span>反馈收集</a>
@@ -185,49 +180,36 @@
     <main class="main">
       <div class="main-header">
         <div>
-          <h1>你好，wang</h1>
-          <p class="sub">今天有 2 个新的反馈，快去看看。</p>
+          <h1>上传发布</h1>
+          <p class="sub">上传文件并发布为在线演示，支持 HTML / 图片 / PDF</p>
         </div>
-        <a href="#" class="btn-pill">+ 新建发布</a>
       </div>
 
-      <div class="stats-row" aria-label="数据概览">
-        <div class="stat-card"><div class="stat-label">在线作品</div><div class="stat-value">3</div><div class="stat-change">↑ 1 本周新增</div></div>
-        <div class="stat-card"><div class="stat-label">本月发布</div><div class="stat-value">7</div><div class="stat-change stat-change--dim">剩余 3 次</div></div>
-        <div class="stat-card"><div class="stat-label">总访问量</div><div class="stat-value">1,284</div><div class="stat-change">↑ 12%</div></div>
-        <div class="stat-card"><div class="stat-label">反馈数</div><div class="stat-value">42</div><div class="stat-change">↑ 3 今日</div></div>
-      </div>
+      <div class="upload-card">
+        <div class="upload-zone">
+          <div class="upload-zone-icon" aria-hidden="true">📂</div>
+          <div class="upload-zone-text">拖拽文件到此处</div>
+          <div class="upload-zone-hint">或点击选择文件 · 支持 HTML、PNG、JPG、PDF</div>
+        </div>
 
-      <div class="section-hdr"><h2>最近作品</h2><a href="#">查看全部 →</a></div>
-      <div class="demo-list">
-        <div class="demo-row">
-          <span class="demo-dot online"></span>
-          <div class="demo-info">
-            <div class="demo-name">产品落地页 v2</div>
-            <div class="demo-meta">2 小时前发布 · 已分享 48 次</div>
-          </div>
-          <div class="demo-views"><span aria-hidden="true">👁️</span> 327</div>
-          <button class="demo-btn">复制链接</button>
-          <button class="demo-btn">详情</button>
+        <div class="form-group">
+          <label class="form-label" for="project-name">作品名称</label>
+          <input class="form-input" id="project-name" type="text" placeholder="输入作品名称">
         </div>
-        <div class="demo-row">
-          <span class="demo-dot online"></span>
-          <div class="demo-info">
-            <div class="demo-name">用户调研原型</div>
-            <div class="demo-meta">昨天发布 · 已分享 12 次</div>
-          </div>
-          <div class="demo-views"><span aria-hidden="true">👁️</span> 89</div>
-          <button class="demo-btn">复制链接</button>
-          <button class="demo-btn">详情</button>
+
+        <div class="form-group">
+          <label class="form-label" for="file-type">文件类型</label>
+          <select class="form-select" id="file-type">
+            <option>HTML 页面</option>
+            <option>图片 (PNG / JPG)</option>
+            <option>PDF 文档</option>
+            <option>ZIP 压缩包</option>
+          </select>
         </div>
-        <div class="demo-row">
-          <span class="demo-dot offline"></span>
-          <div class="demo-info">
-            <div class="demo-name">老版官网 (已归档)</div>
-            <div class="demo-meta">5 天前过期 · 已分享 203 次</div>
-          </div>
-          <div class="demo-views"><span aria-hidden="true">👁️</span> 1,024</div>
-          <button class="demo-btn">重新发布</button>
+
+        <div class="form-actions">
+          <button class="btn-pill"><span aria-hidden="true">⬆️</span> 发布</button>
+          <button class="btn-pill btn-pill--disabled">预览</button>
         </div>
       </div>
     </main>

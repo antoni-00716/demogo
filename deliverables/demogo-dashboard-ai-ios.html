@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="DemoGo 工作台">
-  <title>工作台 · DemoGo</title>
+  <meta name="description" content="DemoGo AI 发布">
+  <title>AI 发布 · DemoGo</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -91,6 +91,7 @@
       font-size: 24px; font-weight: 700; letter-spacing: -.015em;
     }
     .main-header .sub { font-size: 14px; color: var(--text-secondary); margin-top: 2px; }
+
     .btn-pill {
       display: inline-flex; align-items: center; gap: 6px;
       padding: 10px 22px; border-radius: var(--radius-pill);
@@ -102,61 +103,60 @@
     .btn-pill:hover { background: var(--accent-hover); }
     .btn-pill:active { transform: scale(.97); }
 
-    .stats-row {
-      display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 40px;
-    }
-    .stat-card {
-      background: var(--bg); border-radius: var(--radius-md); padding: 24px;
+    .ai-card {
+      background: var(--bg); border-radius: var(--radius-md);
       box-shadow: var(--shadow-sm); border: 1px solid var(--border-light);
-      transition: all .35s cubic-bezier(.25,0,.15,1);
+      padding: 32px; max-width: 680px; margin-bottom: 32px;
     }
-    .stat-card:hover { box-shadow: var(--shadow-green); border-color: var(--accent-border); }
-    .stat-label { font-size: 12px; color: var(--text-tertiary); }
-    .stat-value { font-size: 28px; font-weight: 700; margin-top: 4px; letter-spacing: -.02em; }
-    .stat-change { font-size: 12px; margin-top: 2px; color: var(--green); }
-    .stat-change--dim { color: var(--text-tertiary); }
+    .ai-textarea {
+      width: 100%; min-height: 140px; resize: vertical;
+      padding: 16px; border: 1px solid var(--border); border-radius: 12px;
+      background: var(--bg-section); font-size: 14px; font-family: var(--font-sans);
+      color: var(--text-primary); outline: none; line-height: 1.6;
+      transition: all .25s cubic-bezier(.25,0,.15,1);
+    }
+    .ai-textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-subtle); }
+    .ai-textarea::placeholder { color: var(--text-quaternary); }
+    .ai-hint { font-size: 13px; color: var(--text-tertiary); margin-top: 8px; }
+    .ai-actions { margin-top: 16px; display: flex; gap: 12px; align-items: center; }
 
     .section-hdr {
       display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;
     }
     .section-hdr h2 { font-size: 17px; font-weight: 600; }
-    .section-hdr a { font-size: 13px; color: var(--accent); text-decoration: none; }
-    .section-hdr a:hover { text-decoration: underline; }
 
-    .demo-list { display: flex; flex-direction: column; gap: 8px; }
-    .demo-row {
+    .ai-list { display: flex; flex-direction: column; gap: 8px; }
+    .ai-row {
       display: flex; align-items: center; gap: 14px;
       padding: 18px 24px;
       background: var(--bg); border-radius: var(--radius-md);
       box-shadow: var(--shadow-sm); border: 1px solid var(--border-light);
       transition: all .35s cubic-bezier(.25,0,.15,1);
     }
-    .demo-row:hover { border-color: var(--accent-border); box-shadow: var(--shadow-green); }
-    .demo-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-    .demo-dot.online { background: var(--green); }
-    .demo-dot.offline { background: var(--border); }
-    .demo-info { flex: 1; }
-    .demo-name { font-size: 15px; font-weight: 600; }
-    .demo-meta { font-size: 12px; color: var(--text-tertiary); margin-top: 2px; }
-    .demo-views { font-size: 13px; color: var(--text-secondary); white-space: nowrap; }
-    .demo-btn {
+    .ai-row:hover { border-color: var(--accent-border); box-shadow: var(--shadow-green); }
+    .ai-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .ai-dot.online { background: var(--green); }
+    .ai-dot.offline { background: var(--border); }
+    .ai-info { flex: 1; }
+    .ai-name { font-size: 15px; font-weight: 600; }
+    .ai-meta { font-size: 12px; color: var(--text-tertiary); margin-top: 2px; }
+    .ai-views { font-size: 13px; color: var(--text-secondary); white-space: nowrap; }
+    .ai-btn {
       padding: 6px 14px; border-radius: var(--radius-pill);
       border: 1px solid var(--border); background: none;
       font-size: 12px; font-family: var(--font-sans); cursor: pointer;
       color: var(--text-secondary);
       transition: all .25s cubic-bezier(.25,0,.15,1);
     }
-    .demo-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .ai-btn:hover { border-color: var(--accent); color: var(--accent); }
 
     @media (max-width: 900px) {
       .sidebar { display: none; }
       .main { padding: 24px; }
-      .stats-row { grid-template-columns: repeat(2, 1fr); }
+      .ai-card { max-width: 100%; }
     }
     @media (max-width: 600px) {
-      .stats-row { grid-template-columns: 1fr; }
       .main-header { flex-direction: column; align-items: flex-start; gap: 12px; }
-      .demo-row { flex-wrap: wrap; }
     }
   </style>
 </head>
@@ -165,10 +165,10 @@
     <aside class="sidebar">
       <div class="sidebar-logo"><span class="mark">◆</span>DemoGo</div>
       <nav class="sidebar-nav">
-        <a href="#" class="nav-item active"><span aria-hidden="true">📊</span>总览</a>
+        <a href="#" class="nav-item"><span aria-hidden="true">📊</span>总览</a>
         <a href="#" class="nav-item"><span aria-hidden="true">📁</span>我的作品</a>
         <a href="#" class="nav-item"><span aria-hidden="true">⬆️</span>上传发布</a>
-        <a href="#" class="nav-item"><span aria-hidden="true">🤖</span>AI 发布</a>
+        <a href="#" class="nav-item active"><span aria-hidden="true">🤖</span>AI 发布</a>
         <a href="#" class="nav-item"><span aria-hidden="true">📋</span>发布记录</a>
         <a href="#" class="nav-item"><span aria-hidden="true">💬</span>反馈收集</a>
         <a href="#" class="nav-item"><span aria-hidden="true">📦</span>套餐额度</a>
@@ -185,49 +185,51 @@
     <main class="main">
       <div class="main-header">
         <div>
-          <h1>你好，wang</h1>
-          <p class="sub">今天有 2 个新的反馈，快去看看。</p>
+          <h1>AI 发布</h1>
+          <p class="sub">输入描述，AI 自动生成演示页面并发布</p>
         </div>
-        <a href="#" class="btn-pill">+ 新建发布</a>
       </div>
 
-      <div class="stats-row" aria-label="数据概览">
-        <div class="stat-card"><div class="stat-label">在线作品</div><div class="stat-value">3</div><div class="stat-change">↑ 1 本周新增</div></div>
-        <div class="stat-card"><div class="stat-label">本月发布</div><div class="stat-value">7</div><div class="stat-change stat-change--dim">剩余 3 次</div></div>
-        <div class="stat-card"><div class="stat-label">总访问量</div><div class="stat-value">1,284</div><div class="stat-change">↑ 12%</div></div>
-        <div class="stat-card"><div class="stat-label">反馈数</div><div class="stat-value">42</div><div class="stat-change">↑ 3 今日</div></div>
+      <div class="ai-card">
+        <label class="form-label" for="ai-prompt" style="font-size:13px;font-weight:600;display:block;margin-bottom:8px;">描述你的页面需求</label>
+        <textarea class="ai-textarea" id="ai-prompt" placeholder="例如：创建一个简洁的 SaaS 产品落地页，包含头部导航、功能介绍、定价表格和页脚..."></textarea>
+        <div class="ai-hint">AI 将根据你的描述生成 HTML 页面并自动发布，每次消耗 1 次发布额度</div>
+        <div class="ai-actions">
+          <button class="btn-pill"><span aria-hidden="true">✨</span> 生成并发布</button>
+        </div>
       </div>
 
-      <div class="section-hdr"><h2>最近作品</h2><a href="#">查看全部 →</a></div>
-      <div class="demo-list">
-        <div class="demo-row">
-          <span class="demo-dot online"></span>
-          <div class="demo-info">
-            <div class="demo-name">产品落地页 v2</div>
-            <div class="demo-meta">2 小时前发布 · 已分享 48 次</div>
+      <div class="section-hdr"><h2>最近 AI 生成作品</h2></div>
+      <div class="ai-list">
+        <div class="ai-row">
+          <span class="ai-dot online"></span>
+          <div class="ai-info">
+            <div class="ai-name">SaaS 产品落地页</div>
+            <div class="ai-meta">AI 生成 · 今天 14:23</div>
           </div>
-          <div class="demo-views"><span aria-hidden="true">👁️</span> 327</div>
-          <button class="demo-btn">复制链接</button>
-          <button class="demo-btn">详情</button>
+          <div class="ai-views"><span aria-hidden="true">👁️</span> 45</div>
+          <button class="ai-btn">查看</button>
+          <button class="ai-btn">重新生成</button>
         </div>
-        <div class="demo-row">
-          <span class="demo-dot online"></span>
-          <div class="demo-info">
-            <div class="demo-name">用户调研原型</div>
-            <div class="demo-meta">昨天发布 · 已分享 12 次</div>
+        <div class="ai-row">
+          <span class="ai-dot online"></span>
+          <div class="ai-info">
+            <div class="ai-name">个人简历页</div>
+            <div class="ai-meta">AI 生成 · 昨天 09:15</div>
           </div>
-          <div class="demo-views"><span aria-hidden="true">👁️</span> 89</div>
-          <button class="demo-btn">复制链接</button>
-          <button class="demo-btn">详情</button>
+          <div class="ai-views"><span aria-hidden="true">👁️</span> 128</div>
+          <button class="ai-btn">查看</button>
+          <button class="ai-btn">重新生成</button>
         </div>
-        <div class="demo-row">
-          <span class="demo-dot offline"></span>
-          <div class="demo-info">
-            <div class="demo-name">老版官网 (已归档)</div>
-            <div class="demo-meta">5 天前过期 · 已分享 203 次</div>
+        <div class="ai-row">
+          <span class="ai-dot online"></span>
+          <div class="ai-info">
+            <div class="ai-name">电商促销活动页</div>
+            <div class="ai-meta">AI 生成 · 3 天前</div>
           </div>
-          <div class="demo-views"><span aria-hidden="true">👁️</span> 1,024</div>
-          <button class="demo-btn">重新发布</button>
+          <div class="ai-views"><span aria-hidden="true">👁️</span> 312</div>
+          <button class="ai-btn">查看</button>
+          <button class="ai-btn">重新生成</button>
         </div>
       </div>
     </main>

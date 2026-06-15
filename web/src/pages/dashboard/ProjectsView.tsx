@@ -1,7 +1,7 @@
-﻿import type { Demo, User, FormSubmission, HostedForm, SubdomainRequest, DeploymentStep } from "../../types";
+﻿import { useState } from "react";
+import type { Demo, User, FormSubmission, HostedForm, SubdomainRequest, DeploymentStep } from "../../types";
 import type { Inspection } from "../../api/demos";
 import type { FormQuota } from "../../api/forms";
-import { DemoList } from "../../components/dashboard/DemoList";
 import { Button } from "../../components/Button";
 import { DatabasePanel } from "./DatabasePanel";
 import { FormDataPanel } from "./FormDataPanel";
@@ -57,31 +57,63 @@ export function ProjectsView(
 
   const onlineCount = demos.filter((d) => d.status === "published").length;
   const demo = selectedDemo;
+  const [searchQuery, setSearchQuery] = useState("");
+  const filteredDemos = demos.filter((d) =>
+    !searchQuery || (d.name || d.slug || "").toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   return (
-    <div className="workspace-home">
-      <div className="ws-welcome" style={{ marginBottom: 24 }}>
-        <div className="ws-section-head">
-          <div>
-            <h1 className="ws-greeting">我的作品</h1>
-            <p className="ws-section-desc">共 {demos.length} 个项目，{onlineCount} 个在线</p>
-          </div>
-          <Button onClick={() => setActiveView?.("overview")}>发布新作品</Button>
-        </div>
+    <div>
+      <div style={{ marginBottom: 24 }}>
+        <h1 className="ws-greeting">我的作品</h1>
+        <p className="ws-section-desc" style={{ marginTop: 2 }}>共 {demos.length} 个作品，{onlineCount} 个在线</p>
+      </div>
+
+      {/* iOS search box */}
+      <div className="search-box-pill">
+        <span className="search-icon" aria-hidden="true">🔍</span>
+        <input
+          type="text"
+          placeholder="搜索作品名称..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+        />
       </div>
 
       {!demos.length ? (
         <div className="ws-empty">
-          <p>还没有发布过作品，从工作台开始发布吧</p>
+          <div className="ws-empty-icon">📦</div>
+          <h3>还没有发布过作品</h3>
+          <p>从工作台开始发布吧</p>
         </div>
       ) : (
-        <div className={`view-stack${detailOpen ? " has-detail" : ""}`}>
-          <DemoList
-            demos={demos}
-            selectedDemoId={selectedDemoId}
-            onSelect={onSelect}
-            onCopyLink={onCopyLink}
-          />
+        <div>
+          {/* iOS project card grid */}
+          <div className="project-grid">
+            {filteredDemos.map((demoItem) => (
+              <div className="project-card" key={demoItem.id}>
+                <div className="project-card-top">
+                  <span className={`project-dot ${demoItem.status === "published" ? "online" : "offline"}`} />
+                  <span className="project-name">{demoItem.name || demoItem.slug}</span>
+                </div>
+                <div className="project-date">
+                  创建于 {demoItem.createdAt ? new Date(demoItem.createdAt).toLocaleDateString("zh-CN") : "-"}
+                </div>
+                <div className="project-stats">
+                  <span><span aria-hidden="true">👁️</span> {demoItem.usage?.visits || 0} 次浏览</span>
+                </div>
+                <div className="project-actions">
+                  {demoItem.publicUrl && (
+                    <button className="project-btn" onClick={() => onCopyLink(demoItem.publicUrl)}>复制链接</button>
+                  )}
+                  <button className="project-btn" onClick={() => onSelect(demoItem.id)}>详情</button>
+                  {demoItem.status === "published" && (
+                    <button className="project-btn" onClick={() => onAction("offline", demoItem)}>下线</button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
 
           {detailOpen && demo && (
             <div className="project-detail-panel">

@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="DemoGo 我的作品">
+  <title>我的作品 · DemoGo</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #FFFFFF;
+      --bg-section: #F5F5F7;
+      --accent: #22C55E;
+      --accent-hover: #16A34A;
+      --accent-subtle: rgba(34,197,94,.08);
+      --accent-border: rgba(34,197,94,.2);
+      --text-primary: #1D1D1F;
+      --text-secondary: #6E6E73;
+      --text-tertiary: #86868B;
+      --text-quaternary: #A1A1A6;
+      --border: #D2D2D7;
+      --border-light: #E8E8ED;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,.04), 0 1px 2px rgba(0,0,0,.04);
+      --shadow-md: 0 4px 12px rgba(0,0,0,.06), 0 1px 3px rgba(0,0,0,.04);
+      --shadow-green: 0 4px 20px rgba(34,197,94,.1);
+      --radius-md: 18px;
+      --radius-pill: 100px;
+      --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', 'Inter', sans-serif;
+      --green: #22C55E;
+    }
+    html { font-size: 16px; }
+    body {
+      font-family: var(--font-sans);
+      background: var(--bg-section);
+      color: var(--text-primary);
+      line-height: 1.47059;
+      -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+      overscroll-behavior: none;
+    }
+    :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+    ::selection { background: rgba(34,197,94,.2); color: var(--text-primary); }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+    }
+
+    .dash { display: flex; min-height: 100vh; }
+
+    /* ===== SIDEBAR ===== */
+    .sidebar {
+      width: 240px; background: var(--bg);
+      border-right: 1px solid var(--border);
+      padding: 24px 20px; display: flex; flex-direction: column;
+      position: sticky; top: 0; height: 100vh;
+    }
+    .sidebar-logo {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 16px; font-weight: 700; margin-bottom: 32px;
+    }
+    .sidebar-logo .mark { color: var(--accent); font-size: 18px; }
+    .sidebar-nav { display: flex; flex-direction: column; gap: 2px; flex: 1; }
+    .nav-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 12px; border-radius: 8px;
+      font-size: 14px; color: var(--text-secondary); text-decoration: none;
+      transition: all .2s cubic-bezier(.25,0,.15,1);
+    }
+    .nav-item:hover { background: var(--bg-section); color: var(--text-primary); }
+    .nav-item.active { background: var(--accent-subtle); color: var(--accent); font-weight: 500; }
+    .sidebar-user {
+      display: flex; align-items: center; gap: 10px;
+      padding: 16px 8px 0; margin-top: 12px;
+      border-top: 1px solid var(--border);
+    }
+    .sidebar-avatar {
+      width: 32px; height: 32px; border-radius: 16px;
+      background: var(--accent); color: #fff;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px; font-weight: 600;
+    }
+    .sidebar-user-info { flex: 1; }
+    .sidebar-user-name { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+    .sidebar-user-role { font-size: 11px; color: var(--text-tertiary); }
+
+    /* ===== MAIN ===== */
+    .main { flex: 1; padding: 36px 48px; min-width: 0; }
+
+    .main-header {
+      display: flex; justify-content: space-between; align-items: center; margin-bottom: 28px;
+    }
+    .main-header h1 {
+      font-size: 24px; font-weight: 700; letter-spacing: -.015em;
+    }
+    .main-header .sub { font-size: 14px; color: var(--text-secondary); margin-top: 2px; }
+    .btn-pill {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 10px 22px; border-radius: var(--radius-pill);
+      background: var(--accent); color: #fff;
+      font-size: 14px; font-weight: 600; text-decoration: none; border: none; cursor: pointer;
+      font-family: var(--font-sans);
+      transition: all .3s cubic-bezier(.25,0,.15,1);
+    }
+    .btn-pill:hover { background: var(--accent-hover); }
+    .btn-pill:active { transform: scale(.97); }
+
+    .search-box {
+      position: relative; margin-bottom: 24px;
+    }
+    .search-box input {
+      width: 100%; padding: 12px 16px 12px 44px;
+      border: 1px solid var(--border); border-radius: var(--radius-pill);
+      background: var(--bg); font-size: 14px; font-family: var(--font-sans);
+      color: var(--text-primary); outline: none;
+      transition: all .25s cubic-bezier(.25,0,.15,1);
+    }
+    .search-box input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-subtle); }
+    .search-box input::placeholder { color: var(--text-quaternary); }
+    .search-box .search-icon {
+      position: absolute; left: 16px; top: 50%; transform: translateY(-50%);
+      font-size: 16px; color: var(--text-tertiary); pointer-events: none;
+    }
+
+    .project-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px;
+    }
+    .project-card {
+      background: var(--bg); border-radius: var(--radius-md); padding: 20px 24px;
+      box-shadow: var(--shadow-sm); border: 1px solid var(--border-light);
+      transition: all .35s cubic-bezier(.25,0,.15,1);
+    }
+    .project-card:hover { box-shadow: var(--shadow-green); border-color: var(--accent-border); }
+    .project-card-top { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+    .project-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .project-dot.online { background: var(--green); }
+    .project-dot.offline { background: var(--border); }
+    .project-name { font-size: 15px; font-weight: 600; flex: 1; }
+    .project-date { font-size: 12px; color: var(--text-tertiary); }
+    .project-stats { display: flex; gap: 16px; font-size: 13px; color: var(--text-secondary); }
+    .project-actions { margin-top: 14px; display: flex; gap: 8px; }
+    .project-btn {
+      padding: 6px 14px; border-radius: var(--radius-pill);
+      border: 1px solid var(--border); background: none;
+      font-size: 12px; font-family: var(--font-sans); cursor: pointer;
+      color: var(--text-secondary);
+      transition: all .25s cubic-bezier(.25,0,.15,1);
+    }
+    .project-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+    @media (max-width: 900px) {
+      .sidebar { display: none; }
+      .main { padding: 24px; }
+      .project-grid { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+    }
+    @media (max-width: 600px) {
+      .main-header { flex-direction: column; align-items: flex-start; gap: 12px; }
+      .project-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="dash">
+    <aside class="sidebar">
+      <div class="sidebar-logo"><span class="mark">◆</span>DemoGo</div>
+      <nav class="sidebar-nav">
+        <a href="#" class="nav-item"><span aria-hidden="true">📊</span>总览</a>
+        <a href="#" class="nav-item active"><span aria-hidden="true">📁</span>我的作品</a>
+        <a href="#" class="nav-item"><span aria-hidden="true">⬆️</span>上传发布</a>
+        <a href="#" class="nav-item"><span aria-hidden="true">🤖</span>AI 发布</a>
+        <a href="#" class="nav-item"><span aria-hidden="true">📋</span>发布记录</a>
+        <a href="#" class="nav-item"><span aria-hidden="true">💬</span>反馈收集</a>
+        <a href="#" class="nav-item"><span aria-hidden="true">📦</span>套餐额度</a>
+      </nav>
+      <div class="sidebar-user">
+        <div class="sidebar-avatar">W</div>
+        <div class="sidebar-user-info">
+          <div class="sidebar-user-name">wang@email.com</div>
+          <div class="sidebar-user-role">免费版 · 剩余 3 次</div>
+        </div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <div class="main-header">
+        <div>
+          <h1>我的作品</h1>
+          <p class="sub">共 12 个作品，管理你所有的在线演示</p>
+        </div>
+        <a href="#" class="btn-pill">+ 新建作品</a>
+      </div>
+
+      <div class="search-box">
+        <span class="search-icon" aria-hidden="true">🔍</span>
+        <input type="text" placeholder="搜索作品名称...">
+      </div>
+
+      <div class="project-grid">
+        <div class="project-card">
+          <div class="project-card-top">
+            <span class="project-dot online"></span>
+            <span class="project-name">产品落地页 v2</span>
+          </div>
+          <div class="project-date">创建于 2026-06-10</div>
+          <div class="project-stats">
+            <span><span aria-hidden="true">👁️</span> 327 次浏览</span>
+          </div>
+          <div class="project-actions">
+            <button class="project-btn">复制链接</button>
+            <button class="project-btn">编辑</button>
+            <button class="project-btn">删除</button>
+          </div>
+        </div>
+        <div class="project-card">
+          <div class="project-card-top">
+            <span class="project-dot online"></span>
+            <span class="project-name">用户调研原型</span>
+          </div>
+          <div class="project-date">创建于 2026-06-09</div>
+          <div class="project-stats">
+            <span><span aria-hidden="true">👁️</span> 89 次浏览</span>
+          </div>
+          <div class="project-actions">
+            <button class="project-btn">复制链接</button>
+            <button class="project-btn">编辑</button>
+            <button class="project-btn">删除</button>
+          </div>
+        </div>
+        <div class="project-card">
+          <div class="project-card-top">
+            <span class="project-dot online"></span>
+            <span class="project-name">App 引导页动画</span>
+          </div>
+          <div class="project-date">创建于 2026-06-07</div>
+          <div class="project-stats">
+            <span><span aria-hidden="true">👁️</span> 512 次浏览</span>
+          </div>
+          <div class="project-actions">
+            <button class="project-btn">复制链接</button>
+            <button class="project-btn">编辑</button>
+            <button class="project-btn">删除</button>
+          </div>
+        </div>
+        <div class="project-card">
+          <div class="project-card-top">
+            <span class="project-dot offline"></span>
+            <span class="project-name">老版官网 (已归档)</span>
+          </div>
+          <div class="project-date">创建于 2026-05-28</div>
+          <div class="project-stats">
+            <span><span aria-hidden="true">👁️</span> 1,024 次浏览</span>
+          </div>
+          <div class="project-actions">
+            <button class="project-btn">重新发布</button>
+            <button class="project-btn">删除</button>
+          </div>
+        </div>
+        <div class="project-card">
+          <div class="project-card-top">
+            <span class="project-dot online"></span>
+            <span class="project-name">电商活动页</span>
+          </div>
+          <div class="project-date">创建于 2026-06-05</div>
+          <div class="project-stats">
+            <span><span aria-hidden="true">👁️</span> 203 次浏览</span>
+          </div>
+          <div class="project-actions">
+            <button class="project-btn">复制链接</button>
+            <button class="project-btn">编辑</button>
+            <button class="project-btn">删除</button>
+          </div>
+        </div>
+        <div class="project-card">
+          <div class="project-card-top">
+            <span class="project-dot online"></span>
+            <span class="project-name">品牌展示页</span>
+          </div>
+          <div class="project-date">创建于 2026-06-03</div>
+          <div class="project-stats">
+            <span><span aria-hidden="true">👁️</span> 76 次浏览</span>
+          </div>
+          <div class="project-actions">
+            <button class="project-btn">复制链接</button>
+            <button class="project-btn">编辑</button>
+            <button class="project-btn">删除</button>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

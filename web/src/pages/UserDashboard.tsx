@@ -35,7 +35,7 @@ import { createShareText, writeClipboardText } from "../utils/share";
 import type { Inspection } from "../api/demos";
 import { ApiError } from "../api/client";
 import { createClientDeploymentSteps, createFailureInspection, markClientStepsFailed, waitForDeploymentJob } from "./dashboard/utils";
-import { FeedbackPanel } from "../components/dashboard/FeedbackPanel";
+import { FeedbackCollection } from "../components/dashboard/FeedbackCollection";
 import { Sidebar } from "./dashboard/Sidebar";
 import { OverviewView } from "./dashboard/OverviewView";
 import { AgentPublishPanel } from "./dashboard/AgentPublishPanel";
@@ -589,7 +589,7 @@ export function UserDashboard() {
           <DeployHistory events={events} monthUsage={monthUsage} />
         ) : null}
         {activeView === "feedback" ? (
-          <FeedbackPanel demos={demos} show={show} />
+          <FeedbackCollection />
         ) : null}
         <footer className="app-footer">
           <span>DemoGo</span>
@@ -621,7 +621,7 @@ function dashboardViewTitle(view: DashboardView) {
     projects: "我的作品",
     plan: "套餐与额度",
     history: "生成记录",
-    feedback: "反馈问题"
+    feedback: "反馈收集"
   };
   return titles[view];
 }
@@ -633,7 +633,7 @@ function dashboardViewSubtitle(view: DashboardView, user: User) {
   if (view === "upload") return "上传项目包，DemoGo 先检查，再生成可分享的试用链接。";
   if (view === "plan") return "查看额度使用情况，申请升级套餐。客服QQ：304598006 · 邮箱：hello@demogo.cn";
   if (view === "history") return "查看本月生成和更新记录，理解额度使用情况。";
-  return "提交真实试用中遇到的问题，方便后续优化。";
+  if (view === "feedback") return "查看用户对你作品的反馈和建议。";
 }
 
 function PlanView({
@@ -650,13 +650,61 @@ function PlanView({
   show: (text: string, tone?: "info" | "success" | "warning" | "danger") => void;
 }) {
   return (
-    <section className="content-grid plan-layout">
-      <div className="view-stack">
-        <Overview quota={quota} demos={[]} requests={requests} monthUsage={quota?.monthlyDeploys || null} compact />
-        <PlanPanel user={user} requests={requests} reloadRequests={reloadRequests} show={show} />
+    <div>
+      {/* Plan Cards Grid (iOS style) */}
+      <div className="plan-grid">
+        <div className={`plan-card${user.plan === "free" ? " plan-card--current" : ""}`}>
+          <div className="plan-name">免费版</div>
+          <div className="plan-price">¥0 <sub>/月</sub></div>
+          <div className="plan-desc">个人项目试用，快速验证想法</div>
+          {user.plan === "free" && <div className="plan-badge plan-badge--current">当前套餐</div>}
+          <div className="plan-actions">
+            <button className="btn-pill btn-pill--outline" style={{ width: "100%" }}>当前套餐</button>
+          </div>
+        </div>
+        <div className={`plan-card${user.plan !== "free" ? " plan-card--current" : ""}`}>
+          <div className="plan-name">专业版</div>
+          <div className="plan-price">¥49 <sub>/月</sub></div>
+          <div className="plan-desc">团队协作，更多额度和高级功能</div>
+          {user.plan !== "free" && <div className="plan-badge plan-badge--current">当前套餐</div>}
+          <div className="plan-actions">
+            <button className="btn-pill" style={{ width: "100%" }} disabled={user.plan !== "free"}>升级</button>
+          </div>
+        </div>
       </div>
+
+      {/* Usage Bars */}
+      {quota && (
+        <div className="usage-section">
+          <h2>额度使用</h2>
+          <div className="usage-bar-group">
+            <div>
+              <div className="usage-bar-label">
+                <span>在线项目</span>
+                <span>{quota.onlineDemos?.used || 0} / {quota.onlineDemos?.limit || 1}</span>
+              </div>
+              <div className="usage-bar">
+                <div className="usage-bar-fill" style={{ width: `${Math.min(100, ((quota.onlineDemos?.used || 0) / (quota.onlineDemos?.limit || 1)) * 100)}%` }} />
+              </div>
+            </div>
+            <div>
+              <div className="usage-bar-label">
+                <span>月度发布额度</span>
+                <span>{quota.monthlyDeploys?.used || 0} / {quota.monthlyDeploys?.limit || 0}</span>
+              </div>
+              <div className="usage-bar">
+                <div className={`usage-bar-fill${(quota.monthlyDeploys?.used || 0) >= (quota.monthlyDeploys?.limit || 1) ? " usage-bar-fill--full" : (((quota.monthlyDeploys?.used || 0) / (quota.monthlyDeploys?.limit || 1)) > 0.8 ? " usage-bar-fill--warn" : "")}`}
+                  style={{ width: `${Math.min(100, ((quota.monthlyDeploys?.used || 0) / (quota.monthlyDeploys?.limit || 1)) * 100)}%` }} />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Plan Panel with Upgrade Form */}
+      <PlanPanel user={user} requests={requests} reloadRequests={reloadRequests} show={show} />
       <PlanRequestsTable requests={requests} />
-    </section>
+    </div>
   );
 }
 

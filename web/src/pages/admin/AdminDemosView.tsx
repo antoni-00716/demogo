@@ -23,7 +23,19 @@ export function AdminDemoList({
   compact?: boolean;
 }) {
   const [selectedDemoId, setSelectedDemoId] = useState("");
+  const [filterStatus, setFilterStatus] = useState("all");
   const selectedDemo = demos.find((demo) => demo.id === selectedDemoId) || null;
+
+  const totalDemos = demos.length;
+  const onlineDemos = demos.filter((d) => d.status === "published").length;
+  const reviewDemos = demos.filter((d) => d.status === "review_required").length;
+  const expiredDemos = demos.filter((d) => d.status === "expired").length;
+
+  const filtered = filterStatus === "all" ? demos
+    : filterStatus === "online" ? demos.filter((d) => d.status === "published")
+    : filterStatus === "review" ? demos.filter((d) => d.status === "review_required")
+    : filterStatus === "expired" ? demos.filter((d) => d.status === "expired")
+    : demos;
 
   async function update(action: "offline" | "delete", demo: Demo) {
     const label = action === "offline" ? "下线" : "删除";
@@ -47,6 +59,37 @@ export function AdminDemoList({
             <p>查看作品状态、访问量和需要注意的问题。具体干预动作放在详情里处理。</p>
           </div>
         </div>
+
+        {/* Stats Grid */}
+        <div className="stats-grid" style={{ marginBottom: 20 }}>
+          <div className="stat-card">
+            <div className="stat-label">全部 Demo</div>
+            <div className="stat-value">{totalDemos}</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-label">在线中</div>
+            <div className="stat-value">{onlineDemos}</div>
+            <div className="stat-change up">{totalDemos > 0 ? `${((onlineDemos / totalDemos) * 100).toFixed(0)}%` : "-"}</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-label">审核中</div>
+            <div className="stat-value">{reviewDemos}</div>
+            {reviewDemos > 0 && <div className="stat-change down">需处理</div>}
+          </div>
+          <div className="stat-card">
+            <div className="stat-label">已过期</div>
+            <div className="stat-value">{expiredDemos}</div>
+            {expiredDemos > 0 && <div className="stat-change down">{((expiredDemos / totalDemos) * 100).toFixed(0)}%</div>}
+          </div>
+        </div>
+
+        {/* Filter */}
+        <div className="feedback-filters" style={{ marginBottom: 16 }}>
+          <button className={`filter-btn${filterStatus === "all" ? " active" : ""}`} onClick={() => setFilterStatus("all")}>全部状态</button>
+          <button className={`filter-btn${filterStatus === "online" ? " active" : ""}`} onClick={() => setFilterStatus("online")}>在线</button>
+          <button className={`filter-btn${filterStatus === "review" ? " active" : ""}`} onClick={() => setFilterStatus("review")}>审核中</button>
+          <button className={`filter-btn${filterStatus === "expired" ? " active" : ""}`} onClick={() => setFilterStatus("expired")}>已过期</button>
+        </div>
         {!demos.length ? (
           <EmptyState title="暂无试用项目" description="用户生成试用链接后，会出现在这里。" />
         ) : (
@@ -64,7 +107,7 @@ export function AdminDemoList({
                 </tr>
               </thead>
               <tbody>
-                {demos.map((demo) => (
+                {filtered.map((demo) => (
                   <tr key={demo.id}>
                     <td>
                       <strong>{demo.name || demo.slug}</strong>

@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="DemoGo 反馈收集">
+  <title>反馈收集 · DemoGo</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #FFFFFF;
+      --bg-section: #F5F5F7;
+      --accent: #22C55E;
+      --accent-hover: #16A34A;
+      --accent-subtle: rgba(34,197,94,.08);
+      --accent-border: rgba(34,197,94,.2);
+      --text-primary: #1D1D1F;
+      --text-secondary: #6E6E73;
+      --text-tertiary: #86868B;
+      --text-quaternary: #A1A1A6;
+      --border: #D2D2D7;
+      --border-light: #E8E8ED;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,.04), 0 1px 2px rgba(0,0,0,.04);
+      --shadow-md: 0 4px 12px rgba(0,0,0,.06), 0 1px 3px rgba(0,0,0,.04);
+      --shadow-green: 0 4px 20px rgba(34,197,94,.1);
+      --radius-md: 18px;
+      --radius-pill: 100px;
+      --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', 'Inter', sans-serif;
+      --green: #22C55E;
+    }
+    html { font-size: 16px; }
+    body {
+      font-family: var(--font-sans);
+      background: var(--bg-section);
+      color: var(--text-primary);
+      line-height: 1.47059;
+      -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+      overscroll-behavior: none;
+    }
+    :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+    ::selection { background: rgba(34,197,94,.2); color: var(--text-primary); }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+    }
+
+    .dash { display: flex; min-height: 100vh; }
+
+    /* ===== SIDEBAR ===== */
+    .sidebar {
+      width: 240px; background: var(--bg);
+      border-right: 1px solid var(--border);
+      padding: 24px 20px; display: flex; flex-direction: column;
+      position: sticky; top: 0; height: 100vh;
+    }
+    .sidebar-logo {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 16px; font-weight: 700; margin-bottom: 32px;
+    }
+    .sidebar-logo .mark { color: var(--accent); font-size: 18px; }
+    .sidebar-nav { display: flex; flex-direction: column; gap: 2px; flex: 1; }
+    .nav-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 12px; border-radius: 8px;
+      font-size: 14px; color: var(--text-secondary); text-decoration: none;
+      transition: all .2s cubic-bezier(.25,0,.15,1);
+    }
+    .nav-item:hover { background: var(--bg-section); color: var(--text-primary); }
+    .nav-item.active { background: var(--accent-subtle); color: var(--accent); font-weight: 500; }
+    .sidebar-user {
+      display: flex; align-items: center; gap: 10px;
+      padding: 16px 8px 0; margin-top: 12px;
+      border-top: 1px solid var(--border);
+    }
+    .sidebar-avatar {
+      width: 32px; height: 32px; border-radius: 16px;
+      background: var(--accent); color: #fff;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px; font-weight: 600;
+    }
+    .sidebar-user-info { flex: 1; }
+    .sidebar-user-name { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+    .sidebar-user-role { font-size: 11px; color: var(--text-tertiary); }
+
+    /* ===== MAIN ===== */
+    .main { flex: 1; padding: 36px 48px; min-width: 0; }
+
+    .main-header {
+      display: flex; justify-content: space-between; align-items: center; margin-bottom: 28px;
+    }
+    .main-header h1 {
+      font-size: 24px; font-weight: 700; letter-spacing: -.015em;
+    }
+    .main-header .sub { font-size: 14px; color: var(--text-secondary); margin-top: 2px; }
+
+    .feedback-filters {
+      display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap;
+    }
+    .filter-btn {
+      padding: 6px 16px; border-radius: var(--radius-pill);
+      border: 1px solid var(--border); background: var(--bg);
+      font-size: 13px; font-family: var(--font-sans); cursor: pointer;
+      color: var(--text-secondary);
+      transition: all .25s cubic-bezier(.25,0,.15,1);
+    }
+    .filter-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .filter-btn.active { background: var(--accent-subtle); border-color: var(--accent); color: var(--accent); font-weight: 500; }
+
+    .feedback-list { display: flex; flex-direction: column; gap: 8px; }
+    .feedback-item {
+      display: flex; align-items: flex-start; gap: 14px;
+      padding: 20px 24px;
+      background: var(--bg); border-radius: var(--radius-md);
+      box-shadow: var(--shadow-sm); border: 1px solid var(--border-light);
+      transition: all .35s cubic-bezier(.25,0,.15,1);
+    }
+    .feedback-item:hover { border-color: var(--accent-border); box-shadow: var(--shadow-green); }
+    .feedback-item--unread { border-left: 3px solid var(--accent); }
+
+    .feedback-body { flex: 1; min-width: 0; }
+    .feedback-top { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; flex-wrap: wrap; }
+    .feedback-project { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+    .feedback-badge {
+      display: inline-flex; padding: 2px 8px; border-radius: var(--radius-pill);
+      font-size: 11px; font-weight: 500;
+    }
+    .feedback-badge--suggestion { background: rgba(59,130,246,.1); color: #3B82F6; }
+    .feedback-badge--bug { background: rgba(239,68,68,.1); color: #EF4444; }
+    .feedback-badge--praise { background: rgba(34,197,94,.1); color: var(--green); }
+    .feedback-text { font-size: 14px; color: var(--text-primary); line-height: 1.5; margin-top: 2px; }
+    .feedback-date { font-size: 12px; color: var(--text-quaternary); margin-top: 6px; }
+    .feedback-meta { display: flex; align-items: center; gap: 6px; }
+    .unread-dot {
+      width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex-shrink: 0;
+    }
+
+    @media (max-width: 900px) {
+      .sidebar { display: none; }
+      .main { padding: 24px; }
+    }
+    @media (max-width: 600px) {
+      .main-header { flex-direction: column; align-items: flex-start; gap: 12px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="dash">
+    <aside class="sidebar">
+      <div class="sidebar-logo"><span class="mark">◆</span>DemoGo</div>
+      <nav class="sidebar-nav">
+        <a href="#" class="nav-item"><span aria-hidden="true">📊</span>总览</a>
+        <a href="#" class="nav-item"><span aria-hidden="true">📁</span>我的作品</a>
+        <a href="#" class="nav-item"><span aria-hidden="true">⬆️</span>上传发布</a>
+        <a href="#" class="nav-item"><span aria-hidden="true">🤖</span>AI 发布</a>
+        <a href="#" class="nav-item"><span aria-hidden="true">📋</span>发布记录</a>
+        <a href="#" class="nav-item active"><span aria-hidden="true">💬</span>反馈收集</a>
+        <a href="#" class="nav-item"><span aria-hidden="true">📦</span>套餐额度</a>
+      </nav>
+      <div class="sidebar-user">
+        <div class="sidebar-avatar">W</div>
+        <div class="sidebar-user-info">
+          <div class="sidebar-user-name">wang@email.com</div>
+          <div class="sidebar-user-role">免费版 · 剩余 3 次</div>
+        </div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <div class="main-header">
+        <div>
+          <h1>反馈收集</h1>
+          <p class="sub">查看用户对你作品的反馈和建议</p>
+        </div>
+      </div>
+
+      <div class="feedback-filters">
+        <button class="filter-btn active">全部</button>
+        <button class="filter-btn">未读</button>
+        <button class="filter-btn">建议</button>
+        <button class="filter-btn">问题</button>
+        <button class="filter-btn">赞赏</button>
+      </div>
+
+      <div class="feedback-list">
+        <div class="feedback-item feedback-item--unread">
+          <div class="feedback-body">
+            <div class="feedback-top">
+              <span class="feedback-project">产品落地页 v2</span>
+              <span class="feedback-badge feedback-badge--suggestion">建议</span>
+              <span class="unread-dot" aria-label="未读"></span>
+            </div>
+            <div class="feedback-text">CTA 按钮的颜色跟品牌色调不太搭，建议改成蓝色系，可能会更好引导转化。</div>
+            <div class="feedback-date">10 分钟前</div>
+          </div>
+        </div>
+        <div class="feedback-item feedback-item--unread">
+          <div class="feedback-body">
+            <div class="feedback-top">
+              <span class="feedback-project">App 引导页动画</span>
+              <span class="feedback-badge feedback-badge--praise">赞赏</span>
+              <span class="unread-dot" aria-label="未读"></span>
+            </div>
+            <div class="feedback-text">这个引导动画做得太棒了！交互很流畅，设计也很精致 👍</div>
+            <div class="feedback-date">1 小时前</div>
+          </div>
+        </div>
+        <div class="feedback-item">
+          <div class="feedback-body">
+            <div class="feedback-top">
+              <span class="feedback-project">用户调研原型</span>
+              <span class="feedback-badge feedback-badge--bug">问题</span>
+            </div>
+            <div class="feedback-text">表单提交按钮在移动端点击无响应，iPhone 13 上测试的，麻烦修复一下。</div>
+            <div class="feedback-date">昨天 15:42</div>
+          </div>
+        </div>
+        <div class="feedback-item">
+          <div class="feedback-body">
+            <div class="feedback-top">
+              <span class="feedback-project">电商活动页</span>
+              <span class="feedback-badge feedback-badge--suggestion">建议</span>
+            </div>
+            <div class="feedback-text">建议在价格旁边加一个"省 ¥XXX"的标签，能提升购买欲望。</div>
+            <div class="feedback-date">3 天前</div>
+          </div>
+        </div>
+        <div class="feedback-item">
+          <div class="feedback-body">
+            <div class="feedback-top">
+              <span class="feedback-project">产品落地页 v2</span>
+              <span class="feedback-badge feedback-badge--praise">赞赏</span>
+            </div>
+            <div class="feedback-text">内容结构很清晰，加载速度也很快，专业水平！</div>
+            <div class="feedback-date">5 天前</div>
+          </div>
+        </div>
+        <div class="feedback-item">
+          <div class="feedback-body">
+            <div class="feedback-top">
+              <span class="feedback-project">品牌展示页</span>
+              <span class="feedback-badge feedback-badge--bug">问题</span>
+            </div>
+            <div class="feedback-text">页面在 Safari 浏览器上排版错乱，图片显示不全，请检查兼容性。</div>
+            <div class="feedback-date">1 周前</div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

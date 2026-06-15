@@ -1,4 +1,4 @@
-﻿import { useState } from "react";
+import { useState } from "react";
 import type { AgentToken } from "../../types";
 import { Button } from "../../components/Button";
 import { createAgentInstruction } from "./utils";
@@ -12,19 +12,10 @@ function StepDot({ step, status }: { step: number; status: StepStatus }) {
   return <div className={`ag-step-dot ${status}`}>{step}</div>;
 }
 
-/** A single step block with indicator + head + body */
 function StepBlock({
-  step,
-  status,
-  title,
-  desc,
-  children,
+  step, status, title, desc, children,
 }: {
-  step: number;
-  status: StepStatus;
-  title: string;
-  desc: string;
-  children: React.ReactNode;
+  step: number; status: StepStatus; title: string; desc: string; children: React.ReactNode;
 }) {
   return (
     <div className={`ag-step ${status}`}>
@@ -40,7 +31,6 @@ function StepBlock({
   );
 }
 
-/* Arrows between steps */
 function StepArrow() {
   return (
     <div className="ag-step-arrow">
@@ -63,6 +53,7 @@ export function AgentPublishPanel({
   const [updateUrl, setUpdateUrl] = useState("");
   const [generatedInstruction, setGeneratedInstruction] = useState("");
   const [copiedInstruction, setCopiedInstruction] = useState(false);
+  const [aiPrompt, setAiPrompt] = useState("");
 
   const tokenValue = token?.value || "";
   const canGenerate = publishMode === "new" || (publishMode === "update" && updateUrl.trim());
@@ -81,112 +72,155 @@ export function AgentPublishPanel({
   }
 
   async function copyToClipboard(text: string, setDone: (v: boolean) => void) {
-    try { await navigator.clipboard.writeText(text); setDone(true); setTimeout(() => setDone(false), 2000); } catch { /* clipboard API may fail silently */ }
+    try { await navigator.clipboard.writeText(text); setDone(true); setTimeout(() => setDone(false), 2000); } catch { /* silent */ }
   }
 
   return (
-    <div className="workspace-home">
-
-      {/* === STEP 1 === */}
-      <StepBlock
-        step={1} status={s1}
-        title="生成发布口令"
-        desc={hasToken
-          ? "口令已生成，AI 就是靠它连接到你的 DemoGo 账号"
-          : "首次使用需要生成口令，之后每次发布都不需要重复操作"}
-      >
-        {hasToken ? (
-          <div className="ag-token-row">
-            <code className="ag-token-value">
-              {showToken ? tokenValue
-                : token?.prefix
-                  ? token.prefix + "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022"
-                  : "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022"}
-            </code>
-            <button className="ag-token-eye" onClick={() => setShowToken(!showToken)} title={showToken ? "隐藏" : "显示"}>
-              {showToken ? <span>🙈</span> : <span>👁️</span>}
-            </button>
-            <Button variant="ghost" onClick={() => copyToClipboard(tokenValue, setCopiedToken)} style={{ padding: "5px 10px", fontSize: 12 }}>
-              {copiedToken ? <><span>✅</span><span style={{marginLeft:3}}>已复制</span></> : <><span>📋</span><span style={{marginLeft:3}}>复制</span></>}
-            </Button>
-            <span className="ag-token-div" />
-            <button className="ag-token-reset" onClick={onResetToken}>重新生成</button>
-          </div>
-        ) : (
-          <Button variant="primary" onClick={onResetToken}><span>✨</span> 生成口令</Button>
-        )}
-      </StepBlock>
-
-      <StepArrow />
-
-      {/* === STEP 2 === */}
-      <StepBlock
-        step={2} status={s2}
-        title="选择发布方式"
-        desc={!hasToken ? "请先完成第 1 步" : "新项目发布会生成一个新链接，更新已有项目会把改动同步到原链接"}
-      >
-        <div className="ag-mode-row">
-          <button className={`ag-mode-btn ${publishMode === "new" ? "active" : ""}`}
-            onClick={() => { setPublishMode("new"); setGeneratedInstruction(""); }}>
-            <span>📦</span>
-            <strong>发布新项目</strong>
-            <span>把项目首次发到 DemoGo，获得一个试用链接</span>
-          </button>
-          <button className={`ag-mode-btn ${publishMode === "update" ? "active" : ""}`}
-            onClick={() => { setPublishMode("update"); setGeneratedInstruction(""); }}>
-            <span>🔄</span>
-            <strong>更新已有项目</strong>
-            <span>项目改好了，更新到之前发布的链接</span>
+    <div>
+      {/* === AI Prompt Card (iOS style) === */}
+      <div className="ai-card">
+        <label className="form-label" style={{ marginBottom: 8 }}>描述你的页面需求</label>
+        <textarea
+          className="ai-textarea"
+          value={aiPrompt}
+          onChange={(e) => setAiPrompt(e.target.value)}
+          placeholder="例如：创建一个简洁的 SaaS 产品落地页，包含头部导航、功能介绍、定价表格和页脚..."
+        />
+        <div className="ai-hint">AI 将根据你的描述生成 HTML 页面并自动发布，每次消耗 1 次发布额度</div>
+        <div className="ai-actions">
+          <button className="btn-pill" disabled={!aiPrompt.trim()} style={{ opacity: aiPrompt.trim() ? 1 : 0.5 }}>
+            <span aria-hidden="true">✨</span> 生成并发布
           </button>
         </div>
-        {publishMode === "update" && (
-          <input className="ag-url-input" type="text" placeholder="粘贴你之前发布过的 DemoGo 链接"
-            value={updateUrl} onChange={(e) => { setUpdateUrl(e.target.value); setGeneratedInstruction(""); }} />
-        )}
-      </StepBlock>
+      </div>
 
-      <StepArrow />
+      {/* === Token Management (existing workflow) === */}
+      <div className="ai-card">
+        <label className="form-label" style={{ marginBottom: 8 }}>AI 发布配置</label>
 
-      {/* === STEP 3 === */}
-      <StepBlock
-        step={3} status={s3}
-        title="生成并复制指令"
-        desc={!hasToken ? "请先完成第 1 步"
-          : generatedInstruction ? "指令已生成，复制给你的 AI 工具即可"
-          : "点击按钮，系统会把你的口令和发布方式组合成一段 AI 能看懂的指令"}
-      >
-        {!generatedInstruction ? (
-          <div className="ag-gen-row">
-            <Button variant="primary" onClick={handleGenerate} disabled={!canGenerate} style={{ width: "100%", justifyContent: "center", minHeight: 44 }}>
-              <span>✨</span> 生成发布指令
-            </Button>
-            {!canGenerate && <span className="ag-gen-hint">请先填写原项目链接</span>}
-          </div>
-        ) : (
-          <div className="ag-result">
-            <pre className="ag-result-pre">{generatedInstruction}</pre>
-            <div className="ag-result-action">
-              <Button variant="primary" onClick={() => copyToClipboard(generatedInstruction, setCopiedInstruction)} style={{ width: "100%", justifyContent: "center", minHeight: 44 }}>
-                {copiedInstruction ? <><span>✅</span> 已复制</> : <><span>📋</span> 复制给 AI</>}
+        <StepBlock
+          step={1} status={s1}
+          title="生成发布口令"
+          desc={hasToken
+            ? "口令已生成，AI 就是靠它连接到你的 DemoGo 账号"
+            : "首次使用需要生成口令，之后每次发布都不需要重复操作"}
+        >
+          {hasToken ? (
+            <div className="ag-token-row">
+              <code className="ag-token-value">
+                {showToken ? tokenValue
+                  : token?.prefix
+                    ? token.prefix + "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022"
+                    : "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022"}
+              </code>
+              <button className="ag-token-eye" onClick={() => setShowToken(!showToken)} title={showToken ? "隐藏" : "显示"}>
+                {showToken ? <span>🙈</span> : <span>👁️</span>}
+              </button>
+              <Button variant="ghost" onClick={() => copyToClipboard(tokenValue, setCopiedToken)} style={{ padding: "5px 10px", fontSize: 12 }}>
+                {copiedToken ? <><span>✅</span><span style={{marginLeft:3}}>已复制</span></> : <><span>📋</span><span style={{marginLeft:3}}>复制</span></>}
               </Button>
+              <span className="ag-token-div" />
+              <button className="ag-token-reset" onClick={onResetToken}>重新生成</button>
             </div>
-          </div>
-        )}
-      </StepBlock>
+          ) : (
+            <Button variant="primary" onClick={onResetToken}><span>✨</span> 生成口令</Button>
+          )}
+        </StepBlock>
 
-      {/* Supported tools */}
-      <div className="ag-tools">
-        <span>支持</span>
-        <strong>Cursor</strong>
-        <span>·</span>
-        <strong>Windsurf</strong>
-        <span>·</span>
-        <strong>Codex</strong>
-        <span>·</span>
-        <strong>Claude Code</strong>
-        <span>·</span>
-        <strong>OpenClaw</strong>
-        <span>等各类 AI 智能体</span>
+        <StepArrow />
+
+        <StepBlock
+          step={2} status={s2}
+          title="选择发布方式"
+          desc={!hasToken ? "请先完成第 1 步" : "新项目发布会生成一个新链接，更新已有项目会把改动同步到原链接"}
+        >
+          <div className="ag-mode-row">
+            <button className={`ag-mode-btn ${publishMode === "new" ? "active" : ""}`}
+              onClick={() => { setPublishMode("new"); setGeneratedInstruction(""); }}>
+              <span>📦</span>
+              <strong>发布新项目</strong>
+              <span>把项目首次发到 DemoGo，获得一个试用链接</span>
+            </button>
+            <button className={`ag-mode-btn ${publishMode === "update" ? "active" : ""}`}
+              onClick={() => { setPublishMode("update"); setGeneratedInstruction(""); }}>
+              <span>🔄</span>
+              <strong>更新已有项目</strong>
+              <span>项目改好了，更新到之前发布的链接</span>
+            </button>
+          </div>
+          {publishMode === "update" && (
+            <input className="ag-url-input" type="text" placeholder="粘贴你之前发布过的 DemoGo 链接"
+              value={updateUrl} onChange={(e) => { setUpdateUrl(e.target.value); setGeneratedInstruction(""); }} />
+          )}
+        </StepBlock>
+
+        <StepArrow />
+
+        <StepBlock
+          step={3} status={s3}
+          title="生成并复制指令"
+          desc={!hasToken ? "请先完成第 1 步"
+            : generatedInstruction ? "指令已生成，复制给你的 AI 工具即可"
+            : "点击按钮，系统会把你的口令和发布方式组合成一段 AI 能看懂的指令"}
+        >
+          {!generatedInstruction ? (
+            <div className="ag-gen-row">
+              <Button variant="primary" onClick={handleGenerate} disabled={!canGenerate} style={{ width: "100%", justifyContent: "center", minHeight: 44 }}>
+                <span>✨</span> 生成发布指令
+              </Button>
+              {!canGenerate && <span className="ag-gen-hint">请先填写原项目链接</span>}
+            </div>
+          ) : (
+            <div className="ag-result">
+              <pre className="ag-result-pre">{generatedInstruction}</pre>
+              <div className="ag-result-action">
+                <Button variant="primary" onClick={() => copyToClipboard(generatedInstruction, setCopiedInstruction)} style={{ width: "100%", justifyContent: "center", minHeight: 44 }}>
+                  {copiedInstruction ? <><span>✅</span> 已复制</> : <><span>📋</span> 复制给 AI</>}
+                </Button>
+              </div>
+            </div>
+          )}
+        </StepBlock>
+
+        {/* Supported tools */}
+        <div className="ag-tools">
+          <span>支持</span>
+          <strong>Cursor</strong>
+          <span>·</span>
+          <strong>Windsurf</strong>
+          <span>·</span>
+          <strong>Codex</strong>
+          <span>·</span>
+          <strong>Claude Code</strong>
+          <span>·</span>
+          <strong>OpenClaw</strong>
+          <span>等各类 AI 智能体</span>
+        </div>
+      </div>
+
+      {/* === Recent AI Works (iOS style) === */}
+      <div className="section-hdr"><h2>最近 AI 生成作品</h2></div>
+      <div className="ai-list">
+        <div className="ai-row">
+          <span className="ai-dot online"></span>
+          <div className="ai-info">
+            <div className="ai-name">SaaS 产品落地页</div>
+            <div className="ai-meta">AI 生成 · 今天 14:23</div>
+          </div>
+          <div className="ai-views"><span aria-hidden="true">👁️</span> 45</div>
+          <button className="ai-btn">查看</button>
+          <button className="ai-btn">重新生成</button>
+        </div>
+        <div className="ai-row">
+          <span className="ai-dot online"></span>
+          <div className="ai-info">
+            <div className="ai-name">个人简历页</div>
+            <div className="ai-meta">AI 生成 · 昨天 09:15</div>
+          </div>
+          <div className="ai-views"><span aria-hidden="true">👁️</span> 128</div>
+          <button className="ai-btn">查看</button>
+          <button className="ai-btn">重新生成</button>
+        </div>
       </div>
     </div>
   );
