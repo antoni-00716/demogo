@@ -15,7 +15,7 @@ export function AdminUsers({ users, compact = false }: { users: AdminUser[]; com
 
   const proUsers = users.filter((u) => u.plan === "pro");
   const liteUsers = users.filter((u) => u.plan === "lite");
-  const disabledUsers = users.filter((u) => u.plan === "disabled");
+  const basicUsers = users.filter((u) => u.plan === "free");
 
   const filtered = searchQuery.trim()
     ? users.filter((u) => u.email?.toLowerCase().includes(searchQuery.toLowerCase()))
@@ -41,9 +41,9 @@ export function AdminUsers({ users, compact = false }: { users: AdminUser[]; com
           <div className="stat-change">{((liteUsers.length / (users.length || 1)) * 100).toFixed(1)}%</div>
         </div>
         <div className="stat-card">
-          <div className="stat-label">已禁用</div>
-          <div className="stat-value">{disabledUsers.length}</div>
-          <div className="stat-change down">{disabledUsers.length > 0 ? "需关注" : "正常"}</div>
+          <div className="stat-label">免费版</div>
+          <div className="stat-value">{basicUsers.length}</div>
+          <div className="stat-change">{((basicUsers.length / (users.length || 1)) * 100).toFixed(1)}%</div>
         </div>
       </div>
 

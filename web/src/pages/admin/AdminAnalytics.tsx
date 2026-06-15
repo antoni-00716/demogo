@@ -1,4 +1,3 @@
-import { Card } from "../../components/Card";
 import type { AdminMetrics, Demo, User } from "../../types";
 
 const CHART_BARS = [40, 55, 45, 70, 60, 80, 75, 90, 85, 65, 95, 100, 78, 88];

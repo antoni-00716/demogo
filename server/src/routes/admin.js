@@ -246,6 +246,10 @@ app.get("/api/admin/overview", requireAdmin, async (req, res, next) => {
 
       next(error);
 
+    }
+
+  });
+
 
 
   // POST /api/admin/cache/purge - Purge CDN cache for a demo
@@ -295,10 +299,6 @@ app.get("/api/admin/overview", requireAdmin, async (req, res, next) => {
     } catch (error) {
 
       next(error);
-
-    }
-
-  });
 
     }
 

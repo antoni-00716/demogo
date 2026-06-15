@@ -12,7 +12,7 @@ import { IcpLink } from "../components/IcpLink";
 import { Toast } from "../components/Toast";
 import type { AdminMetrics, AdminUser, ContentReview, Demo, Feedback, FormSubmission, HostedForm, PlanRequest, SubdomainRequest } from "../types";
 import { AdminSidebar, type AdminView } from "./admin/AdminSidebar";
-import { adminViewTitle, adminViewSubtitle, resolveInitialAdminView } from "./admin/adminViewHelpers";
+import { adminViewTitle, resolveInitialAdminView } from "./admin/adminViewHelpers";
 import { AdminOverviewView } from "./admin/AdminOverviewView";
 import { PlanRequestsAdmin, SubdomainRequestsAdmin } from "./admin/AdminPlanRequests";
 import { AdminDemoList, AdminRuntimeOps } from "./admin/AdminDemosView";

@@ -43,7 +43,6 @@ export function ProjectsView(
 ) {
   const {
     demos,
-    selectedDemoId,
     selectedDemo,
     detailOpen,
     onSelect,
@@ -52,7 +51,6 @@ export function ProjectsView(
     onCopyLink,
     onUpdate,
     onAction,
-    setActiveView,
   } = _props;
 
   const onlineCount = demos.filter((d) => d.status === "published").length;

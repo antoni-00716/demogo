@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useReducer, useState } from "react";
 import { useAppStore } from "../stores/appStore";
 import { deployReducer, createInitialDeployState } from "./dashboard/deployReducer";
-import { getAgentToken, getMe, logout, resetAgentToken } from "../api/auth";
+import { getAgentToken, getMe, resetAgentToken } from "../api/auth";
 import {
   createDeploymentJob,
   createSubdomainRequest,
@@ -24,7 +24,6 @@ import { createHostedForm, getForms, getHostedForm, type FormQuota } from "../ap
 import { createPlanRequest, getPlanRequests } from "../api/planRequests";
 import { Badge } from "../components/Badge";
 import { Button } from "../components/Button";
-import { MetricCard } from "../components/MetricCard";
 import { Card } from "../components/Card";
 import { IcpLink } from "../components/IcpLink";
 import { Toast } from "../components/Toast";
@@ -234,11 +233,6 @@ export function UserDashboard() {
   function show(text: string, tone: "info" | "success" | "warning" | "danger" = "info") {
     setMessage(text);
     setMessageTone(tone);
-  }
-
-  async function handleLogout() {
-    await logout();
-    window.location.assign("login.html");
   }
 
   function resetUploadState(options: { keepUpdateTarget?: boolean } = {}) {
@@ -705,32 +699,6 @@ function PlanView({
       <PlanPanel user={user} requests={requests} reloadRequests={reloadRequests} show={show} />
       <PlanRequestsTable requests={requests} />
     </div>
-  );
-}
-
-function Overview({
-  quota,
-  demos,
-  requests,
-  monthUsage,
-  compact = false
-}: {
-  quota: Quota | null;
-  demos: Demo[];
-  requests: PlanRequest[];
-  monthUsage: { used: number; limit: number } | null;
-  compact?: boolean;
-}) {
-  const online = quota?.onlineDemos;
-  const deploys = quota?.monthlyDeploys || monthUsage;
-  const openRequest = requests.find((item) => item.status === "open");
-  return (
-    <section className={`overview-grid ${compact ? "compact-overview" : ""}`} id="overview">
-      <MetricCard label="当前套餐" value={quota?.plan?.name || "Free"} note="Free / Lite / Pro" />
-      <MetricCard label="在线试用项目" value={`${online?.used || 0} / ${online?.limit || 1}`} note={`累计 ${demos.length} 个项目`} />
-      <MetricCard label="本月生成/更新" value={`${deploys?.used || 0} / ${deploys?.limit || 0}`} note="生成和更新都会计入" />
-      <MetricCard label="升级申请" value={openRequest ? "待处理" : "无待处理"} note={openRequest ? `申请 ${openRequest.requestedPlanName || planName(openRequest.requestedPlan)}` : "可随时申请升级"} />
-    </section>
   );
 }
 
