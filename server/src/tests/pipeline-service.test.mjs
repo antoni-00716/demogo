@@ -155,3 +155,23 @@ describe("removeDemoFiles", () => {
     await fs.rm(tmpDir, { recursive: true, force: true });
   });
 });
+
+describe("createAvailableSlug", () => {
+  it("generates a non-empty slug", async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pipeline-slug-"));
+    const pipeline = createPipeline({ demoRoot: tmpDir });
+    const slug = await pipeline.createAvailableSlug("test", []);
+    assert.ok(slug.length > 0);
+    assert.ok(slug.startsWith("try-"));
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it("generates unique slug even with collisions", async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pipeline-slug-"));
+    const pipeline = createPipeline({ demoRoot: tmpDir, readJson: async () => ({}) });
+    const slug1 = await pipeline.createAvailableSlug("test", []);
+    const slug2 = await pipeline.createAvailableSlug("test", []);
+    assert.notEqual(slug1, slug2);
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  });
+});
