@@ -32,8 +32,6 @@ import { filterAdminForms, publicForm, publicFormSubmission } from "../services/
 
 import { filterSubdomainRequests, summarizeFailureReasons, summarizeTrialFunnel, summarizeDeploySources, normalizeSubdomainRequestStatus, subdomainRequestStatusLabel } from "../services/trial-analytics-service.js";
 
-import { getDeployEvents } from "../services/quota-service.js";
-
 import { listRuntimeRecords, stopRuntime } from "../services/runtime-service.js";
 
 import { createApplicationReadiness } from "../services/application-readiness-service.js";
