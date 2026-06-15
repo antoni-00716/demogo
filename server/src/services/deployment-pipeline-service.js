@@ -3,7 +3,9 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import {
   isNodeRuntimeInspection,
-  attachRuntimeToInspection
+  attachRuntimeToInspection,
+  hostingConfig,
+  hostingCapabilities,
 } from "./pipeline-helpers.js";
 import {
   dataDir,
@@ -145,40 +147,7 @@ export function createDeploymentPipelineService(deps) {
 
   // --- Extracted pipeline functions ---
 
-function hostingConfig() {
-  const config = {
-    version: serviceVersion,
-    dataDir,
-    runtimeEnabled,
-    runtimeNodeEnabled,
-    runtimeDriver,
-    runtimeRootDir: runtimeRootDir || path.join(dataDir, "runtime-projects"),
-    runtimeDockerImage,
-    runtimeMemory,
-    runtimeCpus,
-    runtimeTtlMinutes,
-    runtimeStartTimeoutSeconds,
-    runtimeMaxInstances,
-    demoDbEnabled,
-    demoDbMock,
-    demoDbAdminHost,
-    demoDbAdminPort,
-    demoDbAdminUser,
-    demoDbAdminPassword,
-    demoDbHost,
-    demoDbPort
-  };
-  return {
-    ...config,
-    demoDatabaseReady: isDemoDatabaseReady(config)
-  };
-}
-
-function hostingCapabilities() {
-  return createHostingCapabilities(hostingConfig());
-}
-
-// ---- Demo file lifecycle ----
+  // ---- Demo file lifecycle ----
 
 async function removeDemoFiles(value) {
   const slug = demoSlug(value);
