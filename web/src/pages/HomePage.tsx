@@ -20,7 +20,7 @@ const painPoints = [
 
 interface SellItem {
   visual: string;
-  heading: string;
+  heading: string; // ⚠️ Used with dangerouslySetInnerHTML (supports <br />). Only pass STATIC hardcoded strings — NEVER dynamic/user input.
   text: string;
   highlight: string | null;
   tags: string[];

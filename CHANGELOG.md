@@ -1,33 +1,77 @@
 # Changelog
 
-
-
-> **???** v0.9.31 ??????????????????????????? v0.9.35 ???? UTF-8 ???????
-
-## v0.9.35 (2026-06-04)
+## v0.9.39 (2026-06-15)
 
 ### Bug 修复
-- 修复 deployment-pipeline-service.js 缺少 getDeployEvents 导入导致 demo 更新报 500 错误
-- 修复前端 lint 错误：AgentPublishPanel 空 catch 块、OverviewView StatCard 组件在 render 中创建
-- 修复烟雾测试中 5 处 inspection 响应字段路径错误（适配新版 inspection 嵌套结构）
+- 修复 admin.js 路由嵌套 bug（cache/purge 被错误嵌套在 overview catch 块内）
+- 修复 deployment-pipeline-service.js isNodeRuntimeInspection 访问空 analysis 时抛 TypeError
+- 修复 build-service.js 缺少 path/fs 导入导致部署返回 "path is not defined"
+- 修复前端 7 个 TypeScript 错误
+
+### 重构
+- server.js 死代码清理：删除 4 个死 import、5 个死函数、1 个重复路由
+- archive-analyzer import 从 48 个函数减少至 3 个
+- runCommand 4 份副本统一为 lib/process-utils.js
+- lib/tracking.js 孤儿文件删除
+- services/auth-helpers.js 死模块删除
+- pipeline-helpers.js 提取，减少 pipeline service 50 行
+- AdminDashboard loadInitialData/loadAll 合并去重
+- 备份目录清理：删除 6 个残留目录（释放 75MB）
+
+### 测试
+- pipeline-service 测试从 3 个扩展至 17 个
+- 总测试数：203 → 214（单元测试全通过）
+- E2E 回归测试：161 断言全通过
 
 ### 部署
-- 服务器、站点预览、CLI (@demogo-cn/cli)、MCP (demogo-mcp) 同步更新至 0.9.35
+- 站点预览（iOS 设计改版全部 14 项）更新至 0.9.39
+- server/v0.9.39, cli/v0.9.39, mcp/v0.9.39
 
 ---
 
-## 缁撴瀯璋冩暣 (2026-06-02)
+## v0.9.38 (2026-06-14)
 
-### 鐩綍閲嶆瀯
-- codex-skill/ 鍚堝苟鍏?codex-plugin/锛堟彃浠跺凡鍖呭惈 skill锛?- rand/logos/assets/ 鎵佸钩鍖?鈫?rand/
-- server/scripts/ 鍒犻櫎锛?涓猂edis娴嬭瘯鑴氭湰锛?- samples/*/dist/ + samples/*/.demogo/ 娓呯悊锛?0涓畫鐣欑洰褰曪級
-- web/playwright-report/ 	est-results/ dist/ 娓呯悊
-- shared/ 鏂板 package.json锛屾垚涓烘寮忔ā鍧?- server/package.json 淇鏂鐨?sync-version 寮曠敤
-- .gitignore 琛ュ厖 web 娴嬭瘯浜х墿瑙勫垯
+### 新功能
+- iOS 极简设计系统实施：Dashboard/Admin 全部 13 个子页面重新样式
+- 新增 AdminAnalytics 数据分析页面
+- 新增 PreviewPage 试用反馈页面
+- 品牌色从 #06B6D4（青色）切换至 #22C55E（翠绿）
+
+### 重构
+- server.js 模块提取：middleware、lib、service 职责分离
+- lib/tracking.js 功能迁移至 build-service.js（带 DIVERGENCE 标记）
+
+### 部署
+- 前端 dist 包完整部署至 demogo.cn
+- CI 增加 version-check 和 smoke-test 流水线
 
 ---
 
-## v0.9.32 (2026-06-02)
+## v0.9.37 (2026-06-12)
+
+### 测试
+- 新增 HTTP 集成测试覆盖 demos.js 路由
+- 新增 admin-routes.test.mjs（7 个测试覆盖 filterAdminDemos）
+- 新增 pipeline-service.test.mjs（3 个测试覆盖 factory API）
+- 新增 security-rules.test.mjs、deploy-rate-limiter.test.mjs
+- 总测试数从 176 增加至 203
+
+---
+
+## v0.9.36 (2026-06-10)
+
+### 重构
+- server.js 从 4,383 行拆解至 828 行：提取 24 个 service、11 个 route、7 个 middleware、23 个 lib
+- 部署管线从 server.js 提取至 deployment-pipeline-service.js
+- 用户认证、会话管理提取至 auth service / middleware
+- 移除大量内联业务逻辑
+
+### 基础设施
+- infra/ 配置入库（nginx/systemd/env/backup）
+- 9 个版本的回滚脚本
+- 基础设施任务全部完成
+
+---
 
 ### Fixed
 - **闄嶄綆 runtimeMaxInstances 榛樿鍊?*锛氫粠 10 闄嶈嚦 2锛岄槻姝?2G 鍐呭瓨鏈嶅姟鍣?OOM锛堝彲閫氳繃鐜鍙橀噺瑕嗙洊锛?- **閮ㄧ讲鏇存柊娴佺▼澧炲姞鍥炴粴鏈哄埗**锛氭洿鏂?Demo 鏃跺厛澶囦唤鏃ф枃浠跺啀瑙ｅ帇锛岃В鍘嬪け璐ヨ嚜鍔ㄦ仮澶?

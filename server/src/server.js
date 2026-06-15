@@ -539,6 +539,12 @@ registerDemoTrackRoutes(app, { recordDemoVisit });
 
 async function routeRuntimeDemo(req, res, next) {
   try {
+    // Add security headers that are bypassed by proxy routes placed before securityHeadersMiddleware
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("X-Frame-Options", "DENY");
+    res.setHeader("Content-Security-Policy", "default-src 'self' 'unsafe-inline' 'unsafe-eval' *.demogo.cn; img-src 'self' data: blob:; connect-src 'self' ws: wss:; style-src 'self' 'unsafe-inline'; font-src 'self' data:");
+    res.setHeader("X-XSS-Protection", "0");
+    res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
     const slug = slugify(req.params.slug);
     if (!slug) return next();
     if (await redirectDemoAlias(req, res)) return;
