@@ -2,6 +2,10 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import {
+  isNodeRuntimeInspection,
+  attachRuntimeToInspection
+} from "./pipeline-helpers.js";
+import {
   dataDir,
   demoDbAdminHost,
   demoDbAdminPassword,
@@ -319,13 +323,6 @@ async function restartDemoRuntime(demo) {
   }
 }
 
-function isNodeRuntimeInspection(inspection = {}) {
-  return inspection.analysis?.hostingMode === "node_runtime" ||
-    inspection.analysis?.projectProfile?.type === "node_service" ||
-    (inspection.analysis?.projectProfile?.type === "fullstack_framework" && inspection.hosting?.mode === "node_runtime") ||
-    (inspection.analysis?.hasBackend && inspection.runtime?.engine === "node");
-}
-
 function createConfigRequiredRuntime(previousRuntime = null, runtimeConfigStatus = {}, diagnosis = null) {
   return {
     ...(previousRuntime || {}),
@@ -346,27 +343,6 @@ function createConfigRequiredRuntime(previousRuntime = null, runtimeConfigStatus
       stoppedAt: null
     },
     config: runtimeConfigStatus
-  };
-}
-
-function attachRuntimeToInspection(inspection = {}, runtime = {}) {
-  return {
-    ...inspection,
-    runtime: {
-      ...(inspection.runtime || {}),
-      ...runtime,
-      status: runtime.status,
-      statusLabel: runtime.statusLabel
-    },
-    hosting: {
-      ...(inspection.hosting || {}),
-      runtime: {
-        ...(inspection.hosting?.runtime || {}),
-        ...runtime,
-        status: runtime.status,
-        statusLabel: runtime.statusLabel
-      }
-    }
   };
 }
 
