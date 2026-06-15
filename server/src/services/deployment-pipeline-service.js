@@ -320,10 +320,10 @@ async function restartDemoRuntime(demo) {
 }
 
 function isNodeRuntimeInspection(inspection = {}) {
-  return inspection.analysis.hostingMode === "node_runtime" ||
-    inspection.analysis.projectProfile?.type === "node_service" ||
-    (inspection.analysis.projectProfile?.type === "fullstack_framework" && inspection.hosting?.mode === "node_runtime") ||
-    (inspection.analysis.hasBackend && inspection.runtime?.engine === "node");
+  return inspection.analysis?.hostingMode === "node_runtime" ||
+    inspection.analysis?.projectProfile?.type === "node_service" ||
+    (inspection.analysis?.projectProfile?.type === "fullstack_framework" && inspection.hosting?.mode === "node_runtime") ||
+    (inspection.analysis?.hasBackend && inspection.runtime?.engine === "node");
 }
 
 function createConfigRequiredRuntime(previousRuntime = null, runtimeConfigStatus = {}, diagnosis = null) {
