@@ -1,6 +1,8 @@
 // DemoGo v0.9.3 - Build service functions (extracted from server.js)
 // Enhanced backup: build-service.js.enhanced
 import crypto from "node:crypto";
+import fs from "node:fs/promises";
+import path from "node:path";
 import { runCommand } from "../lib/process-utils.js";
 import { isNonCollectableControl, filterAutoHostableFormFields } from "../lib/form-field-utils.js";
 import { normalizeFormFields } from "./form-service.js";

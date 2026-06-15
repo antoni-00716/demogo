@@ -45,32 +45,8 @@ export function AdminDashboard() {
     let mounted = true;
 
     async function loadInitialData() {
-      try {
-        const [overview, usersPayload, requestsPayload, subdomainPayload, feedbackPayload, formsPayload, contentReviewsPayload] = await Promise.all([
-          getAdminOverview(),
-          getAdminUsers(),
-          getAdminPlanRequests(),
-          getAdminSubdomainRequests(),
-          getAdminFeedback(),
-          getAdminForms(),
-          getAdminContentReviews()
-        ]);
-        if (!mounted) return;
-        setMetrics(overview.metrics || {});
-        setDemos(overview.demos || []);
-        setUsers(usersPayload.users || overview.users || []);
-        setRequests(requestsPayload.requests || []);
-        setSubdomainRequests(subdomainPayload.requests || []);
-        setFeedback(feedbackPayload.feedback || overview.feedback || []);
-        setForms(formsPayload.forms || overview.forms || []);
-        setFormSubmissions(formsPayload.submissions || []);
-        setContentReviews(contentReviewsPayload.reviews || overview.contentReviews || []);
-        setRuntimeDemos((overview.demos || []).filter((demo: Demo) => demo.hostingMode === "node_runtime" || demo.database?.enabled));
-      } catch (error) {
-        if (mounted) show(error instanceof Error ? error.message : "运营后台数据加载失败。", "danger");
-      } finally {
-        if (mounted) setLoading(false);
-      }
+      await loadAll();
+      if (mounted) setLoading(false);
     }
 
     void loadInitialData();
