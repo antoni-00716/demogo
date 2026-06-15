@@ -1,5 +1,6 @@
 ﻿import crypto from "node:crypto";
 import mysql from "mysql2/promise";
+import { profileUsesSupabase } from "./runtime-service.js";
 
 const DEMO_DATABASE_PRIVILEGES = [
   "SELECT",
@@ -52,15 +53,6 @@ export function demoDatabaseBlockReason(inspection = {}, config = {}) {
     return "检测到项目需要 MySQL，但当前平台尚未开启 MySQL 试用数据库。";
   }
   return "";
-}
-
-function profileUsesSupabase(profile = {}) {
-  const values = [
-    ...(profile.databases || []).map((item) => `${item.code || ""} ${item.label || ""}`),
-    ...(profile.environmentVariables?.required || []),
-    ...(profile.signals || [])
-  ].join(" ").toLowerCase();
-  return values.includes("supabase");
 }
 
 export function isDemoDatabaseReady(config = {}) {
