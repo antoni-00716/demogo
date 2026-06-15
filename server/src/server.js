@@ -1,7 +1,5 @@
-import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import process from "node:process";
 import cookieParser from "cookie-parser";
 import express from "express";
@@ -58,7 +56,6 @@ import {
   usageFlushIntervalMs
 } from "./config.js";
 import logger from "./lib/logger.js";
-import { isMysqlConfigured, readDataFile, writeDataFile } from "./db/mysql-store.js";
 import { closePool } from "./db/mysql.js";
 import {
   userDeployEvents
@@ -102,9 +99,9 @@ import {
   normalizeRequestedPlan,
   publicPlanRequest
 } from "./services/plan-request-service.js";
-import { calculateQuota as calculateUserQuota, getDeployEvents } from "./services/quota-service.js";
+import { calculateQuota as calculateUserQuota } from "./services/quota-service.js";
 import { adminUserSummary, filterAdminUsers, publicUser } from "./services/user-service.js";
-import { publicUserDemo, createRuntimeConfigStatus, publicRuntimeEnv, runtimeEnvForDemo, mergeRuntimeEnv } from "./lib/admin-helpers.js";
+import { publicUserDemo } from "./lib/admin-helpers.js";
 import {
   createHostingCapabilities,
   createProjectArchitecture
@@ -144,7 +141,7 @@ import {
 } from "./services/runtime-service.js";
 import { hashPassword, verifyPassword, hashVerificationCode, createVerifyEmailCode } from "./lib/password-utils.js";
 import { normalizeEmail, createLoginRateLimiter } from "./lib/login-rate-limiter.js";
-import { createSessionStore, setSessionCookie, createAgentTokenRecord, publicAgentToken, verifyAgentToken, parseAgentToken } from "./lib/session-store.js";
+import { createSessionStore, setSessionCookie, createAgentTokenRecord, publicAgentToken } from "./lib/session-store.js";
 import { readBearerToken, getUserFromRequest, getUserFromAgentToken } from "./lib/auth-helpers.js";
 import { createDeployRateLimiter } from "./lib/deploy-rate-limiter.js";
 import { requestIdMiddleware } from "./middleware/request-id.js";
@@ -172,7 +169,7 @@ import { registerMiscRoutes } from "./routes/misc.js";
 import { registerDeployRoutes } from "./routes/deploy.js";
 import { registerDemosRoutes } from "./routes/demos.js";
 import { registerAdminRoutes } from "./routes/admin.js";
-import { detectDeploySource, deploySourceLabel, normalizeDeploySource } from "./lib/deploy-helpers.js";
+import { detectDeploySource } from "./lib/deploy-helpers.js";
 import { cleanProjectName, isGenericProjectName, slugify } from "./lib/project-utils.js";
 
 import {
@@ -201,7 +198,6 @@ import {
   completeDeploymentSteps,
   failedDeploymentSteps,
 } from "./lib/deployment-steps.js";
-import { removePath, copyDemoArchive, shouldCopyDemoArchivePath } from "./lib/file-utils.js";
 import { getClientIp } from "./lib/request-utils.js";
 import { writeAuditLog } from "./lib/audit-log.js";
 import {
@@ -251,9 +247,8 @@ import {
   createUserFacingInspection,
 } from "./services/failure-diagnosis-service.js";
 
-import { putFile, putDirectory, deletePrefix, isMinioBackend } from "./lib/storage.js";
-import { purgeCache, getCacheHeaders, getCdnInfo } from "./lib/cdn.js";
-import { addDeploymentJob, deploymentQueue, closeQueue } from "./queue/queue.js";
+import { putDirectory, isMinioBackend } from "./lib/storage.js";
+import { addDeploymentJob, closeQueue } from "./queue/queue.js";
 import { registerDemoTrackRoutes } from "./routes/demo-track.js";
 
 const app = express();
