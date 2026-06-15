@@ -3,9 +3,9 @@
 // Handles: extraction, build (Docker/host), save, audit log.
 
 import crypto from "node:crypto";
-import { execFile } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { runCommand } from "../lib/process-utils.js";
 import { readJson, writeJson } from "../lib/data-access.js";
 import { writeAuditLog } from "../lib/audit-log.js";
 import { calculateQuota } from "./quota-service.js";
@@ -19,27 +19,7 @@ import { exists } from "../lib/utils.js";
 const demosFile = path.join(dataDir, "demos.json");
 
 async function commandAvailable(cmd) {
-  try { await runCommand(cmd, ["--version"], "/tmp", 5000); return true; } catch { return false; }
-}
-
-function runCommand(command, args, cwd, timeout = buildTimeoutMs) {
-  return new Promise((resolve, reject) => {
-    execFile(command, args, {
-      cwd,
-      shell: process.platform === "win32",
-      timeout,
-      maxBuffer: 1024 * 1024 * 4,
-      env: { ...process.env, CI: "true" }
-    }, (error, stdout, stderr) => {
-      const output = [`$ ${command} ${args.join(" ")}`, stdout, stderr].filter(Boolean).join("\n");
-      if (error) {
-        error.buildLog = output;
-        reject(error);
-      } else {
-        resolve(output);
-      }
-    });
-  });
+  try { await runCommand(cmd, ["--version"], { cwd: "/tmp", timeout: 5000, maxBufferMB: 1 }); return true; } catch { return false; }
 }
 
 export async function executeDeployment({
@@ -264,8 +244,8 @@ async function buildNodeProjectOnHost(projectDir) {
   const npmCmd = process.platform === "win32" ? "npm.cmd" : "npm";
   const hasLock = await exists(path.join(projectDir, "package-lock.json"));
   const installCmd = hasLock ? ["ci"] : ["install"];
-  const installLog = await runCommand(npmCmd, installCmd, projectDir);
-  const buildResult = await runCommand(npmCmd, ["run", "build"], projectDir);
+  const installLog = await runCommand(npmCmd, installCmd, { cwd: projectDir, timeout: buildTimeoutMs });
+  const buildResult = await runCommand(npmCmd, ["run", "build"], { cwd: projectDir, timeout: buildTimeoutMs });
   return ["[host build]", installLog, buildResult].join("\n");
 }
 
@@ -282,7 +262,7 @@ async function buildNodeProjectInDocker(projectDir) {
     dockerImage,
     "sh", "-lc", script
   ];
-  const log = await runCommand("docker", args, projectDir);
+  const log = await runCommand("docker", args, { cwd: projectDir, timeout: buildTimeoutMs });
   return [`[docker build] image=${dockerImage} memory=${dockerMemory}`, log].join("\n");
 }
 

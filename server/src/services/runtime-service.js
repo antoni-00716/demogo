@@ -1,8 +1,9 @@
-import { execFile, spawn } from "node:child_process";
+import { spawn } from "node:child_process";
 import http from "node:http";
 import net from "node:net";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { runCommand } from "../lib/process-utils.js";
 
 const runtimeProcesses = new Map();
 let nextHostPort = 43100;
@@ -417,9 +418,10 @@ async function startHostRuntime({ slug, projectDir, inspection, runtimeConfig, r
   const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
   const runtimeCommand = selectRuntimeCommand(inspection);
   const installArgs = await selectNpmInstallArgs(projectDir, runtimeCommand);
-  const logs = [await runCommand(npmCommand, installArgs, projectDir, runtimeConfig.startTimeoutSeconds * 1000)];
+  const timeoutMs = runtimeConfig.startTimeoutSeconds * 1000;
+  const logs = [await runCommand(npmCommand, installArgs, { cwd: projectDir, timeout: timeoutMs })];
   if (runtimeCommand.buildBeforeStart) {
-    logs.push(await runCommand(npmCommand, ["run", "build"], projectDir, runtimeConfig.startTimeoutSeconds * 1000));
+    logs.push(await runCommand(npmCommand, ["run", "build"], { cwd: projectDir, timeout: timeoutMs }));
   }
   const child = spawn(npmCommand, runtimeCommand.args, {
     cwd: projectDir,
@@ -767,7 +769,7 @@ async function ensureDockerAvailable() {
 }
 
 function execDocker(args, options = {}) {
-  return runCommand("docker", args, process.cwd(), options.timeoutMs || 30000);
+  return runCommand("docker", args, { cwd: process.cwd(), timeout: options.timeoutMs || 30000 });
 }
 
 async function inspectDockerContainerState(containerName) {
@@ -778,28 +780,6 @@ async function inspectDockerContainerState(containerName) {
     exitCode: Number(exitCode || 0),
     error: errorParts.join(" ")
   };
-}
-
-function runCommand(command, args, cwd, timeoutMs) {
-  return new Promise((resolve, reject) => {
-    execFile(command, args, {
-      cwd,
-      shell: process.platform === "win32",
-      timeout: timeoutMs,
-      maxBuffer: 1024 * 1024 * 2
-    }, (error, stdout, stderr) => {
-      const output = [stdout, stderr].filter(Boolean).join("\n");
-      if (error) {
-        const commandError = createRuntimeError(`${command} ${args.join(" ")} 执行失败：${error.message}${output ? `\n${output}` : ""}`);
-        commandError.code = error.code;
-        commandError.signal = error.signal;
-        commandError.killed = error.killed;
-        reject(commandError);
-        return;
-      }
-      resolve(output);
-    });
-  });
 }
 
 async function fileExists(filePath) {
@@ -829,7 +809,7 @@ async function stopHostProcessTree(child) {
   if (!child || child.exitCode !== null || child.signalCode) return;
   const exited = waitForProcessExit(child, 5000);
   if (process.platform === "win32") {
-    await runCommand("taskkill", ["/pid", String(child.pid), "/T", "/F"], process.cwd(), 5000).catch(() => null);
+    await runCommand("taskkill", ["/pid", String(child.pid), "/T", "/F"], { cwd: process.cwd(), timeout: 5000, maxBufferMB: 1 }).catch(() => null);
   } else {
     child.kill("SIGTERM");
   }

@@ -1,9 +1,7 @@
 // DemoGo v0.9.3 - Build service functions (extracted from server.js)
 // Enhanced backup: build-service.js.enhanced
 import crypto from "node:crypto";
-import { execFile } from "node:child_process";
-import path from "node:path";
-import fs from "node:fs/promises";
+import { runCommand } from "../lib/process-utils.js";
 import { isNonCollectableControl, filterAutoHostableFormFields } from "../lib/form-field-utils.js";
 import { normalizeFormFields } from "./form-service.js";
 import { promoteSingleHtmlEntry } from "../lib/archive-analyzer.js";
@@ -257,8 +255,8 @@ async function buildNodeProject(projectDir) {
 async function buildNodeProjectOnHost(projectDir) {
   const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
   const installCommand = await exists(path.join(projectDir, "package-lock.json")) ? [npmCommand, ["ci"]] : [npmCommand, ["install"]];
-  const installLog = await runCommand(installCommand[0], installCommand[1], projectDir);
-  const buildLog = await runCommand(npmCommand, ["run", "build"], projectDir);
+  const installLog = await runCommand(installCommand[0], installCommand[1], { cwd: projectDir, timeout: buildTimeoutMs });
+  const buildLog = await runCommand(npmCommand, ["run", "build"], { cwd: projectDir, timeout: buildTimeoutMs });
   return ["[host build]", installLog, buildLog].join("\n");
 }
 
@@ -283,46 +281,15 @@ async function buildNodeProjectInDocker(projectDir) {
       "-lc",
       script
     ];
-    const log = await runCommand("docker", args, projectDir);
+    const log = await runCommand("docker", args, { cwd: projectDir, timeout: buildTimeoutMs });
     return [`[docker build] image=${dockerImage} memory=${dockerMemory} cpus=${dockerCpus}`, log].join("\n");
-  });
-}
-
-function runCommand(command, args, cwd) {
-  return new Promise((resolve, reject) => {
-    execFile(command, args, {
-      cwd,
-      shell: process.platform === "win32",
-      timeout: buildTimeoutMs,
-      maxBuffer: 1024 * 1024 * 2,
-      env: {
-        ...process.env,
-        CI: "true"
-      }
-    }, (error, stdout, stderr) => {
-      const output = [
-        `$ ${command} ${args.join(" ")}`,
-        stdout,
-        stderr
-      ].filter(Boolean).join("\n");
-
-      if (error) {
-        const commandError = new Error(`构建命令失败：${command} ${args.join(" ")}\n${error.message}\n${output}`);
-        commandError.code = error.code;
-        commandError.signal = error.signal;
-        commandError.killed = error.killed;
-        reject(commandError);
-        return;
-      }
-      resolve(output);
-    });
   });
 }
 
 async function commandAvailable(command) {
   const checkCommand = process.platform === "win32" ? "where" : "which";
   try {
-    await runCommand(checkCommand, [command], process.cwd());
+    await runCommand(checkCommand, [command], { cwd: process.cwd(), timeout: 10000 });
     return true;
   } catch {
     return false;
